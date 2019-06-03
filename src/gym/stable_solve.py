@@ -3,12 +3,15 @@ import network_sim
 import tensorflow as tf
 
 from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.common.policies import MlpLstmPolicy
 from stable_baselines.common.policies import FeedForwardPolicy
-from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines import PPO1
-from stable_baselines import TRPO
-from simple_arg_parse import arg_or_default
+import os
+import sys
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0,parentdir) 
+from common.simple_arg_parse import arg_or_default
 
 arch_str = arg_or_default("--arch", default="32,16")
 if arch_str == "":
@@ -37,7 +40,7 @@ model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant', timesteps_per_act
 for i in range(0, 6):
     with model.graph.as_default():                                                                   
         saver = tf.train.Saver()                                                                     
-        #saver.save(training_sess, "/home/pcc/spec_model_%d.ckpt" % i)
+        saver.save(training_sess, "./pcc_model_%d.ckpt" % i)
     model.learn(total_timesteps=(1600 * 410))
 
 ##
