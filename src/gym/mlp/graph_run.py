@@ -3,19 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
-if (not (len(sys.argv) == 2)) or (sys.argv[1] == "-h") or (sys.argv[1] == "--help"):
-    print("usage: python3 graph_run.py <pcc_env_log_filename.json>")
-    exit(0)
-
-filename = sys.argv[1]
-
 data = {}
-with open(filename) as f:
+with open(sys.argv[1]) as f:
     data = json.load(f)
 
 time_data = [float(event["Time"]) for event in data["Events"][1:]]
 rew_data = [float(event["Reward"]) for event in data["Events"][1:]]
-send_data = [float(event["Send Rate"]) for event in data["Events"][1:]]
+send_data = [2.0 * float(event["Send Rate"]) for event in data["Events"][1:]]
 thpt_data = [float(event["Throughput"]) for event in data["Events"][1:]]
 latency_data = [float(event["Latency"]) for event in data["Events"][1:]]
 loss_data = [float(event["Loss Rate"]) for event in data["Events"][1:]]
@@ -44,4 +38,4 @@ loss_axis.set_ylabel("Loss Rate")
 loss_axis.set_xlabel("Monitor Interval")
 
 fig.suptitle("Summary Graph for %s" % sys.argv[1])
-fig.savefig("env_graph.pdf")
+fig.savefig("output.pdf")

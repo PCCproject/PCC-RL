@@ -1,0 +1,19 @@
+{
+    "title":"Training Episode",
+    "legend param":"Episode",
+    "type":"event",
+    "event":"Step",
+    "x-axis":"Time",
+    "y-axis":[
+        "Send Rate",
+        "Throughput",
+        "Latency Inflation",
+        "Loss Rate",
+        "Reward",
+        "Target Rate",
+        "Cwnd",
+        "Cwnd Used",
+        "Latency Ratio",
+        "Send Ratio"
+    ]
+}
