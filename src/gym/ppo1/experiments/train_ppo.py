@@ -7,6 +7,16 @@ sys.path.append(str(cpath.parents[2]))
 from stable_baselines.ppo1 import PPO1
 from stable_baselines.common.policies import MlpPolicy
 
+
+class MyMlpPolicy(FeedForwardPolicy):
+
+    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, **_kwargs):
+        super(MyMlpPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse, net_arch=[{"pi":arch, "vf":arch}],
+                                        feature_extraction="mlp", **_kwargs)
+        global training_sess
+        training_sess = sess
+
+
 def parse_args():
     parser = argparse.ArgumentParser("Reinforcement Learning experiments for multiagent environments")
     # Environment
@@ -56,7 +66,6 @@ def make_env(arglist):
 
 def get_trainers(env, num_adversaries, obs_shape_n, arglist):
     trainers = []
-    trainer = PPO1
     for i in range(env.n):
         trainers.append(PPO1(MlpPolicy, env, timesteps_per_actorbatch=8192,
                      optim_batchsize=2048, gamma=0.99, schedule='constant'))
@@ -84,8 +93,7 @@ def train(env_id, num_timesteps, seed):
     train_step = 0
     t_start = time.time()
 
-
-    model.learn(total_timesteps=num_timesteps)
+    model.learn(total_timesteps=(1600 * 410))
 
     print('Starting iterations...')
     while True:

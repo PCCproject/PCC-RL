@@ -669,8 +669,8 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         return sender_obs
 
     def step(self, actions):
-        if (self.episodes_run > 1000):
-            print(str(self.episodes_run) + " " + str(self.senders[0].rate))
+        #if (self.episodes_run > 1000):
+        #    print(str(self.episodes_run) + " " + str(self.senders[0].rate))
 
         for i in range(self.n):#len(actions)):
             #print("Updating rate for sender %d" % i)

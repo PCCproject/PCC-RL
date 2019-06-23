@@ -1,5 +1,8 @@
 # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 10000
 # python3 make_graph.py --num-agents 1 --dump-rate 1000 --save-rate 100 --in-out 1 1 --log-range 1 -1 --criteria reward
+# source ~/.bashrc
+# trainers[1].p_debug['target_act'](obs_n[0][None])
+
 
 # add to PATHONPATH
 import os, sys
@@ -7,18 +10,19 @@ from pathlib import Path
 cpath = Path(os.getcwd())
 sys.path.append(str(cpath.parents[2]))
 
-
 import argparse
 import numpy as np
 import tensorflow as tf
 import time
 import pickle
+import pdb
 
 
 import maddpg.common.tf_util as U
 from maddpg.trainer.maddpg import MADDPGAgentTrainer
 import tensorflow.contrib.layers as layers
 from network_sim import SimulatedMultAgentNetworkEnv
+from tensorflow.python.tools import inspect_checkpoint as chkp
 
 def parse_args():
     parser = argparse.ArgumentParser("Reinforcement Learning experiments for multiagent environments")
@@ -57,9 +61,18 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
     # This model takes as input an observation and returns values of all actions
     with tf.variable_scope(scope, reuse=reuse):
         out = input
-        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
-        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
-        out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
+        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
+        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
+        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
+        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
+        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
+
+        #out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
+        out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None, normalizer_fn=tf.contrib.layers.batch_norm)
+        ''''''
+        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.softmax)
+        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.softmax)
+        #out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None, normalizer_fn=None)
         return out
 
 def make_env(arglist):
@@ -70,7 +83,6 @@ def make_env(arglist):
 def get_trainers(env, num_adversaries, obs_shape_n, arglist):
     trainers = []
     model = mlp_model
-    trainer = MADDPGAgentTrainer
     for i in range(num_adversaries):
         trainers.append(MADDPGAgentTrainer(
             "agent_%d" % i, model, obs_shape_n, env.action_space, i, arglist,
@@ -83,7 +95,7 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist):
 
 
 def train(arglist):
-    with U.single_threaded_session():
+    with U.single_threaded_session() as sess:
         # Create environment
         env = make_env(arglist)
         # env = gym.make('PccNs-v1')
@@ -95,20 +107,24 @@ def train(arglist):
 
         # Initialize
         U.initialize()
+        saver = tf.train.Saver()
 
         # Load previous results, if necessary
+
         if arglist.load_dir == "":
             arglist.load_dir = arglist.save_dir
         if arglist.display or arglist.restore or arglist.benchmark:
             print('Loading previous state...')
-            U.load_state(arglist.load_dir)
+            #U.load_state(arglist.load_dir)
+            saver.restore(sess, "model_episode_1000.ckpt")
+            #tf.print()
 
         episode_rewards = [0.0]  # sum of rewards for all agents
         agent_rewards = [[0.0] for _ in range(env.n)]  # individual agent reward
         final_ep_rewards = []  # sum of rewards for training curve
         final_ep_ag_rewards = []  # agent rewards for training curve
         agent_info = [[[]]]  # placeholder for benchmarking info
-        saver = tf.train.Saver()
+
 
         obs_n = env.reset()
         episode_step = 0
@@ -116,7 +132,9 @@ def train(arglist):
         t_start = time.time()
 
         print('Starting iterations...')
+        tf.add_check_numerics_ops()
         while True:
+
             # get action
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
             # got nan?
@@ -127,9 +145,16 @@ def train(arglist):
             boo2 = np.any(np.isnan(rew_n))
             boo3 = np.any(np.isnan(action_n))
             if boo1 == True or boo2 == True or boo3 == True:
+                save_path = saver.save(sess, "model_nan.ckpt")
+                chkp.print_tensors_in_checkpoint_file("model_nan.ckpt", tensor_name='', all_tensors=True)
+                pdb.set_trace() # Break into debugger to look around
                 print(new_obs_n)
                 print(rew_n)
                 print(action_n)
+
+            #if (train_step == 99900):
+            #    save_path = saver.save(sess, "model_see.ckpt")
+            #    chkp.print_tensors_in_checkpoint_file("model_see.ckpt", tensor_name='', all_tensors=True)
 
             episode_step += 1
             done = all(done_n)
@@ -146,8 +171,6 @@ def train(arglist):
             if done or terminal:
                 #print("train reset: train_step = %d" % train_step)
                 obs_n = env.reset()
-
-
                 episode_step = 0
                 episode_rewards.append(0)
                 for a in agent_rewards:
@@ -189,6 +212,8 @@ def train(arglist):
                 U.save_state(arglist.save_dir, saver=saver)
                 # print statement depends on whether or not there are adversaries
                 if num_adversaries == 0:
+                    save_path = saver.save(sess, "model_episode_%d.ckpt" % len(episode_rewards))
+                    chkp.print_tensors_in_checkpoint_file("model_episode_%d.ckpt" % len(episode_rewards), tensor_name='', all_tensors=True)
                     print("steps: {}, episodes: {}, mean episode reward: {}, time: {}".format(
                         train_step, len(episode_rewards), np.mean(episode_rewards[-arglist.save_rate:]), round(time.time()-t_start, 3)))
                     # print(episode_rewards)

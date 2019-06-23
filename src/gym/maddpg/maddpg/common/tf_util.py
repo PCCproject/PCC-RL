@@ -138,7 +138,7 @@ def minimize_and_clip(optimizer, objective, var_list, clip_val=10):
     """Minimized `objective` using `optimizer` w.r.t. variables in
     `var_list` while ensure the norm of the gradients for each
     variable is clipped to `clip_val`
-    """    
+    """
     if clip_val is None:
         return optimizer.minimize(objective, var_list=var_list)
     else:
@@ -233,7 +233,9 @@ def load_state(fname, saver=None):
 
 def save_state(fname, saver=None):
     """Save all the variables in the current session to the location <fname>"""
+    print("save_state, before")
     os.makedirs(os.path.dirname(fname), exist_ok=True)
+    print("save_state, makedirs")
     if saver is None:
         saver = tf.train.Saver()
     saver.save(get_session(), fname)
@@ -286,7 +288,7 @@ def function(inputs, outputs, updates=None, givens=None):
 
 
 class _Function(object):
-    def __init__(self, inputs, outputs, updates, givens, check_nan=False):
+    def __init__(self, inputs, outputs, updates, givens, check_nan=True):
         for inpt in inputs:
             if not issubclass(type(inpt), TfInput):
                 assert len(inpt.op.inputs) == 0, "inputs should all be placeholders of rl_algs.common.TfInput"
