@@ -664,8 +664,8 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         sender_obs = []
         for sender in self.senders:
             sender_obs.append(np.array(sender.get_obs()).reshape(-1,))
-        #?
         #sender_obs = np.array(sender_obs).reshape(-1,)
+        #print("network_sim.get_all_sender_obs")
         return sender_obs
 
     def step(self, actions):
@@ -755,7 +755,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         self._add_episode_record()
         self._reset_parameters()
 
-        # self.net.reset()
+        self.net.reset()
         self.create_new_links_and_senders(random_link = RANDOM_LINK)
         #if (self.episodes_run > 1000):
         #    print(str(self.episodes_run) + " " + str(self.senders[0].rate))
