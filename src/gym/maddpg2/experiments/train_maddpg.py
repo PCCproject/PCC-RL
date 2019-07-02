@@ -1,8 +1,8 @@
-# python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 10000
+# python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 10000
 # python3 make_graph.py --num-agents 1 --dump-rate 1000 --save-rate 100 --in-out 1 1 --log-range 1 -1 --criteria reward
 # source ~/.bashrc
 # trainers[1].p_debug['target_act'](obs_n[0][None])
-
+# python3 train_maddpg.py --scenario simple_spread
 
 # add to PATHONPATH
 import os, sys
@@ -12,14 +12,14 @@ sys.path.append(str(cpath.parents[2]))
 
 import argparse
 import numpy as np
+import pandas as pd
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 import time
 import pickle
 import pdb
 
 
-#from maddpg2.common2.tf_util2 import TfInput
-#import maddpg.maddpg2.common2.tf_util2 as U
 from maddpg2.maddpg2.trainer.maddpg import MADDPGAgentTrainer, RandomTrainer
 import tensorflow.contrib.layers as layers
 from network_sim import SimulatedMultAgentNetworkEnv
@@ -59,16 +59,13 @@ def parse_args():
     parser.add_argument("--plots-dir", type=str, default="./learning_curves/", help="directory where plot data is saved")
     return parser.parse_args()
 
-
+''' add batch_normalization '''
 def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
     with tf.variable_scope(scope, reuse=reuse):
         out = input
         out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
         out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
-        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
-        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
-        #out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm)
 
         #out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
         out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None, normalizer_fn=tf.contrib.layers.batch_norm)
@@ -78,15 +75,41 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
         #out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None, normalizer_fn=None)
         return out
 
+''' original achitecture '''
+def mlp_model2(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
+    # This model takes as input an observation and returns values of all actions
+    with tf.variable_scope(scope, reuse=reuse):
+        out = input
+        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
+        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
+        out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
+        return out
+
+''' run network_sim.py '''
 def make_env(arglist):
     env = SimulatedMultAgentNetworkEnv(arglist)
     return env
 
+''' run mpe (multi-particle env)'''
+def make_env2(scenario_name, arglist, benchmark=False):
+    from maddpg2.mpe.multiagent.environment import MultiAgentEnv
+    import maddpg2.mpe.multiagent.scenarios as scenarios
+    # load scenario from script
+    scenario = scenarios.load(scenario_name + ".py").Scenario()
+    # create world
+    world = scenario.make_world()
+    # create multiagent environment
+    if benchmark:
+        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data)
+    else:
+        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
+    return env
+
 def get_trainers(env, num_adversaries, obs_shape_n, arglist):
     trainers = []
-    model = mlp_model
-    trainer = RandomTrainer
-    #trainer = MADDPGAgentTrainer
+    model = mlp_model2
+    #trainer = RandomTrainer
+    trainer = MADDPGAgentTrainer
     for i in range(num_adversaries):
         trainers.append(trainer(
             "agent_%d" % i, model, obs_shape_n, env.action_space, i, arglist,
@@ -100,9 +123,11 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist):
 
 def train(arglist):
     with U.single_threaded_session() as sess:
+
         # Create environment
         env = make_env(arglist)
-        # env = gym.make('PccNs-v1')
+        #env = make_env2(arglist.scenario, arglist, arglist.benchmark)
+
         # Create agent trainers
         obs_shape_n = [env.observation_space[i].shape for i in range(env.n)]
         num_adversaries = min(env.n, arglist.num_adversaries)
@@ -114,13 +139,12 @@ def train(arglist):
         saver = tf.train.Saver()
 
         # Load previous results, if necessary
-
         if arglist.load_dir == "":
             arglist.load_dir = arglist.save_dir
         if arglist.display or arglist.restore or arglist.benchmark:
             print('Loading previous state...')
-            #U.load_state(arglist.load_dir)
-            saver.restore(sess, "model_episode_1000.ckpt")
+            U.load_state(arglist.load_dir)
+            #saver.restore(sess, "model_episode_1000.ckpt")
             #tf.print()
 
         episode_rewards = [0.0]  # sum of rewards for all agents
@@ -134,26 +158,31 @@ def train(arglist):
         episode_step = 0
         train_step = 0
         t_start = time.time()
-        best_rew = 0
-        best_params = None
+        #best_rew = 0
+        #best_params = None
 
         print('Starting iterations...')
         # tf.add_check_numerics_ops()
         while True:
             # get action
+
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
+            #print(obs_n)
+            #print(action_n)
             # got nan?
 
             # environment step
+
+            # each new_obs should have global view??
             new_obs_n, rew_n, done_n, info_n = env.step(action_n)
 
-            if(np.sum(rew_n) > best_rew):
-                best_rew = np.sum(rew_n)
-                best_params = [agent.parameters for agent in trainers]
+            #if(np.sum(rew_n) > best_rew):
+            #    best_rew = np.sum(rew_n)
+            #    best_params = [agent.parameters for agent in trainers]
 
-            boo1 = np.any(np.isnan(new_obs_n))
-            boo2 = np.any(np.isnan(rew_n))
-            boo3 = np.any(np.isnan(action_n))
+            boo1 = np.any(pd.isnull(new_obs_n))
+            boo2 = np.any(pd.isnull(rew_n))
+            boo3 = np.any(pd.isnull(action_n))
             if boo1 == True or boo2 == True or boo3 == True:
                 save_path = saver.save(sess, "model_nan.ckpt")
                 chkp.print_tensors_in_checkpoint_file("model_nan.ckpt", tensor_name='', all_tensors=True)
@@ -179,7 +208,6 @@ def train(arglist):
                 agent_rewards[i][-1] += rew
 
             if done or terminal:
-                #print("train reset: train_step = %d" % train_step)
                 obs_n = env.reset()
                 [agent.reset() for agent in trainers]
                 episode_step = 0
@@ -189,8 +217,6 @@ def train(arglist):
                 agent_info.append([[]])
 
             # increment global step counter
-
-            #print("train_step = %d" % train_step)
             train_step += 1
 
             # for benchmarking learned policies
@@ -206,10 +232,10 @@ def train(arglist):
                 continue
 
             # for displaying learned policies
-            '''if arglist.display:
+            if arglist.display:
                 time.sleep(0.1)
                 env.render()
-                continue'''
+                continue
 
             # update all trainers, if not in display or benchmark mode
             loss = None
@@ -235,7 +261,7 @@ def train(arglist):
 
                 print("steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}".format(
                         train_step, num_epi, mean_epi_rew, agent_epi_rew, round(time.time()-t_start, 3)))
-                print("best_reward: {}, best_params: {}".format(best_rew, best_params))
+                #print("best_reward: {}, best_params: {}".format(best_rew, best_params))
 
                 '''else:
                     print("steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}".format(

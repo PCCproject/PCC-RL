@@ -316,6 +316,7 @@ class Sender():
     def get_obs(self):
         return self.history.as_array()
 
+
     def get_run_data(self):
         obs_end_time = self.net.get_cur_time()
 

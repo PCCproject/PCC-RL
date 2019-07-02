@@ -234,7 +234,6 @@ def load_state(fname, saver=None):
 def save_state(root, fname, saver=None):
     """Save all the variables in the current session to the location <fname>"""
     # print("save_state, before")
-    print("save")
     if not os.path.exists(root):
         os.makedirs(os.path.dirname(root), exist_ok=True)
         print("dir created in path: %s" % root)
