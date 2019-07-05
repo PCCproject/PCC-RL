@@ -59,6 +59,54 @@ def parse_args():
     parser.add_argument("--plots-dir", type=str, default="./learning_curves/", help="directory where plot data is saved")
     return parser.parse_args()
 
+def weight_variable(shape):
+    """Create a weight variable with appropriate initialization."""
+    #return tf.truncated_normal(shape, stddev=0.1)
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    #print(tf.Variable(initial))
+    #return tf.Variable(initial)
+    #print(tf.compat.v1.get_variable(name='weights', initializer = initial))
+    return tf.compat.v1.get_variable(name='weights', initializer = initial)
+
+def bias_variable(shape):
+    """Create a bias variable with appropriate initialization."""
+    initial = tf.constant(0.1, shape=shape)
+    #return tf.Variable(initial)
+    return tf.compat.v1.get_variable(name='bias', initializer=initial)
+
+def variable_summaries(var):
+    """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.compat.v1.summary.scalar('mean', mean)
+        with tf.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+        tf.compat.v1.summary.scalar('stddev', stddev)
+        tf.compat.v1.summary.scalar('max', tf.reduce_max(var))
+        tf.compat.v1.summary.scalar('min', tf.reduce_min(var))
+        tf.compat.v1.summary.histogram('histogram', var)
+
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act=tf.nn.relu):
+    """Reusable code for making a simple neural net layer.
+    It does a matrix multiply, bias add, and then uses ReLU to nonlinearize.
+    It also sets up name scoping so that the resultant graph is easy to read,
+    and adds a number of summary ops."""
+    # Adding a name scope ensures logical grouping of the layers in the graph.
+    with tf.variable_scope(layer_name):
+        # This Variable will hold the state of the weights for the layer
+        #with tf.name_scope('weights'):
+        weights = weight_variable([input_dim, output_dim])
+        variable_summaries(weights)
+        #with tf.name_scope('biases'):
+        biases = bias_variable([output_dim])
+        variable_summaries(biases)
+        with tf.name_scope('Wx_plus_b'):
+            preactivate = tf.einsum('ij,jk->ik', input_tensor, weights) + biases
+            tf.compat.v1.summary.histogram('pre_activations', preactivate)
+        activations = act(preactivate, name='activation')
+        tf.compat.v1.summary.histogram('activations', activations)
+        return activations
+
 ''' add batch_normalization '''
 def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
@@ -79,10 +127,29 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
 def mlp_model2(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
     with tf.variable_scope(scope, reuse=reuse):
+        print("mlp_m2")
         out = input
+        print(out)
         out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
+        print(out)
         out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
+        print(out)
         out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
+        print(out)
+        return out
+
+''' tensorboard equivalent achitecture '''
+def mlp_model3(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
+    # This model takes as input an observation and returns values of all actions
+    # scope: p_func, q_func, target_q_func
+    with tf.variable_scope(scope, reuse=reuse):
+        print(input)
+        hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
+        print(hidden1)
+        hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
+        print(hidden2)
+        out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.identity)
+        print(out)
         return out
 
 ''' run network_sim.py '''
@@ -90,7 +157,7 @@ def make_env(arglist):
     env = SimulatedMultAgentNetworkEnv(arglist)
     return env
 
-''' run mpe (multi-particle env)'''
+''' run mpe (multi-particle env) '''
 def make_env2(scenario_name, arglist, benchmark=False):
     from maddpg2.mpe.multiagent.environment import MultiAgentEnv
     import maddpg2.mpe.multiagent.scenarios as scenarios
@@ -123,7 +190,6 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist):
 
 def train(arglist):
     with U.single_threaded_session() as sess:
-
         # Create environment
         env = make_env(arglist)
         #env = make_env2(arglist.scenario, arglist, arglist.benchmark)
@@ -160,6 +226,16 @@ def train(arglist):
         t_start = time.time()
         #best_rew = 0
         #best_params = None
+        '''
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
+        test_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test')
+        tf.global_variables_initializer().run()'''
+
+        #merged = tf.compat.v1.summary.merge_all()
+        #print(merged)
+        #summary_writer = tf.compat.v1.summary.FileWriter('/tmp' + '/train', sess.graph)
+        tf.global_variables_initializer().run()
 
         print('Starting iterations...')
         # tf.add_check_numerics_ops()
@@ -190,10 +266,6 @@ def train(arglist):
                 print(new_obs_n)
                 print(rew_n)
                 print(action_n)
-
-            #if (train_step == 99900):
-            #    save_path = saver.save(sess, "model_see.ckpt")
-            #    chkp.print_tensors_in_checkpoint_file("model_see.ckpt", tensor_name='', all_tensors=True)
 
             episode_step += 1
             done = all(done_n)
@@ -244,11 +316,18 @@ def train(arglist):
             for agent in trainers:
                 loss = agent.update(trainers, train_step)
 
+            #print(merged)
+            #[summary_str] = sess.run([merged])
+            #summary_writer.add_summary(summary_str, num_epi)
+
             # save model, display training output
             if terminal and (len(episode_rewards) % arglist.save_rate == 0):
                 agent_epi_rew = [np.mean(rew[-arglist.save_rate:]) for rew in agent_rewards]
                 mean_epi_rew = np.mean(episode_rewards[-arglist.save_rate:])
                 num_epi = len(episode_rewards)
+
+                #[summary_str] = sess.run([merged])
+                #summary_writer.add_summary(summary_str, num_epi)
 
                 root = os.getcwd()+"/tmp"
                 fname = root + "/model_episode_{}.ckpt".format(len(episode_rewards))

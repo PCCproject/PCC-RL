@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import tensorflow as tf
-import maddpg.common.tf_util as U
+import maddpg2.maddpg2.common.tf_util as U
 
 from maddpg.common.distributions import make_pdtype
 from maddpg import AgentTrainer
@@ -25,6 +25,19 @@ def make_update_exp(vals, target_vals):
     expression = tf.group(*expression)
     return U.function([], [], updates=[expression])
 
+
+'''scope=self.name,
+make_obs_ph_n=obs_ph_n,
+act_space_n=act_space_n,
+p_index=agent_index,
+p_func=model,
+q_func=model,
+optimizer=tf.train.AdamOptimizer(learning_rate=args.lr),
+grad_norm_clipping=0.5,
+local_q_func=local_q_func=False,
+num_units=args.num_units'''
+
+
 def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad_norm_clipping=None, local_q_func=False, num_units=64, scope="trainer", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # create distribtuions
@@ -36,7 +49,10 @@ def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad
 
         p_input = obs_ph_n[p_index]
 
+        U.scope_vars(U.absolute_scope_name("p_func"))
+
         p = p_func(p_input, int(act_pdtype_n[p_index].param_shape()[0]), scope="p_func", num_units=num_units)
+
         p_func_vars = U.scope_vars(U.absolute_scope_name("p_func"))
 
         # wrap parameters in distribution
@@ -83,9 +99,11 @@ def q_train(make_obs_ph_n, act_space_n, q_index, q_func, optimizer, grad_norm_cl
         target_ph = tf.placeholder(tf.float32, [None], name="target")
 
         q_input = tf.concat(obs_ph_n + act_ph_n, 1)
+
         if local_q_func:
             q_input = tf.concat([obs_ph_n[q_index], act_ph_n[q_index]], 1)
         q = q_func(q_input, 1, scope="q_func", num_units=num_units)[:,0]
+
         q_func_vars = U.scope_vars(U.absolute_scope_name("q_func"))
 
         q_loss = tf.reduce_mean(tf.square(q - target_ph))
@@ -116,6 +134,9 @@ class MADDPGAgentTrainer(AgentTrainer):
         self.agent_index = agent_index
         self.args = args
         obs_ph_n = []
+
+        ##########---->
+
         for i in range(self.n):
             obs_ph_n.append(U.BatchInput(obs_shape_n[i], name="observation"+str(i)).get())
 
@@ -126,7 +147,7 @@ class MADDPGAgentTrainer(AgentTrainer):
             act_space_n=act_space_n,
             q_index=agent_index,
             q_func=model,
-            optimizer=tf.train.AdamOptimizer(learning_rate=args.lr),
+            optimizer=tf.compat.v1.train.AdamOptimizer(learning_rate=args.lr),
             grad_norm_clipping=0.5,
             local_q_func=local_q_func,
             num_units=args.num_units
@@ -138,7 +159,7 @@ class MADDPGAgentTrainer(AgentTrainer):
             p_index=agent_index,
             p_func=model,
             q_func=model,
-            optimizer=tf.train.AdamOptimizer(learning_rate=args.lr),
+            optimizer=tf.compat.v1.train.AdamOptimizer(learning_rate=args.lr),
             grad_norm_clipping=0.5,
             local_q_func=local_q_func,
             num_units=args.num_units
@@ -153,10 +174,7 @@ class MADDPGAgentTrainer(AgentTrainer):
         pass
 
     def action(self, obs):
-        #print("maddpg.Trainer.action().obs")
-        #print(obs)
-        #print(obs[None])
-        #print(self.act(obs[None])[0])
+
         return self.act(obs[None])[0]
 
     def experience(self, obs, act, rew, new_obs, done, terminal):
