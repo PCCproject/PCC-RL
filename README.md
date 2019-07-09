@@ -20,5 +20,4 @@ To test models in the real world (i.e., sending real packets into the Linux
 kernel and out onto a real or emulated network), download and install the PCC
 UDT code from github.com/PCCProject/PCC-Uspace. Follow the instructions in that
 repo for using congestion control algorithms with Python modules, and see
-./src/gym/online/README.md for detailed instructions on how to load trained
-models.
+./src/gym/online/README.md for additional instructions regarding testing or training models in the real world.

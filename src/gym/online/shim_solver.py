@@ -51,27 +51,10 @@ class MyMlpPolicy(FeedForwardPolicy):
 
 n_cpu = 1
 env = gym.make('NetShim-v0')
-#env = gym.make('CartPole-v0')
 
 gamma = arg_or_default("--gamma", default=0.99)
 print("gamma = %f" % gamma)
 model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant', timesteps_per_actorbatch=8192, optim_batchsize=2048, gamma=gamma)
-
-"""
-with model.graph.as_default():
-    saver = tf.train.Saver()
-    saver.restore(my_sess, "/home/njay2/tmp_saved_model.ckpt")
-"""
-
-with model.graph.as_default():
-    print(tf.global_variables())
-    var_23 = [v for v in tf.global_variables() if v.name == "model/vf/w:0"][0]
-    print(my_sess.run(var_23))
-    saver = tf.train.Saver()
-    saver.restore(my_sess, "/home/njay2/tmp_saved_model.ckpt")
-    var_23 = [v for v in tf.global_variables() if v.name == "model/vf/w:0"][0]
-    print(my_sess.run(var_23))
-
 model.learn(total_timesteps=(9600 * 410))
 
 ##
