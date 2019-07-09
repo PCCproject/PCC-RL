@@ -110,7 +110,7 @@ def _mi_metric_avg_latency(mi):
 def _mi_metric_send_rate(mi):
     dur = mi.get("send dur")
     if dur > 0.0:
-        return 8.0 * mi.bytes_sent
+        return 8.0 * mi.bytes_sent / dur
     return 0.0
 
 def _mi_metric_send_dur(mi):
