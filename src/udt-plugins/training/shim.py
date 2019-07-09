@@ -22,21 +22,44 @@ class PccShimDriver():
     def reset(self):
         pass # Nothing to reset in the shim driver.
 
-    def give_sample(self, sending_rate, recv_rate, latency, loss, lat_infl, utility):
+    def give_sample(self, flow_id, bytes_sent, bytes_acked, bytes_lost,
+                    send_start_time, send_end_time, recv_start_time,
+                    recv_end_time, rtt_samples, packet_size, utility):
         if not self.replay_rate:
             print("Detected repeat sample! Ignoring.")
             return
-        self.sock.send(("%f,%f,%f,%f,%f,%f\n" % (sending_rate, recv_rate, latency,
-            loss, lat_infl, utility)).encode())
+        self.sock.send(("%d;%d;%d;%d;%f;%f;%f;%f;%s;%d;%f\n" % (
+            flow_id,
+            bytes_sent,
+            bytes_acked,
+            bytes_lost,
+            send_start_time,
+            send_end_time,
+            recv_start_time,
+            recv_end_time,
+            rtt_samples,
+            packet_size,
+            utility)).encode())
         self.replay_rate = False
 
     def get_by_flow_id(flow_id):
         return PccShimDriver.flow_lookup[flow_id]
 
-def give_sample(flow_id, sending_rate, recv_rate, latency, loss, lat_infl, utility):
+def give_sample(flow_id, bytes_sent, bytes_acked, bytes_lost,
+                send_start_time, send_end_time, recv_start_time,
+                recv_end_time, rtt_samples, packet_size, utility):
     driver = PccShimDriver.get_by_flow_id(flow_id)
-    #print("Sent reward")
-    driver.give_sample(sending_rate, recv_rate, latency, loss, lat_infl, utility)
+    driver.give_sample(flow_id,
+        bytes_sent,
+        bytes_acked,
+        bytes_lost,
+        send_start_time,
+        send_end_time,
+        recv_start_time,
+        recv_end_time,
+        rtt_samples,
+        packet_size,
+        utility)
     
 def reset(flow_id):
     driver = PccShimDriver.get_by_flow_id(flow_id)
@@ -44,7 +67,6 @@ def reset(flow_id):
 
 def get_rate(flow_id):
     driver = PccShimDriver.get_by_flow_id(flow_id)
-    #print("Waiting for rate")
     return driver.get_rate() * 1e6
 
 def init(flow_id):
