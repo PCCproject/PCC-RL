@@ -12,7 +12,7 @@ run RL models in the PCC UDT codebase found at github.com/PCCProject/PCC-Uspace.
 To run training only, go to ./src/gym/, install any missing requirements for
 stable\_solve.py and run that script. By default, this should replicate the
 model presented in A Reinforcement Learning Perspective on Internet Congestion
-Control, ICML 2019 [TODO: Hyperlink].
+Control, ICML 2019.
 
 ## Testing Models
 
