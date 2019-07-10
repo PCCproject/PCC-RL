@@ -1,8 +1,20 @@
-# python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 10000
-# python3 make_graph.py --num-agents 1 --dump-rate 1000 --save-rate 100 --in-out 1 1 --log-range 1 -1 --criteria reward
-# source ~/.bashrc
-# trainers[1].p_debug['target_act'](obs_n[0][None])
-# python3 train_maddpg.py --scenario simple_spread
+'''
+TO RUN SINGLE AGENT EXPERIMENT:
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 60000 lr 1e-3
+TO RUN BROKEN DOUBLE AGENT EXPERIMENT:
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 60000 lr 1e-3 --debug
+    # WHEN SEE DEBUGER WINDOW, ENTER: run -f has_inf_or_nan
+    # WAIT FOR NAN TO APPEAR THAN TRACE BACK THE PROBLEMATIC LAYERS
+TO MAKE GRAPHS FROM DUMP-EVENTS1 (ON SINGLE AGENT):
+    # python3 make_graph.py --num-agents 1 --dump-rate 1000 --save-rate 100 --in-out 1 1 --log-range 1 -1 --criteria all
+TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
+    # python3 train_maddpg.py --scenario simple_spread
+
+
+    # source ~/.bashrc
+    # trainers[1].p_debug['target_act'](obs_n[0][None])
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 50 --num-agents 2 --log-dir 210 --num-episodes 30000 --lr 1e-3 --debug
+'''
 
 # add to PATHONPATH
 import os, sys
@@ -20,7 +32,7 @@ import pickle
 import pdb
 
 
-from maddpg2.maddpg2.trainer.maddpg import MADDPGAgentTrainer, RandomTrainer
+from maddpg2.maddpg2.trainer.maddpg import MADDPGAgentTrainer # , RandomTrainer
 import tensorflow.contrib.layers as layers
 from network_sim import SimulatedMultAgentNetworkEnv
 import network_sim
@@ -32,6 +44,7 @@ def parse_args():
     # Environment
     parser.add_argument("--num-agents", type=int, default=1, help="number of good agents")
     parser.add_argument("--log-dir", type=str, default="0", help="directory in which log files are saved")
+    parser.add_argument("--debug", type=bool, nargs="?", const=True, default=False, help="Use debugger to track down bad values during training. ")
 
     parser.add_argument("--scenario", type=str, default="simple", help="name of the scenario script")
     parser.add_argument("--max-episode-len", type=int, default=25, help="maximum episode length")
@@ -143,13 +156,14 @@ def mlp_model3(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
     # This model takes as input an observation and returns values of all actions
     # scope: p_func, q_func, target_q_func
     with tf.variable_scope(scope, reuse=reuse):
-        print(input)
+        #print(input)
         hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
-        print(hidden1)
+        #print(hidden1)
         hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
-        print(hidden2)
+        #print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.identity)
-        print(out)
+        #print(out)
+        #out = tf.clip_by_value(out, -100.0, 100.0)
         return out
 
 ''' run network_sim.py '''
@@ -172,24 +186,51 @@ def make_env2(scenario_name, arglist, benchmark=False):
         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
     return env
 
-def get_trainers(env, num_adversaries, obs_shape_n, arglist):
+def get_trainers(env, num_adversaries, obs_shape_n, arglist, sess):
     trainers = []
-    model = mlp_model2
-    #trainer = RandomTrainer
-    trainer = MADDPGAgentTrainer
+    p_model = mlp_model3
+    q_model = mlp_model3
+    trainer = MADDPGAgentTrainer#RandomTrainer
     for i in range(num_adversaries):
         trainers.append(trainer(
-            "agent_%d" % i, model, obs_shape_n, env.action_space, i, arglist,
-            local_q_func=(arglist.adv_policy=='ddpg')))
+            "agent_%d" % i, p_model, q_model, obs_shape_n, env.action_space, i, arglist,
+            local_q_func=(arglist.adv_policy=='ddpg'), sess=sess))
     for i in range(num_adversaries, env.n):
         trainers.append(trainer(
-            "agent_%d" % i, model, obs_shape_n, env.action_space, i, arglist,
-            local_q_func=(arglist.good_policy=='ddpg')))
+            "agent_%d" % i, p_model, q_model, obs_shape_n, env.action_space, i, arglist,
+            local_q_func=(arglist.good_policy=='ddpg'), sess=sess))
     return trainers
 
 
 def train(arglist):
     with U.single_threaded_session() as sess:
+    #with tf.compat.v1.Session() as sess:
+        if(arglist.debug):
+            sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+            # sess.__enter__()
+            '''def my_filter_callable(datum, tensor):
+                # A filter that detects large tensor val.
+                not_empty = False
+                has_large = False
+                not_empty = len(tensor.shape) > 0
+                if not_empty:
+                    if (tensor.dtype == 'int32'):
+                        has_large = tf.reduce_any(tf.math.greater(tensor, 100000))
+                    if (tensor.dtype == 'float32'):
+                        has_large = tf.reduce_any(tf.math.greater(tensor, 1e6))
+
+                    sess = tf.Session()
+                    if sess.run(has_large):
+                        has_large = True
+                    else:
+                        has_large = False
+                    sess.close()
+
+                return not_empty and has_large
+
+            sess.add_tensor_filter('my_filter', my_filter_callable)'''
+
+
         # Create environment
         env = make_env(arglist)
         #env = make_env2(arglist.scenario, arglist, arglist.benchmark)
@@ -197,12 +238,12 @@ def train(arglist):
         # Create agent trainers
         obs_shape_n = [env.observation_space[i].shape for i in range(env.n)]
         num_adversaries = min(env.n, arglist.num_adversaries)
-        trainers = get_trainers(env, num_adversaries, obs_shape_n, arglist)
+        trainers = get_trainers(env, num_adversaries, obs_shape_n, arglist, sess)
         print('Using good policy {} and adv policy {}'.format(arglist.good_policy, arglist.adv_policy))
 
         # Initialize
         U.initialize()
-        saver = tf.train.Saver()
+        saver = tf.compat.v1.train.Saver()
 
         # Load previous results, if necessary
         if arglist.load_dir == "":
@@ -211,7 +252,7 @@ def train(arglist):
             print('Loading previous state...')
             U.load_state(arglist.load_dir)
             #saver.restore(sess, "model_episode_1000.ckpt")
-            #tf.print()
+
 
         episode_rewards = [0.0]  # sum of rewards for all agents
         agent_rewards = [[0.0] for _ in range(env.n)]  # individual agent reward
@@ -226,25 +267,17 @@ def train(arglist):
         t_start = time.time()
         #best_rew = 0
         #best_params = None
-        '''
-        merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
-        test_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test')
-        tf.global_variables_initializer().run()'''
 
-        #merged = tf.compat.v1.summary.merge_all()
-        #print(merged)
-        #summary_writer = tf.compat.v1.summary.FileWriter('/tmp' + '/train', sess.graph)
-        tf.global_variables_initializer().run()
+        merged = tf.compat.v1.summary.merge_all()
+        path = os.getcwd()+"/tmp/train"
+        summary_writer = tf.compat.v1.summary.FileWriter(path, sess.graph)
+        init = tf.global_variables_initializer()
 
         print('Starting iterations...')
         # tf.add_check_numerics_ops()
         while True:
             # get action
-
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
-            #print(obs_n)
-            #print(action_n)
             # got nan?
 
             # environment step
@@ -315,10 +348,17 @@ def train(arglist):
                 agent.preupdate()
             for agent in trainers:
                 loss = agent.update(trainers, train_step)
+                if (loss is not None):
+                    print(len(episode_rewards))
+                    print(agent.name)
+                    print(loss)
+                    print('\n')
+                #summary_writer.add_summary(loss[0], len(episode_rewards))
+                #summary_writer.add_summary(loss[1], len(episode_rewards))
 
-            #print(merged)
+            #sess.run(init)
             #[summary_str] = sess.run([merged])
-            #summary_writer.add_summary(summary_str, num_epi)
+            #summary_writer.add_summary(summary_str, len(episode_rewards))
 
             # save model, display training output
             if terminal and (len(episode_rewards) % arglist.save_rate == 0):
@@ -365,5 +405,6 @@ def train(arglist):
                 break
 
 if __name__ == '__main__':
+    #tf.enable_eager_execution()
     arglist = parse_args()
     train(arglist)

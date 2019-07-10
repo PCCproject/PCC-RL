@@ -84,14 +84,14 @@ def get_min_obs_vector(feature_names):
     for feature_name in feature_names:
         feature = SenderMonitorIntervalMetric.get_by_name(feature_name)
         result.append(feature.min_val)
-    return np.array(result) 
+    return np.array(result)
 
 def get_max_obs_vector(feature_names):
     result = []
     for feature_name in feature_names:
         feature = SenderMonitorIntervalMetric.get_by_name(feature_name)
         result.append(feature.max_val)
-    return np.array(result) 
+    return np.array(result)
 
 def _mi_metric_recv_rate(mi):
     dur = mi.get("recv dur")
@@ -110,7 +110,7 @@ def _mi_metric_avg_latency(mi):
 def _mi_metric_send_rate(mi):
     dur = mi.get("send dur")
     if dur > 0.0:
-        return 8.0 * mi.bytes_sent
+        return 8.0 * mi.bytes_sent /dur
     return 0.0
 
 def _mi_metric_send_dur(mi):
@@ -160,8 +160,8 @@ def _mi_metric_conn_min_latency(mi):
             return latency
         else:
             return 0.0
-        
-    
+
+
 def _mi_metric_send_ratio(mi):
     thpt = mi.get("recv rate")
     send_rate = mi.get("send rate")
@@ -190,5 +190,3 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("latency ratio", _mi_metric_latency_ratio, 1.0, 10000.0),
     SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0)
 ]
-
-

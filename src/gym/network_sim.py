@@ -228,6 +228,7 @@ class Sender():
         return result
 
     def apply_rate_delta(self, delta):
+
         delta *= config.DELTA_SCALE
         #print("Applying delta %f" % delta)
         if delta >= 0.0:
@@ -243,6 +244,7 @@ class Sender():
         if(np.isnan(delta)):
             print("delta"+str(delta))
             # printed nan
+        config.DELTA_SCALE = 0.025
         delta *= config.DELTA_SCALE
         if delta >= 0.0:
             self.rate = self.rate * (1.0 + delta)
@@ -403,6 +405,7 @@ class SimulatedNetworkEnv(gym.Env):
         if USE_CWND:
             self.action_space = spaces.Box(np.array([-1e12, -1e12]), np.array([1e12, 1e12]), dtype=np.float32)
         else:
+            #self.action_space = spaces.Box(np.array([-1e12]), np.array([1e12]), dtype=np.float32)
             self.action_space = spaces.Box(np.array([-1e12]), np.array([1e12]), dtype=np.float32)
 
 
@@ -597,7 +600,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             if USE_CWND:
                 self.action_space.append(spaces.Box(np.array([-1e12, -1e12]), np.array([1e12, 1e12]), dtype=np.float32))
             else:
-                self.action_space.append(spaces.Box(np.array([-1e12]), np.array([1e12]), dtype=np.float32))
+                self.action_space.append(spaces.Box(np.array([-MAX_RATE]), np.array([MAX_RATE]), dtype=np.float32))
 
             use_only_scale_free = True
             single_obs_min_vec = sender_obs.get_min_obs_vector(self.features)

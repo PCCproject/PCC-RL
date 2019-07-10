@@ -2,6 +2,9 @@ import collections
 import numpy as np
 import os
 import tensorflow as tf
+import sys
+from tensorflow.python import debug as tf_debug
+
 
 def sum(x, axis=None, keepdims=False):
     return tf.reduce_sum(x, axis=None if axis is None else [axis], keep_dims = keepdims)
@@ -145,7 +148,8 @@ def minimize_and_clip(optimizer, objective, var_list, clip_val=10):
         gradients = optimizer.compute_gradients(objective, var_list=var_list)
         for i, (grad, var) in enumerate(gradients):
             if grad is not None:
-                gradients[i] = (tf.clip_by_norm(grad, clip_val), var)
+                #gradients[i] = (tf.clip_by_norm(grad, clip_val), var)
+                gradients[i] = (tf.clip_by_value(grad, -0.5, 0.5), var)
         return optimizer.apply_gradients(gradients)
 
 
@@ -163,12 +167,14 @@ def make_session(num_cpu):
     tf_config = tf.ConfigProto(
         inter_op_parallelism_threads=num_cpu,
         intra_op_parallelism_threads=num_cpu)
+
     return tf.Session(config=tf_config)
 
 
 def single_threaded_session():
     """Returns a session which will only use a single CPU"""
     return make_session(1)
+
 
 
 ALREADY_INITIALIZED = set()
@@ -253,7 +259,7 @@ def save_state(root, fname, saver=None):
 # ================================================================
 
 
-def function(inputs, outputs, updates=None, givens=None):
+def function(inputs, outputs, updates=None, givens=None, sess=None):
     """Just like Theano function. Take a bunch of tensorflow placeholders and expersions
     computed based on those placeholders and produces f(inputs) -> outputs. Function f takes
     values to be feed to the inputs placeholders and produces the values of the experessions
@@ -285,17 +291,17 @@ def function(inputs, outputs, updates=None, givens=None):
         value will also have the same shape.
     """
     if isinstance(outputs, list):
-        return _Function(inputs, outputs, updates, givens=givens)
+        return _Function(inputs, outputs, updates, givens=givens, sess=sess)
     elif isinstance(outputs, (dict, collections.OrderedDict)):
-        f = _Function(inputs, outputs.values(), updates, givens=givens)
+        f = _Function(inputs, outputs.values(), updates, givens=givens, sess=sess)
         return lambda *args, **kwargs: type(outputs)(zip(outputs.keys(), f(*args, **kwargs)))
     else:
-        f = _Function(inputs, [outputs], updates, givens=givens)
+        f = _Function(inputs, [outputs], updates, givens=givens, sess=sess)
         return lambda *args, **kwargs: f(*args, **kwargs)[0]
 
 
 class _Function(object):
-    def __init__(self, inputs, outputs, updates, givens, check_nan=True):
+    def __init__(self, inputs, outputs, updates, givens, check_nan=True, sess=None):
         for inpt in inputs:
             if not issubclass(type(inpt), TfInput):
                 assert len(inpt.op.inputs) == 0, "inputs should all be placeholders of rl_algs.common.TfInput"
@@ -305,6 +311,7 @@ class _Function(object):
         self.outputs_update = list(outputs) + [self.update_group]
         self.givens = {} if givens is None else givens
         self.check_nan = check_nan
+        self.sess = sess
 
     def _feed_input(self, feed_dict, inpt, value):
         if issubclass(type(inpt), TfInput):
@@ -334,8 +341,21 @@ class _Function(object):
         # Update feed dict with givens.
         for inpt in self.givens:
             feed_dict[inpt] = feed_dict.get(inpt, self.givens[inpt])
-        results = get_session().run(self.outputs_update, feed_dict=feed_dict)[:-1]
+
+        #print_op = tf.print("Debug output:", self.outputs_update, "\n", output_stream=sys.stdout)
+        #with tf.control_dependencies([print_op]):
+        #    self.outputs_update = self.outputs_update
+
+        #sess = get_session()
+        #results = sess.run(self.outputs_update, feed_dict=feed_dict)[:-1]
+
+        if self.sess is None:
+            results = get_session().run(self.outputs_update, feed_dict=feed_dict)[:-1]
+        else:
+            results = self.sess.run(self.outputs_update, feed_dict=feed_dict)[:-1]
+
         if self.check_nan:
             if any(np.isnan(r).any() for r in results):
                 raise RuntimeError("Nan detected")
+
         return results

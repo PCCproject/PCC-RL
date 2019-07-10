@@ -29,6 +29,7 @@ class PdType(object):
     def pdclass(self):
         raise NotImplementedError
     def pdfromflat(self, flat):
+        print("PdType pdfromflat")
         return self.pdclass()(flat)
     def param_shape(self):
         raise NotImplementedError
@@ -101,6 +102,8 @@ class SoftMultiCategoricalPdType(PdType):
 class DiagGaussianPdType(PdType):
     def __init__(self, size):
         self.size = size
+        print("DiagGaussianPdType init")
+        print(self.size)
     def pdclass(self):
         return DiagGaussianPd
     def param_shape(self):
@@ -202,10 +205,10 @@ class SoftCategoricalPd(Pd):
         return U.sum(p0 * (tf.log(z0) - a0), axis=1)
     def sample(self):
         u = tf.random_uniform(tf.shape(self.logits))
-        return U.softmax(self.logits - tf.log(-tf.log(u)), axis=-1)  
+        return U.softmax(self.logits - tf.log(-tf.log(u)), axis=-1)
     @classmethod
     def fromflat(cls, flat):
-        return cls(flat)        
+        return cls(flat)
 
 class MultiCategoricalPd(Pd):
     def __init__(self, low, high, flat):
@@ -266,8 +269,15 @@ class DiagGaussianPd(Pd):
         self.mean = mean
         self.logstd = logstd
         self.std = tf.exp(logstd)
+        #self.std = tf.math.abs(logstd)
+
+        print("DiagGaussianPd init")
+        print(self.flat)
+        print(self.mean)
+        print(self.logstd)
+        print(self.std)
     def flatparam(self):
-        return self.flat        
+        return self.flat
     def mode(self):
         return self.mean
     def logp(self, x):
