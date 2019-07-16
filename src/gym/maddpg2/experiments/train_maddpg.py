@@ -25,10 +25,12 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     2e1e2: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025
     3e1e1: agent: 3, multiply-layer: 8.9, config.DELTA_SCALE = 0.025
     3e1e2: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025
-    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
-    2e1e3: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, 74.90041227874295
-    2e1e4: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, 75.82250612531352
-    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1
+    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 40
+    2e1e3: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 74.90041227874295
+    2e1e4: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 75.82250612531352
+    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1,
+    4e1e1: agent: 4, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 34
+
 
 
     # WORKING,
