@@ -35,7 +35,7 @@ MAX_LATENCY_NOISE = 1.1
 
 USE_CWND = False
 RANDOM_LINK = False
-DUMPRATE = 1000
+DUMPRATE = 100
 
 class Link():
 
@@ -245,6 +245,7 @@ class Sender():
             print("delta"+str(delta))
             # printed nan
         config.DELTA_SCALE = 0.025
+        # config.DELTA_SCALE = 1e6
         delta *= config.DELTA_SCALE
         if delta >= 0.0:
             self.rate = self.rate * (1.0 + delta)

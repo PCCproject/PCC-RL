@@ -14,6 +14,33 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     # source ~/.bashrc
     # trainers[1].p_debug['target_act'](obs_n[0][None])
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 50 --num-agents 2 --log-dir 210 --num-episodes 30000 --lr 1e-3 --debug
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 31 --num-episodes 30000 --lr 1e-3
+    # python3 make_graph.py --num-agents 1 --dump-rate 100 --save-rate 100 --in-out 31 new1 --log-range 1 -1 --criteria all
+
+    -- experiment log --
+    baseline: model3, no restriction on out range, works for 1 agent but blows up for multi-agents
+    improve: model4, tanh to change to (-1, 1), then scale it by multiplying, if unscaled learns slow or does not learn
+    1e1e1: agent: 1, multiply-layer: 10, config.DELTA_SCALE = 0.025
+    2e1e1: agent: 2, multiply-layer: 10, config.DELTA_SCALE = 0.025
+    2e1e2: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025
+    3e1e1: agent: 3, multiply-layer: 8.9, config.DELTA_SCALE = 0.025
+    3e1e2: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025
+    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
+    2e1e3: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, 74.90041227874295
+    2e1e4: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, 75.82250612531352
+    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1
+
+
+    # WORKING,
+        1e1e1 (rewards > 100 after 600 epi, capped at 135 after 2000 epi):
+            --python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1e3 --num-episodes 30000 --lr 1e-3
+        2e1e2, bad until epi 3500 (0.92 rew, negatives before), got 94 rew at epi 4600, 131 rew at epi 5700
+            --python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 2e1e2 --num-episodes 30000 --lr 1e-3
+        3e1e
+
+    # double agents: kind of work if multiply layer = 9
+      see 2e1e2, multiply-layer: 9
+
 '''
 
 # add to PATHONPATH
@@ -139,7 +166,7 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
 ''' original achitecture '''
 def mlp_model2(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
-    with tf.variable_scope(scope, reuse=reuse):
+    with tf.compat.v1.variable_scope(scope, reuse=reuse):
         print("mlp_m2")
         out = input
         print(out)
@@ -155,13 +182,30 @@ def mlp_model2(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
 def mlp_model3(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
     # scope: p_func, q_func, target_q_func
-    with tf.variable_scope(scope, reuse=reuse):
+    with tf.compat.v1.variable_scope(scope, reuse=reuse):
         #print(input)
         hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
         #print(hidden1)
         hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
         #print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.identity)
+        #print(out)
+        #out = tf.clip_by_value(out, -100.0, 100.0)
+        return out
+
+'''attemp to solve the blowing out prob'''
+def mlp_model4(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
+    # This model takes as input an observation and returns values of all actions
+    # scope: p_func, q_func, target_q_func
+    with tf.compat.v1.variable_scope(scope, reuse=reuse):
+        #print(input)
+        hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
+        #print(hidden1)
+        hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
+        #print(hidden2)
+        out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.tanh)
+        #print(out)
+        out = tf.math.multiply(out, 7, 'scale')
         #print(out)
         #out = tf.clip_by_value(out, -100.0, 100.0)
         return out
@@ -188,7 +232,7 @@ def make_env2(scenario_name, arglist, benchmark=False):
 
 def get_trainers(env, num_adversaries, obs_shape_n, arglist, sess):
     trainers = []
-    p_model = mlp_model3
+    p_model = mlp_model4
     q_model = mlp_model3
     trainer = MADDPGAgentTrainer#RandomTrainer
     for i in range(num_adversaries):
@@ -200,6 +244,11 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist, sess):
             "agent_%d" % i, p_model, q_model, obs_shape_n, env.action_space, i, arglist,
             local_q_func=(arglist.good_policy=='ddpg'), sess=sess))
     return trainers
+
+def action_check(action_n, env, bar):
+    action_vals = [action_n[i][0] for i in range(env.n)]
+    if (any(abs(action_val) > bar for action_val in action_vals)):
+        print(action_vals)
 
 
 def train(arglist):
@@ -278,6 +327,8 @@ def train(arglist):
         while True:
             # get action
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
+            action_check(action_n, env, bar=1000.0)
+
             # got nan?
 
             # environment step
@@ -349,10 +400,11 @@ def train(arglist):
             for agent in trainers:
                 loss = agent.update(trainers, train_step)
                 if (loss is not None):
-                    print(len(episode_rewards))
+                    # print("update")
+                    '''print(len(episode_rewards))
                     print(agent.name)
                     print(loss)
-                    print('\n')
+                    print('\n')'''
                 #summary_writer.add_summary(loss[0], len(episode_rewards))
                 #summary_writer.add_summary(loss[1], len(episode_rewards))
 
