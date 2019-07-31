@@ -8,6 +8,7 @@ import time
 import random
 import json
 import os
+import math
 from simple_arg_parse import arg_or_default
 from common import sender_obs, config
 
@@ -105,6 +106,10 @@ class Network():
     def get_cur_time(self):
         return self.cur_time
 
+
+    def sigmoid(self, x):
+        return 1 / (1 + math.exp(-x))
+
     def run_for_dur(self, dur):
         end_time = self.cur_time + dur
         for sender in self.senders:
@@ -162,14 +167,48 @@ class Network():
             if push_new_event:
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped))
 
-        rewards = []
+
+        rates = []
         for sender in self.senders:
             sender_mi = sender.get_run_data()
+            rates.append(sender_mi.get("send rate"))
+
+        penalties = []
+        threshold = 1.0 / len(rates)
+        sum_rates = sum(rates)
+        for rate in rates:
+            penalty = 0.0
+            '''
+            occupancy = rate / sum_rates
+            occupancy_ratio = (occupancy - threshold) / (1.0 - threshold)
+            penalty = max(0.25 * occupancy_ratio, 0)
+            '''
+            penalties.append(penalty)
+
+        rewards = []
+        for sender, penalty in zip(self.senders, penalties):
+            sender_mi = sender.get_run_data()
+            sendrate = sender_mi.get("send rate")
             throughput = sender_mi.get("recv rate")
             latency = sender_mi.get("avg latency")
             loss = sender_mi.get("loss ratio")
             # Very high thpt
             reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss) * REWARD_SCALE
+            # 2e12: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 2e3 * loss) * REWARD_SCALE
+            # 2e13: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET)) * REWARD_SCALE
+            # 2e14: reward = (10.0 * sendrate / (8 * BYTES_PER_PACKET) - 11.3 * 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * 0.0001
+            # reward = (10.0 * sendrate / (8 * BYTES_PER_PACKET) - 11.3 * 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * 0.001
+            # 2e15: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) * self.sigmoid(loss - 0.05) - 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * REWARD_SCALE
+            # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) * self.sigmoid(loss - 0.05) - 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * REWARD_SCALE
+
+            # print(reward)
+            '''
+            if (reward > 0):
+                reward = reward * (1-penalty)
+            else:
+                reward = reward * (1+penalty)
+                '''
+
             #if (reward < 0):
             #    print(reward)
             #    print(str(throughput)+" "+str(latency)+" "+str(loss))
@@ -194,7 +233,9 @@ class Network():
         #print("Reward = %f, thpt = %f, lat = %f, loss = %f" % (reward, throughput, latency, loss))
 
         #reward = (throughput / RATE_OBS_SCALE) * np.exp(-1 * (LATENCY_PENALTY * latency / LAT_OBS_SCALE + LOSS_PENALTY * loss))
-
+        #print(rates)
+        #print(penalties)
+        #print(rewards)
         return rewards
 
 class Sender():
@@ -256,6 +297,7 @@ class Sender():
             self.rate = MAX_RATE
         elif self.rate < MIN_RATE:
             self.rate = MIN_RATE
+            self.rate = self.rate
         #if (self.rate < 40):
         #    print("WARNING: self.rate = %f" % self.rate)
         #if np.isnan(self.rate):
@@ -578,6 +620,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         self.reward_sums = [0.0 for _ in range(self.n)]
         self.reward_ewmas = [0.0 for _ in range(self.n)]
         self.event_records = [[] for _ in range(self.n)] # per episode record, list of dicts
+        self.step_records = [[] for _ in range(self.n)]
 
         # per step count, reset in each episode
         self.agent_rewards = [[] for _ in range(self.n)]  # individual per step reward, for computing avg over steps in an episode
@@ -595,7 +638,6 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         self.episode_lossrates = [[] for _ in range(self.n)]
         self.episode_sum_rewards = []
 
-
         for i, sender in enumerate(self.senders, 0):
 
             if USE_CWND:
@@ -609,7 +651,6 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.observation_space.append(spaces.Box(np.tile(single_obs_min_vec, self.history_len),
                                             np.tile(single_obs_max_vec, self.history_len),
                                             dtype=np.float32))
-
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
@@ -634,6 +675,18 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.episode_latencies[i].append(np.mean(self.agent_latencies[i]))
             self.episode_lossrates[i].append(np.mean(self.agent_lossrates[i]))
 
+    def _add_step_record(self):
+        for i, sender in enumerate(self.senders, 0):
+            event = {}
+            event["Sender"] = (i+1)
+            event["Episode"] = self.episodes_run
+            event["Step"] = self.steps_taken[i]
+            event["Reward"] = self.agent_rewards[i][-1]
+            event["Send Rate"] = self.agent_sendrates[i][-1]
+            event["Throughput"] = self.agent_throughputs[i][-1]
+            event["Latency"] = self.agent_latencies[i][-1]
+            event["Loss Rate"] = self.agent_lossrates[i][-1]
+            self.step_records[i].append(event)
 
     # add event record, episodes avg
     def _add_event_record(self):
@@ -713,8 +766,8 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.agent_lossrates[i].append(sender_mi.get("loss ratio"))
             self.sum_rewards[-1] += reward_n[i]
 
-            #if(self.episodes_run > 1000):
-                #print(self.agent_sendrates)
+        if self.episodes_run > 0 and self.episodes_run % 1000 == 0:
+            self._add_step_record()
 
         return obs_n, reward_n, [((self.steps_taken[i] >= self.max_steps) or False) for i in range(self.n)], {}
 
@@ -762,21 +815,23 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
 
         self.net.reset()
         self.create_new_links_and_senders(random_link = RANDOM_LINK)
-        #if (self.episodes_run > 1000):
-        #    print(str(self.episodes_run) + " " + str(self.senders[0].rate))
 
         self.net = Network(self.senders, self.links)
-
-        self.episodes_run += 1
 
         if self.episodes_run > 0 and self.episodes_run % self.save_rate == 0:
             self._add_event_record()
         # self.dump_events_to_file("./dump-events" + self.log_dir +"/pcc_env_log_run_%d.json" % self.episodes_run)
-        if self.episodes_run > 0 and self.episodes_run % DUMPRATE == 0:
+        if self.episodes_run > 0 and self.episodes_run % self.save_rate == 0:
             print("dump episodes_run = %d" % self.episodes_run)
-            self.dump_events_to_file("./dump-events" + self.log_dir +"/pcc_env_log_run_%d.json" % self.episodes_run)
+            self.dump_events_to_file("./dump-events" + self.log_dir +"/pcc_env_log_run_%d.json" % self.episodes_run, self.event_records)
             self.event_records = [[] for _ in range(self.n)]
 
+        if self.episodes_run > 0 and self.episodes_run % 1000 == 0:
+            print("dump steps at episode %d" % self.episodes_run)
+            self.dump_events_to_file("./dump-events" + self.log_dir +"/steps_at_epi_%d.json" % self.episodes_run, self.step_records)
+            self.step_records = [[] for _ in range(self.n)]
+
+        self.episodes_run += 1
 
         self.net.run_for_dur(self.run_dur)
         self.net.run_for_dur(self.run_dur)
@@ -796,10 +851,10 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.viewer.close()
             self.viewer = None
 
-    def dump_events_to_file(self, filename):
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'w') as f:
-            json.dump(self.event_records, f, indent=4)
+    def dump_events_to_file(self, dirname, record):
+        os.makedirs(os.path.dirname(dirname), exist_ok=True)
+        with open(dirname, 'w') as f:
+            json.dump(record, f, indent=4)
 
 
 register(id='PccNs-v0', entry_point='network_sim:SimulatedNetworkEnv')

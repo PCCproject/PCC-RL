@@ -206,7 +206,7 @@ def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad
         #loss = tf.add(print_out, p_reg * 1e-3)
         #loss = print_out + p_reg * 1e-3
         # loss = pg_loss + p_reg * 1e-3
-        loss = pg_loss + p_reg * 1e0
+        loss = pg_loss + p_reg * 1e-3
 
         optimize_expr = U.minimize_and_clip(optimizer, loss, p_func_vars, grad_norm_clipping)
 

@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "Sender": 1,
+            "Episode": 12600,
+            "Reward": 39.89849969870192,
+            "SumReward": 39.94924194156016,
+            "Send Rate": 40.0,
+            "Throughput": 464547.05870300793,
+            "Latency": 0.06299428001111386,
+            "Loss Rate": 0.0
+        }
+    ],
+    [
+        {
+            "Sender": 2,
+            "Episode": 12600,
+            "Reward": 40.00066518591443,
+            "SumReward": 39.94924194156016,
+            "Send Rate": 40.0,
+            "Throughput": 465748.1918113149,
+            "Latency": 0.06823054055455255,
+            "Loss Rate": 0.0
+        }
+    ]
+]

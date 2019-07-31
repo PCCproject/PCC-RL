@@ -1,12 +1,12 @@
 '''
 TO RUN SINGLE AGENT EXPERIMENT:
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 60000 lr 1e-3
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 60000 --lr 1e-3
 TO RUN BROKEN DOUBLE AGENT EXPERIMENT:
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 60000 lr 1e-3 --debug
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 60000 --lr 1e-3 --debug
     # WHEN SEE DEBUGER WINDOW, ENTER: run -f has_inf_or_nan
     # WAIT FOR NAN TO APPEAR THAN TRACE BACK THE PROBLEMATIC LAYERS
 TO MAKE GRAPHS FROM DUMP-EVENTS1 (ON SINGLE AGENT):
-    # python3 make_graph.py --num-agents 1 --dump-rate 1000 --save-rate 100 --in-out 1 1 --log-range 1 -1 --criteria all
+    # python3 make_graph.py --num-agents 1 --dump-rate 100 --save-rate 100 --in-out 1 1 --log-range 1 20 --type epi
 TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     # python3 train_maddpg.py --scenario simple_spread
 
@@ -20,17 +20,34 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     -- experiment log --
     baseline: model3, no restriction on out range, works for 1 agent but blows up for multi-agents
     improve: model4, tanh to change to (-1, 1), then scale it by multiplying, if unscaled learns slow or does not learn
-    1e1e1: agent: 1, multiply-layer: 10, config.DELTA_SCALE = 0.025
-    2e1e1: agent: 2, multiply-layer: 10, config.DELTA_SCALE = 0.025
-    2e1e2: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025
-    3e1e1: agent: 3, multiply-layer: 8.9, config.DELTA_SCALE = 0.025
-    3e1e2: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025
-    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 40
-    2e1e3: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 74.90041227874295
-    2e1e4: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 75.82250612531352
-    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 40 but not fair spread
-    4e1e1: agent: 4, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 34
+    1e1e1: agent: 1, multiply-layer: 10, config.DELTA_SCALE = 0.025, p_reg * 1e-3
 
+    2e1e1: agent: 2, multiply-layer: 10, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    2e1e2: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    2e1e3: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 40 not fair, send = 43, 48
+    2e1e4: agent: 2, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 40, send = 45
+    2e5: agent: 2, multiply-layer: 10, config.DELTA_SCALE = 0.025, p_reg * 1e-2
+    2e6: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025, p_reg * 1e-3, penalty = 0.25
+    2e7: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025, p_reg * 1e-3, penalty = 1.0
+    2e8: original model, relu std, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    2e9: original model, elu std, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    2e10: repeat 2e6
+    2e11: repeat 2e1e2
+    2e12: repeat 2e1e2, but with latency reward turned off, only throughput and lossrate
+    2e13: repeat 2e1e2, throughput only
+    2e14: 2018 Pcc, sendrate - 11.3 * sendrate * lossrate
+    2e15: 2015 Pcc, throughput * Sigmoid(lossrate−0.05) − sendrate * lossrate
+
+
+    3e1e1: agent: 3, multiply-layer: 8.9, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    3e1e2: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 40, send = 46
+    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 40 not fair, send = 60, 50, 50
+    3e5: TODO repeat 3e1e2
+
+    4e1e1: agent: 4, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
+
+    5e1: agent: 5, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
 
 
     # WORKING,
@@ -38,10 +55,6 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
             --python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1e3 --num-episodes 30000 --lr 1e-3
         2e1e2, bad until epi 3500 (0.92 rew, negatives before), got 94 rew at epi 4600, 131 rew at epi 5700
             --python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 2e1e2 --num-episodes 30000 --lr 1e-3
-        3e1e
-
-    # double agents: kind of work if multiply layer = 9
-      see 2e1e2, multiply-layer: 9
 
 '''
 
@@ -207,7 +220,7 @@ def mlp_model4(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
         #print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.tanh)
         #print(out)
-        out = tf.math.multiply(out, 7, 'scale')
+        out = tf.math.multiply(out, 9, 'scale')
         #print(out)
         #out = tf.clip_by_value(out, -100.0, 100.0)
         return out
@@ -334,24 +347,12 @@ def train(arglist):
             # got nan?
 
             # environment step
-
             # each new_obs should have global view??
             new_obs_n, rew_n, done_n, info_n = env.step(action_n)
 
             #if(np.sum(rew_n) > best_rew):
             #    best_rew = np.sum(rew_n)
             #    best_params = [agent.parameters for agent in trainers]
-
-            boo1 = np.any(pd.isnull(new_obs_n))
-            boo2 = np.any(pd.isnull(rew_n))
-            boo3 = np.any(pd.isnull(action_n))
-            if boo1 == True or boo2 == True or boo3 == True:
-                save_path = saver.save(sess, "model_nan.ckpt")
-                chkp.print_tensors_in_checkpoint_file("model_nan.ckpt", tensor_name='', all_tensors=True)
-                pdb.set_trace() # Break into debugger to look around
-                print(new_obs_n)
-                print(rew_n)
-                print(action_n)
 
             episode_step += 1
             done = all(done_n)
@@ -435,12 +436,6 @@ def train(arglist):
                 print("steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}".format(
                         train_step, num_epi, mean_epi_rew, agent_epi_rew, round(time.time()-t_start, 3)))
                 #print("best_reward: {}, best_params: {}".format(best_rew, best_params))
-
-                '''else:
-                    print("steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}".format(
-                        train_step, len(episode_rewards), np.mean(episode_rewards[-arglist.save_rate:]),
-                        [np.mean(rew[-arglist.save_rate:]) for rew in agent_rewards], round(time.time()-t_start, 3)))'''
-
                 t_start = time.time()
                 # Keep track of final episode reward
                 final_ep_rewards.append(np.mean(episode_rewards[-arglist.save_rate:]))

@@ -269,7 +269,9 @@ class DiagGaussianPd(Pd):
         self.mean = mean
         self.logstd = logstd
         self.std = tf.exp(logstd)
-        #self.std = tf.math.abs(logstd)
+        # self.std = tf.math.abs(logstd)
+        # self.std = tf.nn.relu(logstd)
+        # self.std = tf.nn.elu(logstd)+1
 
         print("DiagGaussianPd init")
         print(self.flat)
