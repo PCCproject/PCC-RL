@@ -194,6 +194,7 @@ class Network():
             loss = sender_mi.get("loss ratio")
             # Very high thpt
             reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss) * REWARD_SCALE
+
             # 2e12: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 2e3 * loss) * REWARD_SCALE
             # 2e13: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET)) * REWARD_SCALE
             # 2e14: reward = (10.0 * sendrate / (8 * BYTES_PER_PACKET) - 11.3 * 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * 0.0001
@@ -500,9 +501,12 @@ class SimulatedNetworkEnv(gym.Env):
         event["Send Rate"] = sender_mi.get("send rate")
         event["Throughput"] = sender_mi.get("recv rate")
         event["Latency"] = sender_mi.get("avg latency")
+
         event["Loss Rate"] = sender_mi.get("loss ratio")
         event["Latency Inflation"] = sender_mi.get("sent latency inflation")
+
         event["Latency Ratio"] = sender_mi.get("latency ratio")
+
         event["Send Ratio"] = sender_mi.get("send ratio")
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
@@ -730,6 +734,8 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         #if (self.episodes_run > 1000):
         #    print(str(self.episodes_run) + " " + str(self.senders[0].rate))
 
+
+
         for i in range(self.n):#len(actions)):
             #print("Updating rate for sender %d" % i)
             action = actions[i]
@@ -757,6 +763,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.steps_taken[i] += 1
 
             sender_mi = sender.get_run_data()
+            
             self.agent_rewards[i].append(reward_n[i])
 
             self.agent_sendrates[i].append(sender.rate)

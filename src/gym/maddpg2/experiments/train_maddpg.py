@@ -348,6 +348,7 @@ def train(arglist):
 
             # environment step
             # each new_obs should have global view??
+            
             new_obs_n, rew_n, done_n, info_n = env.step(action_n)
 
             #if(np.sum(rew_n) > best_rew):
