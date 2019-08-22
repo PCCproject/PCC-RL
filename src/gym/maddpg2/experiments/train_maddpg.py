@@ -1,12 +1,13 @@
 '''
-TO RUN SINGLE AGENT EXPERIMENT:
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 60000 --lr 1e-3
-TO RUN BROKEN DOUBLE AGENT EXPERIMENT:
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 60000 --lr 1e-3 --debug
+TO RUN SINGLE/DOUBLE AGENT EXPERIMENT:
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 40000 --lr 1e-3
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 2e20 --num-episodes 40000 --lr 1e-2
+TO RUN DOUBLE AGENT WITH DEGUBBER:
+    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 40000 --lr 1e-3 --debug
     # WHEN SEE DEBUGER WINDOW, ENTER: run -f has_inf_or_nan
     # WAIT FOR NAN TO APPEAR THAN TRACE BACK THE PROBLEMATIC LAYERS
 TO MAKE GRAPHS FROM DUMP-EVENTS1 (ON SINGLE AGENT):
-    # python3 make_graph.py --num-agents 1 --dump-rate 100 --save-rate 100 --in-out 1 1 --log-range 1 20 --type epi
+    # python3 make_graph.py --num-agents 2 --dump-rate 100 --save-rate 100 --in-out 2e19 2e19 --log-range 1 190 --type epi
 TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     # python3 train_maddpg.py --scenario simple_spread
 
@@ -15,12 +16,12 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     # trainers[1].p_debug['target_act'](obs_n[0][None])
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 50 --num-agents 2 --log-dir 210 --num-episodes 30000 --lr 1e-3 --debug
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 31 --num-episodes 30000 --lr 1e-3
-    # python3 make_graph.py --num-agents 1 --dump-rate 100 --save-rate 100 --in-out 31 new1 --log-range 1 -1 --criteria all
 
     -- experiment log --
     baseline: model3, no restriction on out range, works for 1 agent but blows up for multi-agents
     improve: model4, tanh to change to (-1, 1), then scale it by multiplying, if unscaled learns slow or does not learn
     1e1e1: agent: 1, multiply-layer: 10, config.DELTA_SCALE = 0.025, p_reg * 1e-3
+    1e6: ran on simple network simulator
 
     2e1e1: agent: 2, multiply-layer: 10, config.DELTA_SCALE = 0.025, p_reg * 1e-3
     2e1e2: agent: 2, multiply-layer: 9, config.DELTA_SCALE = 0.025, p_reg * 1e-3
@@ -37,18 +38,35 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
     2e13: repeat 2e1e2, throughput only
     2e14: 2018 Pcc, sendrate - 11.3 * sendrate * lossrate
     2e15: 2015 Pcc, throughput * Sigmoid(lossrate−0.05) − sendrate * lossrate
+    2e16: ran on simple network simulator, no P term, 2 obs
+    2e17: simple, P term, 4 obs
+    2e18: P term, sending_time noise, high bw, high min_rate, small queue_size, long run_dur
 
+        turn off  F
+        variance 1%-9%
+        bw = 400, 80, longer takes bigger T
+        qsize = 10-50
+        run_dur = 1.0-2.0
+
+        (base)bw=400, min_r=80, queue = 10, no F, variance = 0.1, run_dur = 1.0
+        2e22: queue = 10 (base), no F
+        2e23: queue = 50, no F
+        2e24: queue = 10, F
+        2e25: queue = 10, no F, 800, 160
+        2e26:  queue = 10 (base), no F, variance = 0.25
+        2e27: run_dur = 2.0
 
     3e1e1: agent: 3, multiply-layer: 8.9, config.DELTA_SCALE = 0.025, p_reg * 1e-3
     3e1e2: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-3
-    3e1e3: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0, avg_rew = 40, send = 46
-    3e1e4: agent: 3, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e-1, avg_rew = 40 not fair, send = 60, 50, 50
-    3e5: TODO repeat 3e1e2
+    3e3: ran on simple network simulator
+    3e4: simple sim, P term, 2 obs
+    3e5: P, sending_time noise, high bw, high min_rate, small queue_size, long run_dur
 
     4e1e1: agent: 4, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
+    4e2: simple sim, P term, 2 obs
 
     5e1: agent: 5, multiply-layer: 7, config.DELTA_SCALE = 0.025, p_reg * 1e0
-
+    5e2: simple sim, P term, 2 obs
 
     # WORKING,
         1e1e1 (rewards > 100 after 600 epi, capped at 135 after 2000 epi):
@@ -76,8 +94,7 @@ import pdb
 
 from maddpg2.maddpg2.trainer.maddpg import MADDPGAgentTrainer # , RandomTrainer
 import tensorflow.contrib.layers as layers
-from network_sim import SimulatedMultAgentNetworkEnv
-import network_sim
+from maddpg2.network_sim import SimulatedMultAgentNetworkEnv
 import maddpg2.maddpg2.common.tf_util as U
 from tensorflow.python.tools import inspect_checkpoint as chkp
 
@@ -118,9 +135,7 @@ def weight_variable(shape):
     """Create a weight variable with appropriate initialization."""
     #return tf.truncated_normal(shape, stddev=0.1)
     initial = tf.truncated_normal(shape, stddev=0.1)
-    #print(tf.Variable(initial))
     #return tf.Variable(initial)
-    #print(tf.compat.v1.get_variable(name='weights', initializer = initial))
     return tf.compat.v1.get_variable(name='weights', initializer = initial)
 
 def bias_variable(shape):
@@ -198,14 +213,13 @@ def mlp_model3(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
     # This model takes as input an observation and returns values of all actions
     # scope: p_func, q_func, target_q_func
     with tf.compat.v1.variable_scope(scope, reuse=reuse):
-        #print(input)
+        print(input)
         hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
-        #print(hidden1)
+        print(hidden1)
         hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
-        #print(hidden2)
+        print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.identity)
-        #print(out)
-        #out = tf.clip_by_value(out, -100.0, 100.0)
+        print(out)
         return out
 
 '''attemp to solve the blowing out prob'''
@@ -213,20 +227,20 @@ def mlp_model4(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
     # This model takes as input an observation and returns values of all actions
     # scope: p_func, q_func, target_q_func
     with tf.compat.v1.variable_scope(scope, reuse=reuse):
-        #print(input)
+        print(input)
         hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
-        #print(hidden1)
+        print(hidden1)
         hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
-        #print(hidden2)
+        print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.tanh)
-        #print(out)
+        print(out)
         out = tf.math.multiply(out, 9, 'scale')
-        #print(out)
-        #out = tf.clip_by_value(out, -100.0, 100.0)
+        print(out)
         return out
 
 ''' run network_sim.py '''
 def make_env(arglist):
+    # env = SimulatedMultAgentNetworkEnv(arglist, n_features = 2, history_len = 1)
     env = SimulatedMultAgentNetworkEnv(arglist)
     return env
 
@@ -247,7 +261,7 @@ def make_env2(scenario_name, arglist, benchmark=False):
 
 def get_trainers(env, num_adversaries, obs_shape_n, arglist, sess):
     trainers = []
-    p_model = mlp_model4
+    p_model = mlp_model3
     q_model = mlp_model3
     trainer = MADDPGAgentTrainer#RandomTrainer
     for i in range(num_adversaries):
@@ -300,6 +314,7 @@ def train(arglist):
         #env = make_env2(arglist.scenario, arglist, arglist.benchmark)
 
         # Create agent trainers
+
         obs_shape_n = [env.observation_space[i].shape for i in range(env.n)]
         num_adversaries = min(env.n, arglist.num_adversaries)
         trainers = get_trainers(env, num_adversaries, obs_shape_n, arglist, sess)
@@ -341,14 +356,13 @@ def train(arglist):
         # tf.add_check_numerics_ops()
         while True:
             # get action
+
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
+
             action_check(action_n, env, bar=1000.0)
 
             # got nan?
-
             # environment step
-            # each new_obs should have global view??
-            
             new_obs_n, rew_n, done_n, info_n = env.step(action_n)
 
             #if(np.sum(rew_n) > best_rew):
@@ -398,6 +412,7 @@ def train(arglist):
                 continue
 
             # update all trainers, if not in display or benchmark mode
+
             loss = None
             for agent in trainers:
                 agent.preupdate()

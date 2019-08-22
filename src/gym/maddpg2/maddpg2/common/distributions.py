@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import maddpg.common.tf_util as U
 from tensorflow.python.ops import math_ops
-from multiagent_particle_envs.multiagent.multi_discrete import MultiDiscrete
+#from multiagent.multi_discrete import MultiDiscrete
 from tensorflow.python.ops import nn
 
 class Pd(object):
@@ -29,7 +29,6 @@ class PdType(object):
     def pdclass(self):
         raise NotImplementedError
     def pdfromflat(self, flat):
-        print("PdType pdfromflat")
         return self.pdclass()(flat)
     def param_shape(self):
         raise NotImplementedError
@@ -102,8 +101,6 @@ class SoftMultiCategoricalPdType(PdType):
 class DiagGaussianPdType(PdType):
     def __init__(self, size):
         self.size = size
-        print("DiagGaussianPdType init")
-        print(self.size)
     def pdclass(self):
         return DiagGaussianPd
     def param_shape(self):
@@ -327,9 +324,9 @@ def make_pdtype(ac_space):
     elif isinstance(ac_space, spaces.Discrete):
         # return CategoricalPdType(ac_space.n)
         return SoftCategoricalPdType(ac_space.n)
-    elif isinstance(ac_space, MultiDiscrete):
+    #elif isinstance(ac_space, MultiDiscrete):
         #return MultiCategoricalPdType(ac_space.low, ac_space.high)
-        return SoftMultiCategoricalPdType(ac_space.low, ac_space.high)
+    #    return SoftMultiCategoricalPdType(ac_space.low, ac_space.high)
     elif isinstance(ac_space, spaces.MultiBinary):
         return BernoulliPdType(ac_space.n)
     else:

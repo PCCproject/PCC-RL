@@ -86,10 +86,6 @@ def p_train2(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, gra
 
         optimize_expr = U.minimize_and_clip(optimizer, loss, p_func_vars, grad_norm_clipping)
 
-        #print(grad_norm_clipping)
-        #print(optimize_expr)
-        #print_op = tf.print("Debug output:", optimize_expr, "\n", output_stream=sys.stdout)
-
         # Create callable functions
         train = U.function(inputs=obs_ph_n + act_ph_n, outputs=loss, updates=[optimize_expr], sess=sess)
         act = U.function(inputs=[obs_ph_n[p_index]], outputs=act_sample, sess=None)
@@ -164,9 +160,7 @@ def q_train2(make_obs_ph_n, act_space_n, q_index, q_func, optimizer, grad_norm_c
 def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad_norm_clipping=None, local_q_func=False, num_units=64, scope="trainer", reuse=None, sess=None):
     with tf.variable_scope(scope, reuse=reuse):
         # create distribtuions
-        print("create distrbutions")
         act_pdtype_n = [make_pdtype(act_space) for act_space in act_space_n]
-        print("finsih create dist")
 
         # set up placeholders
         obs_ph_n = make_obs_ph_n
@@ -182,7 +176,6 @@ def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad
 
         # wrap parameters in distribution
         act_pd = act_pdtype_n[p_index].pdfromflat(p)
-        print(act_pd)
 
         act_sample = act_pd.sample()
         p_reg = tf.reduce_mean(tf.square(act_pd.flatparam())) #???
@@ -209,11 +202,6 @@ def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad
         loss = pg_loss + p_reg * 1e-3
 
         optimize_expr = U.minimize_and_clip(optimizer, loss, p_func_vars, grad_norm_clipping)
-
-        #print(grad_norm_clipping)
-        #print(optimize_expr)
-        print_op = tf.print("Debug output:", optimize_expr, "\n", output_stream=sys.stdout)
-
         # Create callable functions
         train = U.function(inputs=obs_ph_n + act_ph_n, outputs=loss, updates=[optimize_expr], sess=sess)
         act = U.function(inputs=[obs_ph_n[p_index]], outputs=act_sample, sess=None)
@@ -227,11 +215,10 @@ def p_train(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, grad
         target_act_sample = act_pdtype_n[p_index].pdfromflat(target_p).sample()
         target_act = U.function(inputs=[obs_ph_n[p_index]], outputs=target_act_sample, sess=None)
 
-        with tf.control_dependencies([print_op]):
-            return act, train, update_target_p, {'p_values': p_values, 'target_act': target_act}
+        return act, train, update_target_p, {'p_values': p_values, 'target_act': target_act}
 
 def q_train(make_obs_ph_n, act_space_n, q_index, q_func, optimizer, grad_norm_clipping=None, local_q_func=False, scope="trainer", reuse=None, num_units=64, sess=None):
-    with tf.variable_scope(scope, reuse=reuse):
+    with tf.compat.v1.variable_scope(scope, reuse=reuse):
         # create distribtuions
         act_pdtype_n = [make_pdtype(act_space) for act_space in act_space_n]
 
@@ -320,8 +307,6 @@ class MADDPGAgentTrainer(AgentTrainer):
         # Create experience buffer
         self.replay_buffer = ReplayBuffer(1e6)
         self.max_replay_buffer_len = args.batch_size * args.max_episode_len
-        print(args.batch_size)
-        print(args.max_episode_len)
         self.replay_sample_index = None
         self.parameters = None
 
@@ -342,8 +327,8 @@ class MADDPGAgentTrainer(AgentTrainer):
     ''' nan happens after a few updates'''
     def update(self, agents, t):
         # self.max_replay_buffer_len = 25600   1024 * 100 / 12
-        if len(self.replay_buffer) < (self.max_replay_buffer_len/12): # replay buffer is not large enough
-            print("{}, {}".format(len(self.replay_buffer), self.max_replay_buffer_len/12))
+        if len(self.replay_buffer) < (self.max_replay_buffer_len/96): # replay buffer is not large enough
+            print("{}, {}".format(len(self.replay_buffer), self.max_replay_buffer_len/96))
             return
         if not t % 400 == 0:  # only update every 400 steps, that is 4 episodes, because --max-episode-len = 100
             return

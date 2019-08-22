@@ -1,0 +1,35 @@
+[
+    [
+        {
+            "Sender": 1,
+            "Episode": 600,
+            "Reward": 0.20748644373395153,
+            "SumReward": 0.24855731938557246,
+            "Send Rate": 40.0,
+            "Throughput": 40.0,
+            "Loss Rate": 0.0
+        }
+    ],
+    [
+        {
+            "Sender": 2,
+            "Episode": 600,
+            "Reward": 0.20911742816027312,
+            "SumReward": 0.24855731938557246,
+            "Send Rate": 40.31442717836794,
+            "Throughput": 40.31442717836794,
+            "Loss Rate": 0.0
+        }
+    ],
+    [
+        {
+            "Sender": 3,
+            "Episode": 600,
+            "Reward": 0.27586272054451405,
+            "SumReward": 0.24855731938557246,
+            "Send Rate": 53.18183021117999,
+            "Throughput": 53.18183021117999,
+            "Loss Rate": 0.0
+        }
+    ]
+]

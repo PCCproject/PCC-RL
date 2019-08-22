@@ -108,7 +108,8 @@ class Network():
 
 
     def sigmoid(self, x):
-        return 1 / (1 + math.exp(-x))
+        # return 1 / (1 + math.exp(-x))
+        return 1 / (1 + math.exp(100 * x))
 
     def run_for_dur(self, dur):
         end_time = self.cur_time + dur
@@ -193,23 +194,21 @@ class Network():
             latency = sender_mi.get("avg latency")
             loss = sender_mi.get("loss ratio")
             # Very high thpt
-            reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss) * REWARD_SCALE
+            # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss) * REWARD_SCALE
 
             # 2e12: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 2e3 * loss) * REWARD_SCALE
             # 2e13: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET)) * REWARD_SCALE
             # 2e14: reward = (10.0 * sendrate / (8 * BYTES_PER_PACKET) - 11.3 * 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * 0.0001
             # reward = (10.0 * sendrate / (8 * BYTES_PER_PACKET) - 11.3 * 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * 0.001
             # 2e15: reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) * self.sigmoid(loss - 0.05) - 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * REWARD_SCALE
-            # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) * self.sigmoid(loss - 0.05) - 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * REWARD_SCALE
-
-            # print(reward)
+            reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) * self.sigmoid(loss - 0.05) - 10.0 * sendrate / (8 * BYTES_PER_PACKET) * loss) * REWARD_SCALE
+            print(reward)
             '''
             if (reward > 0):
                 reward = reward * (1-penalty)
             else:
                 reward = reward * (1+penalty)
                 '''
-
             #if (reward < 0):
             #    print(reward)
             #    print(str(throughput)+" "+str(latency)+" "+str(loss))
@@ -478,8 +477,6 @@ class SimulatedNetworkEnv(gym.Env):
         return sender_obs
 
     def step(self, actions):
-        #print("Actions: %s" % str(actions))
-        #print(actions)
         for i in range(0, 1):#len(actions)):
             #print("Updating rate for sender %d" % i)
             action = actions
@@ -734,17 +731,11 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         #if (self.episodes_run > 1000):
         #    print(str(self.episodes_run) + " " + str(self.senders[0].rate))
 
-
-
-        for i in range(self.n):#len(actions)):
-            #print("Updating rate for sender %d" % i)
+        for i in range(self.n):
             action = actions[i]
             self.senders[i].rate = self.senders[i].apply_rate_delta2(action[0])
             if USE_CWND:
                 self.senders[i].rate = self.senders[i].apply_cwnd_delta2(action[1])
-
-        #print("Running for %fs" % self.run_dur)
-
 
         reward_n = self.net.run_for_dur(self.run_dur)
 
@@ -763,7 +754,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             self.steps_taken[i] += 1
 
             sender_mi = sender.get_run_data()
-            
+
             self.agent_rewards[i].append(reward_n[i])
 
             self.agent_sendrates[i].append(sender.rate)
@@ -866,6 +857,3 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
 
 register(id='PccNs-v0', entry_point='network_sim:SimulatedNetworkEnv')
 register(id='PccNs-v1', entry_point='network_sim:SimulatedMultAgentNetworkEnv')
-
-#env = SimulatedNetworkEnv()
-#env.step([1.0])

@@ -33,7 +33,8 @@ def plot_avg_criteria(arglist):
     avg_agent_latency = [[] for _ in range(arglist.num_agents)]
     avg_agent_lossrate = [[] for _ in range(arglist.num_agents)]
 
-    y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_latency, avg_agent_lossrate]
+    #y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_latency, avg_agent_lossrate]
+    y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_lossrate]
 
 
     if (end_log == -1):
@@ -47,7 +48,7 @@ def plot_avg_criteria(arglist):
                     avg_agent_reward[ag].append(float(rec["Reward"]))
                     avg_agent_sendrate[ag].append(float(rec["Send Rate"]))
                     avg_agent_throughput[ag].append(float(rec["Throughput"]))
-                    avg_agent_latency[ag].append(float(rec["Latency"]))
+                    #avg_agent_latency[ag].append(float(rec["Latency"]))
                     avg_agent_lossrate[ag].append(float(rec["Loss Rate"]))
 
     x_range = range((start_log-1)*arglist.dump_rate+arglist.save_rate, (end_log)*arglist.dump_rate+arglist.save_rate, arglist.save_rate)
@@ -55,7 +56,7 @@ def plot_avg_criteria(arglist):
     fig, ax = plt.subplots(5,1,figsize=(15,15))
     # fig = plt.figure()
     fig.suptitle("experiment_{}".format(arglist.in_out[1]))
-    for idx in range(0, 5):
+    for idx in range(0, len(y_list)):
         ax = plt.subplot(5, 1, idx+1)
         for ag in range(arglist.num_agents):
             ax.plot(x_range, y_list[idx][ag], linestyle="-", linewidth=0.5, label='agent {}'.format(ag+1))
@@ -76,7 +77,8 @@ def plot_steps(arglist):
     avg_agent_latency = [[] for _ in range(arglist.num_agents)]
     avg_agent_lossrate = [[] for _ in range(arglist.num_agents)]
 
-    y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_latency, avg_agent_lossrate]
+    #y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_latency, avg_agent_lossrate]
+    y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_lossrate]
 
     with open(dir + "steps_at_epi_%d.json" % (start_log * 1000)) as f:
         data = json.load(f)
@@ -85,7 +87,7 @@ def plot_steps(arglist):
                 avg_agent_reward[ag].append(float(rec["Reward"]))
                 avg_agent_sendrate[ag].append(float(rec["Send Rate"]))
                 avg_agent_throughput[ag].append(float(rec["Throughput"]))
-                avg_agent_latency[ag].append(float(rec["Latency"]))
+                #avg_agent_latency[ag].append(float(rec["Latency"]))
                 avg_agent_lossrate[ag].append(float(rec["Loss Rate"]))
 
     x_range = range(1, 101)
@@ -93,7 +95,7 @@ def plot_steps(arglist):
     fig, ax = plt.subplots(5,1,figsize=(15,15))
     # fig = plt.figure()
     fig.suptitle("steps_at_api_{}_experiment_{}".format(start_log * 1000, arglist.in_out[1]))
-    for idx in range(0, 5):
+    for idx in range(0, len(y_list)):
         ax = plt.subplot(5, 1, idx+1)
         for ag in range(arglist.num_agents):
             ax.plot(x_range, y_list[idx][ag], linestyle="-", linewidth=0.5, label='agent {}'.format(ag+1))
