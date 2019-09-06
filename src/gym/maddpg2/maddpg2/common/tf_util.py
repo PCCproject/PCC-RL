@@ -248,8 +248,7 @@ def save_state(root, fname, saver=None):
     if not os.path.exists(root):
         os.makedirs(os.path.dirname(root), exist_ok=True)
         print("dir created in path: %s" % root)
-    if saver is None:
-        saver = tf.train.Saver()
+    
     saver.save(get_session(), fname)
     print("Model saved in path: %s" % fname)
     return saver

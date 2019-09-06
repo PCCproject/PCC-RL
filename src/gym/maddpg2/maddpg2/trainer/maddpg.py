@@ -70,12 +70,14 @@ def p_train2(make_obs_ph_n, act_space_n, p_index, p_func, q_func, optimizer, gra
 
         q_input = tf.concat(obs_ph_n + act_input_n, 1)
         #q_input = tf.clip_by_value(q_input, -1000000.0, 1000000.0)
+        '''
         print("\n\n")
         print("p_train")
         print(p_input)
         print(obs_ph_n + act_input_n)
         print(q_input)
         print("\n\n")
+        '''
         if local_q_func:
             q_input = tf.concat([obs_ph_n[p_index], act_input_n[p_index]], 1)
 
@@ -122,12 +124,13 @@ def q_train2(make_obs_ph_n, act_space_n, q_index, q_func, optimizer, grad_norm_c
 
         q_input = tf.concat(obs_ph_n + act_ph_n, 1)
         #q_input = tf.clip_by_value(q_input, -1000000.0, 1000000.0)
+        '''
         print("\n\n")
         print("q_train")
         print(obs_ph_n + act_ph_n)
         print(q_input)
         print("\n\n")
-
+        '''
         # local observation and action i.e. 30, 1
         if local_q_func:
             q_input = tf.concat([obs_ph_n[q_index], act_ph_n[q_index]], 1)
@@ -327,8 +330,8 @@ class MADDPGAgentTrainer(AgentTrainer):
     ''' nan happens after a few updates'''
     def update(self, agents, t):
         # self.max_replay_buffer_len = 25600   1024 * 100 / 12
-        if len(self.replay_buffer) < (self.max_replay_buffer_len/96): # replay buffer is not large enough
-            print("{}, {}".format(len(self.replay_buffer), self.max_replay_buffer_len/96))
+        if len(self.replay_buffer) < (self.max_replay_buffer_len/200): # replay buffer is not large enough
+            print("{}, {}".format(len(self.replay_buffer), self.max_replay_buffer_len/200))
             return
         if not t % 400 == 0:  # only update every 400 steps, that is 4 episodes, because --max-episode-len = 100
             return
@@ -361,13 +364,6 @@ class MADDPGAgentTrainer(AgentTrainer):
 
         self.p_update()
         self.q_update()
-        '''
-        if(abs(q_loss) > 15322843000.0):
-            tf.print(*(obs_n + act_n + [target_q]))
-
-        if(abs(p_loss) > 15322843000.0):
-            tf.print(*(obs_n + act_n))
-            '''
 
         return [q_loss, p_loss, np.mean(target_q), np.mean(rew), np.mean(target_q_next), np.std(target_q)]
 

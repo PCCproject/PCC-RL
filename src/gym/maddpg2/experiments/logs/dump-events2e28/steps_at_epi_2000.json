@@ -1,0 +1,2006 @@
+[
+    [
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 1,
+            "Reward": 0.09933071490757149,
+            "Send Rate": 40,
+            "Throughput": 119999.99999999996,
+            "Latency": 0.06200484776772308,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 2,
+            "Reward": 0.38699478839558366,
+            "Send Rate": 40,
+            "Throughput": 467522.8065224584,
+            "Latency": 0.06349716666222402,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 3,
+            "Reward": 0.39622963734633604,
+            "Send Rate": 40.65220528841019,
+            "Throughput": 478679.2939706908,
+            "Latency": 0.06340427760891358,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 4,
+            "Reward": 0.38585390017999033,
+            "Send Rate": 40.04790616983638,
+            "Throughput": 466144.51597055217,
+            "Latency": 0.06365676731840539,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 5,
+            "Reward": 0.3860618608690637,
+            "Send Rate": 40.27457691878503,
+            "Throughput": 466395.75027116126,
+            "Latency": 0.06376803676503337,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 6,
+            "Reward": 0.40651141811863806,
+            "Send Rate": 41.41998631115693,
+            "Throughput": 491100.5646101334,
+            "Latency": 0.06364386241139343,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 7,
+            "Reward": 0.3871554026462828,
+            "Send Rate": 40,
+            "Throughput": 467716.8422756675,
+            "Latency": 0.06405028279617095,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 8,
+            "Reward": 0.38656400205985236,
+            "Send Rate": 40,
+            "Throughput": 467002.3797809831,
+            "Latency": 0.0644859968192921,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 9,
+            "Reward": 0.43520242338412424,
+            "Send Rate": 45.30512285232544,
+            "Throughput": 525761.7530961119,
+            "Latency": 0.06384411697506812,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 10,
+            "Reward": 0.494869185627618,
+            "Send Rate": 51.43624233313397,
+            "Throughput": 597844.3055662289,
+            "Latency": 0.06463945459575668,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 11,
+            "Reward": 0.5648929783729437,
+            "Send Rate": 58.65045754922666,
+            "Throughput": 682439.0367856513,
+            "Latency": 0.06387716993516264,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 12,
+            "Reward": 0.5951292497867463,
+            "Send Rate": 60.25044307125179,
+            "Throughput": 718967.0389552978,
+            "Latency": 0.06405055778604259,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 13,
+            "Reward": 0.6023351262697733,
+            "Send Rate": 62.536051210339785,
+            "Throughput": 727672.3541115196,
+            "Latency": 0.06428650865228082,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 14,
+            "Reward": 0.645255782140526,
+            "Send Rate": 65.19119555266417,
+            "Throughput": 779524.1776817306,
+            "Latency": 0.06417602434179077,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 15,
+            "Reward": 0.6435986380058566,
+            "Send Rate": 66.09139259784907,
+            "Throughput": 777522.2058209082,
+            "Latency": 0.0646776962534597,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 16,
+            "Reward": 0.6542611918848179,
+            "Send Rate": 67.49167949937038,
+            "Throughput": 790403.4829431553,
+            "Latency": 0.06432592140148252,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 17,
+            "Reward": 0.6852326902931661,
+            "Send Rate": 70.20478192459237,
+            "Throughput": 827819.7022108826,
+            "Latency": 0.06481757668023655,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 18,
+            "Reward": 0.6849124016431498,
+            "Send Rate": 73.4917269098024,
+            "Throughput": 827432.7661253251,
+            "Latency": 0.09004563874775161,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 19,
+            "Reward": 0.6244384580954937,
+            "Send Rate": 69.57776959732499,
+            "Throughput": 754375.0695963982,
+            "Latency": 0.15699920125717737,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 20,
+            "Reward": 0.5048182575283638,
+            "Send Rate": 51.580679724403005,
+            "Throughput": 609863.6354301127,
+            "Latency": 0.22707425908559215,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 21,
+            "Reward": 0.41709493046703644,
+            "Send Rate": 40,
+            "Throughput": 503886.3528025326,
+            "Latency": 0.2695280159018856,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 22,
+            "Reward": -0.03912793907088594,
+            "Send Rate": 40,
+            "Throughput": 406606.04402642936,
+            "Latency": 0.3045635348733301,
+            "Loss Rate": 0.10256410256410256
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 23,
+            "Reward": -0.12254379329038435,
+            "Send Rate": 40,
+            "Throughput": 310648.51599534735,
+            "Latency": 0.31438993960260336,
+            "Loss Rate": 0.3076923076923077
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 24,
+            "Reward": -0.15598743894360553,
+            "Send Rate": 40,
+            "Throughput": 287796.82485095295,
+            "Latency": 0.31709911490051756,
+            "Loss Rate": 0.3902439024390244
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 25,
+            "Reward": -0.15990499867586108,
+            "Send Rate": 40,
+            "Throughput": 275836.1227158606,
+            "Latency": 0.31293667004568154,
+            "Loss Rate": 0.4
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 26,
+            "Reward": -0.07990651932419764,
+            "Send Rate": 40,
+            "Throughput": 371565.755300838,
+            "Latency": 0.31627778760504377,
+            "Loss Rate": 0.2
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 27,
+            "Reward": 0.3731346558442794,
+            "Send Rate": 40,
+            "Throughput": 490835.14524703583,
+            "Latency": 0.28345973912041206,
+            "Loss Rate": 0.023255813953488372
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 28,
+            "Reward": 0.4569123250947261,
+            "Send Rate": 40,
+            "Throughput": 551989.1713493319,
+            "Latency": 0.12541222567358692,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 29,
+            "Reward": 0.3863294160144307,
+            "Send Rate": 40,
+            "Throughput": 466718.9797724682,
+            "Latency": 0.06422796142224123,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 30,
+            "Reward": 0.38621269088548427,
+            "Send Rate": 40,
+            "Throughput": 466577.9658324538,
+            "Latency": 0.06379174489149754,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 31,
+            "Reward": 0.38654779662921307,
+            "Send Rate": 40,
+            "Throughput": 466982.80223461665,
+            "Latency": 0.06379634657288677,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 32,
+            "Reward": 0.4163671775098378,
+            "Send Rate": 42.64114451408386,
+            "Throughput": 503007.16498086945,
+            "Latency": 0.06403304239417282,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 33,
+            "Reward": 0.44582286527958226,
+            "Send Rate": 46.84823819321042,
+            "Throughput": 538592.1553401797,
+            "Latency": 0.06372969103537447,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 34,
+            "Reward": 0.5038674571343101,
+            "Send Rate": 51.36043055772396,
+            "Throughput": 608714.987226054,
+            "Latency": 0.06386474274525987,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 35,
+            "Reward": 0.5553760280892812,
+            "Send Rate": 56.96651361801926,
+            "Throughput": 670941.7467973313,
+            "Latency": 0.06400620944509867,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 36,
+            "Reward": 0.6247135295193177,
+            "Send Rate": 64.72981027905202,
+            "Throughput": 754707.3794049965,
+            "Latency": 0.06428408088416637,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 37,
+            "Reward": 0.6942054734447073,
+            "Send Rate": 71.20182521434126,
+            "Throughput": 838659.5917575031,
+            "Latency": 0.06404064543444118,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 38,
+            "Reward": 0.7045787469039675,
+            "Send Rate": 72.16789957154928,
+            "Throughput": 851191.3933887461,
+            "Latency": 0.06445455175305913,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 39,
+            "Reward": 0.7341127224505775,
+            "Send Rate": 74.99421915148956,
+            "Throughput": 886870.9620789643,
+            "Latency": 0.06443979053127326,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 40,
+            "Reward": 0.7635332697012127,
+            "Send Rate": 78.59802046876186,
+            "Throughput": 922413.4996853974,
+            "Latency": 0.0643507798207404,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 41,
+            "Reward": 0.7944172847768031,
+            "Send Rate": 81.43696226671842,
+            "Throughput": 959724.0316041438,
+            "Latency": 0.06475416226747888,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 42,
+            "Reward": 0.804124985533855,
+            "Send Rate": 83.96062031592393,
+            "Throughput": 971451.7644804269,
+            "Latency": 0.07432034124151289,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 43,
+            "Reward": 0.7626665385791022,
+            "Send Rate": 82.20195534814559,
+            "Throughput": 921366.4143528288,
+            "Latency": 0.11037052883707389,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 44,
+            "Reward": 0.6646331178337578,
+            "Send Rate": 68.07464646901873,
+            "Throughput": 802933.6566666701,
+            "Latency": 0.15825949372551582,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 45,
+            "Reward": 0.5065050088114367,
+            "Send Rate": 46.02558165743994,
+            "Throughput": 611901.3752586953,
+            "Latency": 0.16411999746343425,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 46,
+            "Reward": 0.40665842129436863,
+            "Send Rate": 40,
+            "Throughput": 491278.15702053823,
+            "Latency": 0.12474513418013344,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 47,
+            "Reward": 0.3872238354774909,
+            "Send Rate": 40,
+            "Throughput": 467799.5149892649,
+            "Latency": 0.1063223663426035,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 48,
+            "Reward": 0.3674065709643427,
+            "Send Rate": 40,
+            "Throughput": 443858.5643599393,
+            "Latency": 0.1261633921646871,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 49,
+            "Reward": 0.36748589023421,
+            "Send Rate": 40,
+            "Throughput": 443954.3888226237,
+            "Latency": 0.17909652725453307,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 50,
+            "Reward": 0.33734177910206214,
+            "Send Rate": 40,
+            "Throughput": 407537.7241562748,
+            "Latency": 0.26465645029769697,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 51,
+            "Reward": -0.18515859695696962,
+            "Send Rate": 40,
+            "Throughput": 251718.23996834343,
+            "Latency": 0.31351277187031823,
+            "Loss Rate": 0.4634146341463415
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 52,
+            "Reward": -0.06979638334845334,
+            "Send Rate": 40,
+            "Throughput": 382889.5401570096,
+            "Latency": 0.3153364192226116,
+            "Loss Rate": 0.175
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 53,
+            "Reward": 0.23213945862521257,
+            "Send Rate": 40,
+            "Throughput": 490977.00856635766,
+            "Latency": 0.2758542328650184,
+            "Loss Rate": 0.045454545454545456
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 54,
+            "Reward": 0.44507652687758187,
+            "Send Rate": 40,
+            "Throughput": 537690.5147114639,
+            "Latency": 0.11349268016090082,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 55,
+            "Reward": 0.3870501057904694,
+            "Send Rate": 40,
+            "Throughput": 467589.6346671311,
+            "Latency": 0.0639404215409829,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 56,
+            "Reward": 0.38732192377553115,
+            "Send Rate": 40,
+            "Throughput": 467918.01404341735,
+            "Latency": 0.06429452185756677,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 57,
+            "Reward": 0.3958869736519741,
+            "Send Rate": 40.89870274066925,
+            "Throughput": 478265.32691768336,
+            "Latency": 0.06405159320517809,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 58,
+            "Reward": 0.4368392474504995,
+            "Send Rate": 44.33299185156858,
+            "Throughput": 527739.1765763296,
+            "Latency": 0.06428390173906728,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 59,
+            "Reward": 0.46631729924943566,
+            "Send Rate": 48.856584157954046,
+            "Throughput": 563351.1845958419,
+            "Latency": 0.06440833334330827,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 60,
+            "Reward": 0.5256427120449839,
+            "Send Rate": 54.25150176762831,
+            "Throughput": 635021.3577350382,
+            "Latency": 0.06485763325755392,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 61,
+            "Reward": 0.5956822824990712,
+            "Send Rate": 61.3216538756841,
+            "Throughput": 719635.149776213,
+            "Latency": 0.06421780775524663,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 62,
+            "Reward": 0.6751462946744952,
+            "Send Rate": 69.3556147630108,
+            "Throughput": 815634.4735495688,
+            "Latency": 0.06470111585658075,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 63,
+            "Reward": 0.7310773779394829,
+            "Send Rate": 75.72702764384987,
+            "Throughput": 883204.0062771232,
+            "Latency": 0.06528736811352515,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 64,
+            "Reward": 0.7145187571450764,
+            "Send Rate": 76.33221171021393,
+            "Throughput": 863199.7759926866,
+            "Latency": 0.08536403187571111,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 65,
+            "Reward": 0.6650745358977878,
+            "Send Rate": 71.73983203973889,
+            "Throughput": 803466.9274453301,
+            "Latency": 0.139461061240817,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 66,
+            "Reward": 0.5357648942413764,
+            "Send Rate": 53.66256945755265,
+            "Throughput": 647249.8196432944,
+            "Latency": 0.19259970090358253,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 67,
+            "Reward": 0.40696273963086893,
+            "Send Rate": 40,
+            "Throughput": 491645.7996013251,
+            "Latency": 0.21350475413622744,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 68,
+            "Reward": 0.3857846453371513,
+            "Send Rate": 40,
+            "Throughput": 466060.8501965928,
+            "Latency": 0.22302092622950723,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 69,
+            "Reward": 0.3568863194169837,
+            "Send Rate": 40,
+            "Throughput": 431149.2006262967,
+            "Latency": 0.26494961094608893,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 70,
+            "Reward": 0.1479460199247983,
+            "Send Rate": 40,
+            "Throughput": 431946.0557420774,
+            "Latency": 0.313524306673956,
+            "Loss Rate": 0.05128205128205128
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 71,
+            "Reward": 0.003195082103397695,
+            "Send Rate": 40,
+            "Throughput": 443878.3524528965,
+            "Latency": 0.3163171521734382,
+            "Loss Rate": 0.07317073170731707
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 72,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.3162349305882349,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 73,
+            "Reward": 0.40725593112095065,
+            "Send Rate": 40,
+            "Throughput": 491999.9999998881,
+            "Latency": 0.30164967116243374,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 74,
+            "Reward": 0.46685436006548,
+            "Send Rate": 40,
+            "Throughput": 563999.9999998717,
+            "Latency": 0.18043589494021486,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 75,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.06419694545192538,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 76,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.06397852168015118,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 77,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.06421245202940075,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 78,
+            "Reward": 0.4070853037541281,
+            "Send Rate": 41.68449604511261,
+            "Throughput": 491793.867545916,
+            "Latency": 0.06392516523303976,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 79,
+            "Reward": 0.42711681706214855,
+            "Send Rate": 44.44434684409266,
+            "Throughput": 515993.6490455176,
+            "Latency": 0.0637935308256101,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 80,
+            "Reward": 0.47633974797748907,
+            "Send Rate": 49.58623116453009,
+            "Throughput": 575459.1599435029,
+            "Latency": 0.06422699217655327,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 81,
+            "Reward": 0.53562573886977,
+            "Send Rate": 55.588350081712726,
+            "Throughput": 647081.7080515447,
+            "Latency": 0.06377832281801117,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 82,
+            "Reward": 0.6156942376152683,
+            "Send Rate": 63.26633799371991,
+            "Throughput": 743811.3033071547,
+            "Latency": 0.06429546501503368,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 83,
+            "Reward": 0.6749007158320911,
+            "Send Rate": 69.7927169302146,
+            "Throughput": 815337.793302015,
+            "Latency": 0.06440465094891278,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 84,
+            "Reward": 0.7029897967244403,
+            "Send Rate": 72.358711495326,
+            "Throughput": 849271.8056588006,
+            "Latency": 0.06429519612026935,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 85,
+            "Reward": 0.7447275614015478,
+            "Send Rate": 75.2301180922933,
+            "Throughput": 899694.5954868353,
+            "Latency": 0.06474843049602413,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 86,
+            "Reward": 0.7447165682881415,
+            "Send Rate": 76.88230818965914,
+            "Throughput": 899681.3148655294,
+            "Latency": 0.0648386095297457,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 87,
+            "Reward": 0.7543901154508669,
+            "Send Rate": 78.2009602758208,
+            "Throughput": 911367.7872784904,
+            "Latency": 0.07767467337109601,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 88,
+            "Reward": 0.6943110884007283,
+            "Send Rate": 75.48206294191677,
+            "Throughput": 838787.1836582996,
+            "Latency": 0.12008210842397603,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 89,
+            "Reward": 0.5851758166051946,
+            "Send Rate": 59.85794307084411,
+            "Throughput": 706942.4402911521,
+            "Latency": 0.168955632852928,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 90,
+            "Reward": 0.4355355906890095,
+            "Send Rate": 40,
+            "Throughput": 526164.2476983449,
+            "Latency": 0.18139836341237836,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 91,
+            "Reward": 0.38717982786392985,
+            "Send Rate": 40,
+            "Throughput": 467746.3500278304,
+            "Latency": 0.16063264659747828,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 92,
+            "Reward": 0.37745671664868596,
+            "Send Rate": 40,
+            "Throughput": 455999.99999989633,
+            "Latency": 0.17900674903196015,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 93,
+            "Reward": 0.3575905736671763,
+            "Send Rate": 40,
+            "Throughput": 431999.9999999018,
+            "Latency": 0.23093231534558759,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 94,
+            "Reward": 0.31865312533661455,
+            "Send Rate": 40,
+            "Throughput": 431999.9999999018,
+            "Latency": 0.30172982793788083,
+            "Loss Rate": 0.02631578947368421
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 95,
+            "Reward": -0.03765750217649174,
+            "Send Rate": 40,
+            "Throughput": 419999.9999999045,
+            "Latency": 0.3169338024442936,
+            "Loss Rate": 0.1
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 96,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.3164370722077874,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 97,
+            "Reward": 0.41718900261170555,
+            "Send Rate": 40,
+            "Throughput": 503999.9999998854,
+            "Latency": 0.28419173624516386,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 98,
+            "Reward": 0.45692128857472514,
+            "Send Rate": 40,
+            "Throughput": 551999.9999998745,
+            "Latency": 0.12217725543721622,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 99,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.06412350299260679,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 1,
+            "Episode": 2000,
+            "Step": 100,
+            "Reward": 0.38738978813944097,
+            "Send Rate": 40,
+            "Throughput": 467999.9999998936,
+            "Latency": 0.06361175807863784,
+            "Loss Rate": 0.0
+        }
+    ],
+    [
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 1,
+            "Reward": 0.19866142981514298,
+            "Send Rate": 40,
+            "Throughput": 239999.9999999999,
+            "Latency": 0.06721903353407521,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 2,
+            "Reward": 0.416763618272167,
+            "Send Rate": 42.95615530014038,
+            "Throughput": 503486.09933187824,
+            "Latency": 0.06391891251831029,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 3,
+            "Reward": 0.44575834201462794,
+            "Send Rate": 46.17298352271295,
+            "Throughput": 538514.2057170272,
+            "Latency": 0.06373475516110273,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 4,
+            "Reward": 0.4748971079138342,
+            "Send Rate": 49.49494366778944,
+            "Throughput": 573716.3273483719,
+            "Latency": 0.06359639471002272,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 5,
+            "Reward": 0.524648169898984,
+            "Send Rate": 53.24212495044091,
+            "Throughput": 633819.8657531166,
+            "Latency": 0.06339917023004692,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 6,
+            "Reward": 0.5552351076742372,
+            "Send Rate": 57.54201683247456,
+            "Throughput": 670771.5028821334,
+            "Latency": 0.06355175378481762,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 7,
+            "Reward": 0.6055507579852115,
+            "Send Rate": 62.01055907572314,
+            "Throughput": 731557.1122773262,
+            "Latency": 0.06369156944204807,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 8,
+            "Reward": 0.6442733367664205,
+            "Send Rate": 66.8078824697506,
+            "Throughput": 778337.2996349718,
+            "Latency": 0.06336073775313726,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 9,
+            "Reward": 0.7022584559152915,
+            "Send Rate": 71.85945502652991,
+            "Throughput": 848388.2834050898,
+            "Latency": 0.06364692327162011,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 10,
+            "Reward": 0.7522011621539794,
+            "Send Rate": 77.47065406308596,
+            "Throughput": 908723.3444606679,
+            "Latency": 0.06317832275941698,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 11,
+            "Reward": 0.822563459736041,
+            "Send Rate": 83.7921397203028,
+            "Throughput": 993727.0184773519,
+            "Latency": 0.06395563309459026,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 12,
+            "Reward": 0.8728562330205613,
+            "Send Rate": 89.87661385014236,
+            "Throughput": 1054484.99046777,
+            "Latency": 0.06393110295836146,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 13,
+            "Reward": 0.9479372478999711,
+            "Send Rate": 96.75554480984601,
+            "Throughput": 1145189.2786017358,
+            "Latency": 0.0637614992040707,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 14,
+            "Reward": 1.0224822393919102,
+            "Send Rate": 104.00488013535099,
+            "Throughput": 1235246.0046341268,
+            "Latency": 0.0641707485028698,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 15,
+            "Reward": 1.0891669258560648,
+            "Send Rate": 111.67609875490665,
+            "Throughput": 1315806.8098507677,
+            "Latency": 0.06406565261420988,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 16,
+            "Reward": 1.1796527550650504,
+            "Send Rate": 120.12717940203376,
+            "Throughput": 1425121.4313672043,
+            "Latency": 0.0644883925447454,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 17,
+            "Reward": 1.2612253864816245,
+            "Send Rate": 128.60120828287134,
+            "Throughput": 1523668.1475475666,
+            "Latency": 0.06506278771858622,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 18,
+            "Reward": 1.2804884030719756,
+            "Send Rate": 138.04107695251392,
+            "Throughput": 1546939.5192777817,
+            "Latency": 0.08986162882821339,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 19,
+            "Reward": 1.3281706886475582,
+            "Send Rate": 147.75208944131037,
+            "Throughput": 1604543.798824085,
+            "Latency": 0.15676024120794843,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 20,
+            "Reward": 1.445165992140022,
+            "Send Rate": 157.5142957848993,
+            "Throughput": 1745884.1327999306,
+            "Latency": 0.22864934093315245,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 21,
+            "Reward": 1.5790022367680665,
+            "Send Rate": 165.45682630738705,
+            "Throughput": 1907569.7641810165,
+            "Latency": 0.2704455217413349,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 22,
+            "Reward": 1.6036598000733644,
+            "Send Rate": 171.69684311945707,
+            "Throughput": 1937358.2097729868,
+            "Latency": 0.30475534072278837,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 23,
+            "Reward": 1.6822203497916783,
+            "Send Rate": 174.53729195575966,
+            "Throughput": 2055059.4135076825,
+            "Latency": 0.31582741101038775,
+            "Loss Rate": 0.005747126436781609
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 24,
+            "Reward": 1.7182277651977853,
+            "Send Rate": 177.89364289742934,
+            "Throughput": 2098518.5145381987,
+            "Latency": 0.31700031212039687,
+            "Loss Rate": 0.005649717514124294
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 25,
+            "Reward": 1.7285301178717705,
+            "Send Rate": 176.17181813583113,
+            "Throughput": 2110745.982521368,
+            "Latency": 0.3164183125286347,
+            "Loss Rate": 0.0056179775280898875
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 26,
+            "Reward": 1.646965077991362,
+            "Send Rate": 163.3972483574398,
+            "Throughput": 1989674.6896754547,
+            "Latency": 0.31624681710640906,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 27,
+            "Reward": 1.5756190924359381,
+            "Send Rate": 138.72558355148124,
+            "Throughput": 1903482.636445822,
+            "Latency": 0.2847447768992106,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 28,
+            "Reward": 1.30120683885672,
+            "Send Rate": 107.05560776012955,
+            "Throughput": 1571969.1618861407,
+            "Latency": 0.12757538988080064,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 29,
+            "Reward": 0.8122823618764954,
+            "Send Rate": 81.49829200249899,
+            "Throughput": 981306.5728549332,
+            "Latency": 0.06339024239624955,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 30,
+            "Reward": 0.6932022656918949,
+            "Send Rate": 69.40414375652789,
+            "Throughput": 837447.6309813274,
+            "Latency": 0.06350313692850784,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 31,
+            "Reward": 0.6640692916450582,
+            "Send Rate": 67.99363582583157,
+            "Throughput": 802252.5064030593,
+            "Latency": 0.06363498848028655,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 32,
+            "Reward": 0.6840317916233051,
+            "Send Rate": 69.4592415199339,
+            "Throughput": 826368.9138971427,
+            "Latency": 0.06331704368237491,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 33,
+            "Reward": 0.6935022348793503,
+            "Send Rate": 71.64340721249916,
+            "Throughput": 837810.0194180574,
+            "Latency": 0.06345651076371535,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 34,
+            "Reward": 0.7311018005478225,
+            "Send Rate": 74.19335271998835,
+            "Throughput": 883233.5108770195,
+            "Latency": 0.06385139827067335,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 35,
+            "Reward": 0.7537246095497389,
+            "Send Rate": 77.18040577377604,
+            "Throughput": 910563.7992249496,
+            "Latency": 0.0638041698177206,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 36,
+            "Reward": 0.7833709338416842,
+            "Send Rate": 80.49093286143285,
+            "Throughput": 946379.0948094401,
+            "Latency": 0.063913047887672,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 37,
+            "Reward": 0.8330465681336487,
+            "Send Rate": 84.94214216368105,
+            "Throughput": 1006391.5101090037,
+            "Latency": 0.0640082127416893,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 38,
+            "Reward": 0.8832043447106072,
+            "Send Rate": 90.3684388092917,
+            "Throughput": 1066986.394529555,
+            "Latency": 0.0637175280192107,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 39,
+            "Reward": 0.9523624507466949,
+            "Send Rate": 97.19396955388831,
+            "Throughput": 1150535.3021564942,
+            "Latency": 0.06397089115279629,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 40,
+            "Reward": 1.0213496984314925,
+            "Send Rate": 104.26352409885544,
+            "Throughput": 1233877.7982804666,
+            "Latency": 0.06444180317366764,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 41,
+            "Reward": 1.1022539826278144,
+            "Send Rate": 112.15248351923553,
+            "Throughput": 1331617.0938507495,
+            "Latency": 0.06476719622978798,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 42,
+            "Reward": 1.1515863990361381,
+            "Send Rate": 120.25618326662475,
+            "Throughput": 1391214.8725892534,
+            "Latency": 0.07423351142856163,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 43,
+            "Reward": 1.1984759891957317,
+            "Send Rate": 129.1998782190126,
+            "Throughput": 1447861.508268731,
+            "Latency": 0.11095651281067666,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 44,
+            "Reward": 1.2995065438242126,
+            "Send Rate": 137.8846527596982,
+            "Throughput": 1569915.0600497578,
+            "Latency": 0.15834991395315498,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 45,
+            "Reward": 1.4599262018682588,
+            "Send Rate": 146.03557642388807,
+            "Throughput": 1763715.7286868277,
+            "Latency": 0.1632806588711167,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 46,
+            "Reward": 1.567122696695372,
+            "Send Rate": 153.44120394370344,
+            "Throughput": 1893218.263640123,
+            "Latency": 0.12405006941951348,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 47,
+            "Reward": 1.5786817907928474,
+            "Send Rate": 161.52840519079166,
+            "Throughput": 1907182.6380331567,
+            "Latency": 0.10622439011455236,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 48,
+            "Reward": 1.5987150790610585,
+            "Send Rate": 168.0450007599589,
+            "Throughput": 1931384.5638364926,
+            "Latency": 0.12668984183023882,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 49,
+            "Reward": 1.5891281739857726,
+            "Send Rate": 176.0581350228769,
+            "Throughput": 1919802.7624762105,
+            "Latency": 0.17986531869941577,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 50,
+            "Reward": 1.607334359251002,
+            "Send Rate": 181.82061873668428,
+            "Throughput": 1941797.391568133,
+            "Latency": 0.26397588476412226,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 51,
+            "Reward": 1.6482565436743435,
+            "Send Rate": 183.4374031201911,
+            "Throughput": 2145598.3311587367,
+            "Latency": 0.3164406422350851,
+            "Loss Rate": 0.021739130434782608
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 52,
+            "Reward": 1.5635020409105236,
+            "Send Rate": 164.47691476857273,
+            "Throughput": 1986239.4895644872,
+            "Latency": 0.3162724710645995,
+            "Loss Rate": 0.01764705882352941
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 53,
+            "Reward": 1.5760744847537136,
+            "Send Rate": 135.1675102275004,
+            "Throughput": 1904032.7893183138,
+            "Latency": 0.2801157499421405,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 54,
+            "Reward": 1.285776633201903,
+            "Send Rate": 109.60209738736314,
+            "Throughput": 1553328.1536108959,
+            "Latency": 0.11476830543115589,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 55,
+            "Reward": 0.9428143602588357,
+            "Send Rate": 94.63486236685515,
+            "Throughput": 1139000.3921378835,
+            "Latency": 0.06335580813257789,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 56,
+            "Reward": 0.9236138182339589,
+            "Send Rate": 93.79353285384846,
+            "Throughput": 1115804.4950266106,
+            "Latency": 0.0634793618155067,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 57,
+            "Reward": 0.950128736764738,
+            "Send Rate": 96.44781233321021,
+            "Throughput": 1147836.78460244,
+            "Latency": 0.06340929021541536,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 58,
+            "Reward": 0.9729601420488397,
+            "Send Rate": 100.02563086687992,
+            "Throughput": 1175419.075101825,
+            "Latency": 0.06352483013389916,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 59,
+            "Reward": 1.0219294004828057,
+            "Send Rate": 103.91924163067162,
+            "Throughput": 1234578.127944079,
+            "Latency": 0.0638819925162347,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 60,
+            "Reward": 1.0512854240899678,
+            "Send Rate": 107.58905808168187,
+            "Throughput": 1270042.7154700763,
+            "Latency": 0.06394117072109051,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 61,
+            "Reward": 1.1119402606649331,
+            "Send Rate": 112.39862208994069,
+            "Throughput": 1343318.9462489309,
+            "Latency": 0.06406855263868141,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 62,
+            "Reward": 1.1517201497388447,
+            "Send Rate": 118.02863189206384,
+            "Throughput": 1391376.4548786762,
+            "Latency": 0.0645529314214382,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 63,
+            "Reward": 1.2151691552237351,
+            "Send Rate": 124.13843758517442,
+            "Throughput": 1468028.280703867,
+            "Latency": 0.06536756727066707,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 64,
+            "Reward": 1.2504078250038835,
+            "Send Rate": 132.6690276592113,
+            "Throughput": 1510599.6079872015,
+            "Latency": 0.08500716906953229,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 65,
+            "Reward": 1.3003696149643316,
+            "Send Rate": 142.35258272248055,
+            "Throughput": 1570957.7238110185,
+            "Latency": 0.13994115898059736,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 66,
+            "Reward": 1.4287063846436707,
+            "Send Rate": 151.68365359634515,
+            "Throughput": 1725999.5190487853,
+            "Latency": 0.19433929704620995,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 67,
+            "Reward": 1.5484435946930624,
+            "Send Rate": 159.54150886846625,
+            "Throughput": 1870652.3106782127,
+            "Latency": 0.21386978555730815,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 68,
+            "Reward": 1.5925981512636247,
+            "Send Rate": 166.71946965941515,
+            "Throughput": 1923994.7918372166,
+            "Latency": 0.22386215530553033,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 69,
+            "Reward": 1.5861614196310387,
+            "Send Rate": 173.11449357282612,
+            "Throughput": 1916218.6694502076,
+            "Latency": 0.2648612488155242,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 70,
+            "Reward": 0.3908111823671776,
+            "Send Rate": 177.73350325323565,
+            "Throughput": 1931758.749290957,
+            "Latency": 0.3128859812711388,
+            "Loss Rate": 0.05813953488372093
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 71,
+            "Reward": -0.1490989340543024,
+            "Send Rate": 180.7963146549059,
+            "Throughput": 1955464.093238436,
+            "Latency": 0.31694533568538547,
+            "Loss Rate": 0.09392265193370165
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 72,
+            "Reward": -0.10480432327975966,
+            "Send Rate": 172.70239485894103,
+            "Throughput": 1907999.9999995662,
+            "Latency": 0.3161510089321227,
+            "Loss Rate": 0.08571428571428572
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 73,
+            "Reward": 1.3376839916821996,
+            "Send Rate": 149.39869142949578,
+            "Throughput": 1895999.9999995688,
+            "Latency": 0.30155578614056383,
+            "Loss Rate": 0.03048780487804878
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 74,
+            "Reward": 1.499893795103989,
+            "Send Rate": 118.78570931106228,
+            "Throughput": 1811999.999999588,
+            "Latency": 0.18650554781626463,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 75,
+            "Reward": 0.9138425771494503,
+            "Send Rate": 91.3561642322349,
+            "Throughput": 1103999.999999749,
+            "Latency": 0.06376683135753722,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 76,
+            "Reward": 0.7747795762788819,
+            "Send Rate": 77.43748904300082,
+            "Throughput": 935999.9999997872,
+            "Latency": 0.06344170031643867,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 77,
+            "Reward": 0.744980361806617,
+            "Send Rate": 76.144295232154,
+            "Throughput": 899999.9999997953,
+            "Latency": 0.0633775200400265,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 78,
+            "Reward": 0.764526058269948,
+            "Send Rate": 78.35242140993205,
+            "Throughput": 923612.8731959886,
+            "Latency": 0.06342750779256454,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 79,
+            "Reward": 0.7946359387202764,
+            "Send Rate": 80.84388471529518,
+            "Throughput": 959988.1842707304,
+            "Latency": 0.06340938060535713,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 80,
+            "Reward": 0.8236708142110749,
+            "Send Rate": 84.43431023098023,
+            "Throughput": 995064.797402307,
+            "Latency": 0.06346324548943143,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 81,
+            "Reward": 0.8728715744544403,
+            "Send Rate": 88.79686722335288,
+            "Throughput": 1054503.524232147,
+            "Latency": 0.06371777864163339,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 82,
+            "Reward": 0.9136108042033014,
+            "Send Rate": 93.11142297770337,
+            "Throughput": 1103719.998455778,
+            "Latency": 0.06373441876670738,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 83,
+            "Reward": 0.9528010105864817,
+            "Send Rate": 97.77672582940451,
+            "Throughput": 1151065.119955786,
+            "Latency": 0.06427039816409558,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 84,
+            "Reward": 1.0198302684875682,
+            "Send Rate": 103.74893084652503,
+            "Throughput": 1232042.1969416405,
+            "Latency": 0.06394768160150786,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 85,
+            "Reward": 1.0823373892369161,
+            "Send Rate": 111.01815510013017,
+            "Throughput": 1307556.1454408674,
+            "Latency": 0.06442358097825947,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 86,
+            "Reward": 1.1716874007733429,
+            "Send Rate": 119.03977492703724,
+            "Throughput": 1415498.6020550996,
+            "Latency": 0.06489799480794747,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 87,
+            "Reward": 1.2109946590132337,
+            "Send Rate": 127.56154368094276,
+            "Throughput": 1462985.132210208,
+            "Latency": 0.07739546966226696,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 88,
+            "Reward": 1.2795161486241993,
+            "Send Rate": 136.82940576837285,
+            "Throughput": 1545764.9527417237,
+            "Latency": 0.11993789616601515,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 89,
+            "Reward": 1.3687163168053704,
+            "Send Rate": 146.23538104272797,
+            "Throughput": 1653526.3857657458,
+            "Latency": 0.17004071366576845,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 90,
+            "Reward": 1.5243745674115334,
+            "Send Rate": 153.51417368703252,
+            "Throughput": 1841574.8669442073,
+            "Latency": 0.18024266003371134,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 91,
+            "Reward": 1.5785023751375602,
+            "Send Rate": 161.16423127654187,
+            "Throughput": 1906965.888575001,
+            "Latency": 0.1596651853900825,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 92,
+            "Reward": 1.589291438520783,
+            "Send Rate": 168.49466606962866,
+            "Throughput": 1919999.9999995634,
+            "Latency": 0.1787079192417893,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 93,
+            "Reward": 1.6091575815022932,
+            "Send Rate": 174.68045677473742,
+            "Throughput": 1943999.999999558,
+            "Latency": 0.22906401820984026,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 94,
+            "Reward": 1.234824023189431,
+            "Send Rate": 178.71822080410882,
+            "Throughput": 1931999.9999995606,
+            "Latency": 0.29904019361654177,
+            "Loss Rate": 0.03571428571428571
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 95,
+            "Reward": -0.09350987910739235,
+            "Send Rate": 180.34764578686278,
+            "Throughput": 1967999.9999995525,
+            "Latency": 0.3159644334308289,
+            "Loss Rate": 0.08333333333333333
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 96,
+            "Reward": 0.3388835195630781,
+            "Send Rate": 164.7521948390233,
+            "Throughput": 1883999.9999995716,
+            "Latency": 0.3159143206925338,
+            "Loss Rate": 0.05952380952380952
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 97,
+            "Reward": 1.5168005292409148,
+            "Send Rate": 137.23056746967134,
+            "Throughput": 1883999.9999995716,
+            "Latency": 0.28479801958873513,
+            "Loss Rate": 0.0125
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 98,
+            "Reward": 1.301232365288891,
+            "Send Rate": 107.59640242497387,
+            "Throughput": 1571999.9999996426,
+            "Latency": 0.12490127551348715,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 99,
+            "Reward": 0.8542441482049209,
+            "Send Rate": 85.48763994641851,
+            "Throughput": 1031999.9999997653,
+            "Latency": 0.06359700853798902,
+            "Loss Rate": 0.0
+        },
+        {
+            "Sender": 2,
+            "Episode": 2000,
+            "Step": 100,
+            "Reward": 0.7648465047881269,
+            "Send Rate": 77.40239596470565,
+            "Throughput": 923999.9999997899,
+            "Latency": 0.06338728199733681,
+            "Loss Rate": 0.0
+        }
+    ]
+]

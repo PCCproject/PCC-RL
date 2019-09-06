@@ -574,7 +574,7 @@ class SimulatedNetworkEnv(gym.Env):
             json.dump(self.event_record, f, indent=4)
 
 
-class SimulatedMultAgentNetworkEnv(gym.Env):
+class SimulatedMultAgentNetworkEnv233(gym.Env):
 
     def __init__(self, arglist = None,
                  history_len=arg_or_default("--history-len", default=10),
@@ -596,7 +596,7 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         self.min_lat, self.max_lat = (0.05, 0.5)
         self.min_queue, self.max_queue = (0, 8)
         self.min_loss, self.max_loss = (0.0, 0.05)
-        self.history_len = history_len
+        self.history_len = 10
         print("History length: %d" % history_len)
         self.features = features.split(",")
         print("Features: %s" % str(self.features))
@@ -649,9 +649,14 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
             use_only_scale_free = True
             single_obs_min_vec = sender_obs.get_min_obs_vector(self.features)
             single_obs_max_vec = sender_obs.get_max_obs_vector(self.features)
+            print("HELLLLLLLLLLLLLLLLOOOOOOOLOOOOOOOOO\n")
+            print("aaaaaaaaaaaaaaaa\n\n\n\n\n\n")
+            print(single_obs_min_vec)
+            print(np.tile(single_obs_min_vec, self.history_len))
             self.observation_space.append(spaces.Box(np.tile(single_obs_min_vec, self.history_len),
                                             np.tile(single_obs_max_vec, self.history_len),
                                             dtype=np.float32))
+
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
@@ -853,7 +858,3 @@ class SimulatedMultAgentNetworkEnv(gym.Env):
         os.makedirs(os.path.dirname(dirname), exist_ok=True)
         with open(dirname, 'w') as f:
             json.dump(record, f, indent=4)
-
-
-register(id='PccNs-v0', entry_point='network_sim:SimulatedNetworkEnv')
-register(id='PccNs-v1', entry_point='network_sim:SimulatedMultAgentNetworkEnv')

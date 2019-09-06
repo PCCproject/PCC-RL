@@ -1,8 +1,8 @@
 '''
-TO RUN SINGLE/DOUBLE AGENT EXPERIMENT:
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 1 --num-episodes 40000 --lr 1e-3
-    # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 2e20 --num-episodes 40000 --lr 1e-2
-TO RUN DOUBLE AGENT WITH DEGUBBER:
+RUN:
+    # python3 train_maddpg.py --max-episode-len 100 --num-agents 1 --log-dir 1e1 --num-episodes 40000 --lr 1e-3
+    # python3 train_maddpg.py --max-episode-len 100 --num-agents 2 --log-dir 2e1 --num-episodes 40000 --lr 1e-3
+RUN DOUBLE AGENT WITH DEGUBBER:
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 2 --log-dir 210 --num-episodes 40000 --lr 1e-3 --debug
     # WHEN SEE DEBUGER WINDOW, ENTER: run -f has_inf_or_nan
     # WAIT FOR NAN TO APPEAR THAN TRACE BACK THE PROBLEMATIC LAYERS
@@ -13,7 +13,6 @@ TO RUN MULTI-PARTICLE ENVIRONMENT, SEE GITHUB PAGE, SEARCH OPENAI-MADDPG:
 
 
     # source ~/.bashrc
-    # trainers[1].p_debug['target_act'](obs_n[0][None])
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 50 --num-agents 2 --log-dir 210 --num-episodes 30000 --lr 1e-3 --debug
     # python3 train_maddpg.py --max-episode-len 100 --save-rate 100 --num-agents 1 --log-dir 31 --num-episodes 30000 --lr 1e-3
 
@@ -85,6 +84,7 @@ sys.path.append(str(cpath.parents[2]))
 import argparse
 import numpy as np
 import pandas as pd
+from sklearn import preprocessing
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 import time
@@ -93,10 +93,9 @@ import pdb
 
 
 from maddpg2.maddpg2.trainer.maddpg import MADDPGAgentTrainer # , RandomTrainer
+from maddpg2.maddpg2.trainer.network_sim import SimulatedMultAgentNetworkEnv
 import tensorflow.contrib.layers as layers
-from maddpg2.network_sim import SimulatedMultAgentNetworkEnv
 import maddpg2.maddpg2.common.tf_util as U
-from tensorflow.python.tools import inspect_checkpoint as chkp
 
 def parse_args():
     parser = argparse.ArgumentParser("Reinforcement Learning experiments for multiagent environments")
@@ -116,11 +115,10 @@ def parse_args():
     parser.add_argument("--gamma", type=float, default=0.95, help="discount factor")
     parser.add_argument("--batch-size", type=int, default=1024, help="number of episodes to optimize at the same time")
     parser.add_argument("--num-units", type=int, default=64, help="number of units in the mlp")
-    # Checkpointing
 
     parser.add_argument("--exp-name", type=str, default=None, help="name of the experiment")
     parser.add_argument("--save-dir", type=str, default="/tmp/policy/", help="directory in which training state and model should be saved")
-    parser.add_argument("--save-rate", type=int, default=1000, help="save model once every time this many episodes are completed")
+    parser.add_argument("--save-rate", type=int, default=100, help="save model once every time this many episodes are completed")
     parser.add_argument("--load-dir", type=str, default="", help="directory in which training state and model are loaded")
     # Evaluation
     parser.add_argument("--restore", action="store_true", default=False)
@@ -213,13 +211,13 @@ def mlp_model3(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=No
     # This model takes as input an observation and returns values of all actions
     # scope: p_func, q_func, target_q_func
     with tf.compat.v1.variable_scope(scope, reuse=reuse):
-        print(input)
+        #print(input)
         hidden1 = nn_layer(input, input.shape[1].value, num_units, 'layer1')
-        print(hidden1)
+        #print(hidden1)
         hidden2 = nn_layer(hidden1, hidden1.shape[1].value, num_units, 'layer2')
-        print(hidden2)
+        #print(hidden2)
         out = nn_layer(hidden2, hidden1.shape[1].value, num_outputs, 'layer3', act=tf.identity)
-        print(out)
+        #print(out)
         return out
 
 '''attemp to solve the blowing out prob'''
@@ -274,10 +272,12 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist, sess):
             local_q_func=(arglist.good_policy=='ddpg'), sess=sess))
     return trainers
 
-def action_check(action_n, env, bar):
+def action_check(action_n, obs_n, env, bar):
     action_vals = [action_n[i][0] for i in range(env.n)]
     if (any(abs(action_val) > bar for action_val in action_vals)):
         print(action_vals)
+        print(obs_n)
+
 
 
 def train(arglist):
@@ -285,52 +285,27 @@ def train(arglist):
     #with tf.compat.v1.Session() as sess:
         if(arglist.debug):
             sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-            # sess.__enter__()
-            '''def my_filter_callable(datum, tensor):
-                # A filter that detects large tensor val.
-                not_empty = False
-                has_large = False
-                not_empty = len(tensor.shape) > 0
-                if not_empty:
-                    if (tensor.dtype == 'int32'):
-                        has_large = tf.reduce_any(tf.math.greater(tensor, 100000))
-                    if (tensor.dtype == 'float32'):
-                        has_large = tf.reduce_any(tf.math.greater(tensor, 1e6))
-
-                    sess = tf.Session()
-                    if sess.run(has_large):
-                        has_large = True
-                    else:
-                        has_large = False
-                    sess.close()
-
-                return not_empty and has_large
-
-            sess.add_tensor_filter('my_filter', my_filter_callable)'''
-
 
         # Create environment
         env = make_env(arglist)
         #env = make_env2(arglist.scenario, arglist, arglist.benchmark)
-
         # Create agent trainers
-
         obs_shape_n = [env.observation_space[i].shape for i in range(env.n)]
+
         num_adversaries = min(env.n, arglist.num_adversaries)
         trainers = get_trainers(env, num_adversaries, obs_shape_n, arglist, sess)
         print('Using good policy {} and adv policy {}'.format(arglist.good_policy, arglist.adv_policy))
 
         # Initialize
         U.initialize()
-        saver = tf.compat.v1.train.Saver()
+        saver = tf.compat.v1.train.Saver(max_to_keep = 10000)
 
         # Load previous results, if necessary
-        if arglist.load_dir == "":
-            arglist.load_dir = arglist.save_dir
-        if arglist.display or arglist.restore or arglist.benchmark:
+        if arglist.restore or arglist.benchmark:
             print('Loading previous state...')
-            U.load_state(arglist.load_dir)
-            #saver.restore(sess, "model_episode_1000.ckpt")
+            root = os.getcwd()+"/tmp1"
+            fname = root + "/model_episode_1200.ckpt"
+            U.load_state(fname)
 
 
         episode_rewards = [0.0]  # sum of rewards for all agents
@@ -348,8 +323,6 @@ def train(arglist):
         #best_params = None
 
         merged = tf.compat.v1.summary.merge_all()
-        path = os.getcwd()+"/tmp/train"
-        summary_writer = tf.compat.v1.summary.FileWriter(path, sess.graph)
         init = tf.global_variables_initializer()
 
         print('Starting iterations...')
@@ -359,7 +332,7 @@ def train(arglist):
 
             action_n = [agent.action(obs) for agent, obs in zip(trainers,obs_n)]
 
-            action_check(action_n, env, bar=1000.0)
+            action_check(action_n, obs_n, env, bar=1000.0)
 
             # got nan?
             # environment step
@@ -376,6 +349,11 @@ def train(arglist):
             for i, agent in enumerate(trainers):
                 agent.experience(obs_n[i], action_n[i], rew_n[i], new_obs_n[i], done_n[i], terminal)
             obs_n = new_obs_n
+
+            for i in range(env.n):
+                obs_n_ = obs_n[i].reshape(3, 10)
+                obs_n_ = preprocessing.scale(obs_n_, axis = 0) / 2
+                obs_n[i] = obs_n_.reshape(obs_n[i].shape)
 
             for i, rew in enumerate(rew_n):
                 episode_rewards[-1] += rew
@@ -412,7 +390,6 @@ def train(arglist):
                 continue
 
             # update all trainers, if not in display or benchmark mode
-
             loss = None
             for agent in trainers:
                 agent.preupdate()
@@ -440,10 +417,10 @@ def train(arglist):
                 #[summary_str] = sess.run([merged])
                 #summary_writer.add_summary(summary_str, num_epi)
 
-                root = os.getcwd()+"/tmp"
+                root = os.getcwd()+"/tmp2"
                 fname = root + "/model_episode_{}.ckpt".format(len(episode_rewards))
+                #save_path = saver.save(sess, fname)
                 U.save_state(root, fname, saver=saver)
-                #chkp.print_tensors_in_checkpoint_file(fname, tensor_name='', all_tensors=True)
 
                 #if (mean_epi_rew > best_rew):
                 #    best_rew = mean_epi_rew
@@ -470,6 +447,5 @@ def train(arglist):
                 break
 
 if __name__ == '__main__':
-    #tf.enable_eager_execution()
     arglist = parse_args()
     train(arglist)

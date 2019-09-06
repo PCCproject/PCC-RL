@@ -188,5 +188,8 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("conn min latency", _mi_metric_conn_min_latency, 0.0, 100.0),
     SenderMonitorIntervalMetric("latency increase", _mi_metric_latency_increase, 0.0, 100.0),
     SenderMonitorIntervalMetric("latency ratio", _mi_metric_latency_ratio, 1.0, 10000.0),
-    SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0)
+    SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0),
+    #SenderMonitorIntervalMetric("ratio1", _mi_metric_ratio1, 0.0, 1000.0),
+    #SenderMonitorIntervalMetric("ratio2", _mi_metric_ratio2, 0.0, 1000.0)
+
 ]

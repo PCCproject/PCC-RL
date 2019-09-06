@@ -7,6 +7,7 @@ import os
 import argparse
 
 title_list = ["reward", "send-rate", "throughput", "latency", "loss-rate"]
+title_list = ["reward", "send-rate", "throughput", "loss-rate"]
 
 def parse_args():
     parser = argparse.ArgumentParser("Reinforcement Learning experiments for multiagent environments")
@@ -80,7 +81,7 @@ def plot_steps(arglist):
     #y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_latency, avg_agent_lossrate]
     y_list = [avg_agent_reward, avg_agent_sendrate, avg_agent_throughput, avg_agent_lossrate]
 
-    with open(dir + "steps_at_epi_%d.json" % (start_log * 1000)) as f:
+    with open(dir + "steps_at_epi_%d.json" % (start_log * 100)) as f:
         data = json.load(f)
         for ag in range(arglist.num_agents):
             for rec in data[ag]:
@@ -94,7 +95,7 @@ def plot_steps(arglist):
 
     fig, ax = plt.subplots(5,1,figsize=(15,15))
     # fig = plt.figure()
-    fig.suptitle("steps_at_api_{}_experiment_{}".format(start_log * 1000, arglist.in_out[1]))
+    fig.suptitle("steps_at_api_{}_experiment_{}".format(start_log * 100, arglist.in_out[1]))
     for idx in range(0, len(y_list)):
         ax = plt.subplot(5, 1, idx+1)
         for ag in range(arglist.num_agents):
@@ -102,7 +103,7 @@ def plot_steps(arglist):
         ax.legend()
         ax.set_title(title_list[idx])
 
-    fig.savefig("steps_at_epi_{}_experiment_{}.png".format(start_log * 1000, arglist.in_out[1]))
+    fig.savefig("steps_at_epi_{}_experiment_{}.png".format(start_log * 100, arglist.in_out[1]))
 
 
 if __name__ == '__main__':
