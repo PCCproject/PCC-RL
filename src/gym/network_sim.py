@@ -26,7 +26,7 @@ import sys
 import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir) 
+sys.path.insert(0,parentdir)
 from common import sender_obs, config
 from common.simple_arg_parse import arg_or_default
 
@@ -96,7 +96,7 @@ class Link():
         self.queue_delay_update_time = 0.0
 
 class Network():
-    
+
     def __init__(self, senders, links):
         self.q = []
         self.cur_time = 0.0
@@ -108,7 +108,7 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False)) 
+            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False))
 
     def reset(self):
         self.cur_time = 0.0
@@ -159,21 +159,21 @@ class Network():
                         sender.on_packet_sent()
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False))
-                
+
                 else:
                     push_new_event = True
 
                 if next_hop == sender.dest:
                     new_event_type = EVENT_TYPE_ACK
                 new_next_hop = next_hop + 1
-                
+
                 link_latency = sender.path[next_hop].get_cur_latency(self.cur_time)
                 if USE_LATENCY_NOISE:
                     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                 new_latency += link_latency
                 new_event_time += link_latency
                 new_dropped = not sender.path[next_hop].packet_enters_link(self.cur_time)
-                   
+
             if push_new_event:
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped))
 
@@ -186,26 +186,26 @@ class Network():
         loss_cutoff = 2.0 * self.links[0].lr * 1.5
         #print("thpt %f, bw %f" % (throughput, bw_cutoff))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
-        
+
         # Super high throughput
         #reward = REWARD_SCALE * (20.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-        
+
         # Very high thpt
         reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss)
-        
+
         # High thpt
         #reward = REWARD_SCALE * (5.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-        
+
         # Low latency
         #reward = REWARD_SCALE * (2.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
         #if reward > 857:
         #print("Reward = %f, thpt = %f, lat = %f, loss = %f" % (reward, throughput, latency, loss))
-        
+
         #reward = (throughput / RATE_OBS_SCALE) * np.exp(-1 * (LATENCY_PENALTY * latency / LAT_OBS_SCALE + LOSS_PENALTY * loss))
         return reward * REWARD_SCALE
 
 class Sender():
-    
+
     def __init__(self, rate, path, dest, features, cwnd=25, history_len=10):
         self.id = Sender._get_next_id()
         self.starting_rate = rate
@@ -297,7 +297,7 @@ class Sender():
 
     def get_run_data(self):
         obs_end_time = self.net.get_cur_time()
-        
+
         #obs_dur = obs_end_time - self.obs_start_time
         #print("Got %d acks in %f seconds" % (self.acked, obs_dur))
         #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
@@ -342,7 +342,7 @@ class Sender():
                                                 self.features, self.id)
 
 class SimulatedNetworkEnv(gym.Env):
-    
+
     def __init__(self,
                  history_len=arg_or_default("--history-len", default=10),
                  features=arg_or_default("--input-features",
@@ -377,7 +377,7 @@ class SimulatedNetworkEnv(gym.Env):
             self.action_space = spaces.Box(np.array([-1e12, -1e12]), np.array([1e12, 1e12]), dtype=np.float32)
         else:
             self.action_space = spaces.Box(np.array([-1e12]), np.array([1e12]), dtype=np.float32)
-                   
+
 
         self.observation_space = None
         use_only_scale_free = True
