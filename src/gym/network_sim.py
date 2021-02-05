@@ -341,6 +341,131 @@ class Sender():
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
 
+
+class TCPCubicSender(Sender):
+    """Mimic TCPCubic sender behavior.
+
+    Args:
+        rate
+        path
+        dest
+        features
+        cwnd: congestion window size. Unit: number of packets.
+        history_len:
+    """
+    tcp_friendliness = 1
+    fast_convergence = 1
+    beta = 0.2
+    C = 0.4
+
+    def __init__(self, rate, path, dest, features, cwnd=25, history_len=10):
+        super().__init__(rate, path, dest, features, cwnd, history_len)
+
+        # slow start threshold, arbitrarily high at start
+        self.sshthresh = MAX_CWND
+
+        self.reset()
+        assert self.net is not None
+
+    def reset(self):
+        self.W_last_max = 0
+        self.epoch_start = 0
+        self.origin_point = 0
+        self.dMin = 0
+        self.W_tcp = 0  # used in tcp friendliness
+        self.K = 0
+        # self.acked = 0 # TODO is this one used in Cubic?
+        self.ack_cnt = 0
+
+        # In standard, TCP cwnd_cnt is an additional state variable that tracks
+        # the number of segments acked since the last cwnd increment; cwnd is
+        # incremented only when cwnd_cnt > cwnd; then, cwnd_cnt is set to 0.
+        # initialie to 0
+        self.cwnd_cnt = 0
+
+    def apply_rate_delta(self, delta):
+        # place holder
+        #  do nothing
+        pass
+
+    def apply_cwnd_delta(self, delta):
+        # place holder
+        #  do nothing
+        pass
+        # raise NotImplementedError
+        # delta *= config.DELTA_SCALE
+        # #print("Applying delta %f" % delta)
+        # if delta >= 0.0:
+        #     self.set_cwnd(self.cwnd * (1.0 + delta))
+        # else:
+        #     self.set_cwnd(self.cwnd / (1.0 - delta))
+
+    def on_packet_sent(self):
+        self.sent += 1
+        self.bytes_in_flight += BYTES_PER_PACKET
+
+    def on_packet_acked(self, rtt):
+        self.acked += 1
+        self.rtt_samples.append(rtt)
+        if (self.min_latency is None) or (rtt < self.min_latency):
+            self.min_latency = rtt
+        self.bytes_in_flight -= BYTES_PER_PACKET
+
+        # Added by Zhengxu Xia
+        if self.dMin:
+            self.dMin = min(self.dMin, rtt)
+        else:
+            self.dMin = rtt
+        if self.cwnd <= self.sshthresh:  # in slow start region
+            self.cwnd += 1
+        else:  # in congestion avoidance or max bw probing region
+            cnt = self.cubic_update()
+            if self.cwnd_cnt > cnt:
+                self.cwnd += 1
+                self.cwnd_cnt = 0
+            else:
+                self.cwnd_cnt += self.cwnd_cnt
+
+    def on_packet_lost(self):
+        self.lost += 1
+        self.bytes_in_flight -= BYTES_PER_PACKET
+
+        self.epoch_start = 0
+        if self.cwnd < self.W_last_max and self.fast_convergence:
+            self.W_last_max = self.cwnd * (2 - self.beta) / 2
+        else:
+            self.W_last_max = self.cwnd
+        self.cwnd  = self.cwnd * (1- self.beta)
+        self.sshthresh = self.cwnd
+
+    def cubic_update(self):
+        self.ack_cnt += 1
+        # assume network current time is tcp_time_stamp
+        tcp_time_stamp = self.net.get_cur_time()
+        if self.epoch_start <= 0:
+            self.epoch_start = tcp_time_stamp # TODO: check the unit of time
+            if self.cwnd < self.W_last_max:
+                self.K = np.cbrt((self.W_last_max - self.cwnd)/self.C)
+                self.origin_point = self.W_last_max
+            else:
+                self.K = 0
+                self.origin_point = self.cwnd
+            self.ack_cnt = 1
+            self.W_tcp = self.cwnd
+        t = tcp_time_stamp + self.dMin - self.epoch_start
+        target = self.origin_point + self.C * (t - self.K)**3
+        if target > self.cwnd:
+            cnt = self.cwnd / (target - self.cwnd)
+        else:
+            cnt = 100 * self.cwnd
+        # TODO: call friendliness
+        return cnt
+
+
+    def cubic_tcp_friendliness(self):
+        raise NotImplementedError
+
+
 class SimulatedNetworkEnv(gym.Env):
 
     def __init__(self,
@@ -348,7 +473,14 @@ class SimulatedNetworkEnv(gym.Env):
                  features=arg_or_default("--input-features",
                     default="sent latency inflation,"
                           + "latency ratio,"
-                          + "send ratio")):
+                          + "send ratio"), congestion_control_type="rl"):
+        """Network environment used in simulation.
+        congestion_control_type: rl is pcc-rl. cubic is TCPCubic.
+        """
+        assert congestion_control_type in {"rl", "cubic"}, \
+            "Unrecognized congestion_control_type {}.".format(
+                congestion_control_type)
+        self.congestion_control_type = congestion_control_type
         self.viewer = None
         self.rand = None
 
@@ -463,7 +595,19 @@ class SimulatedNetworkEnv(gym.Env):
         self.links = [Link(bw, lat, queue, loss), Link(bw, lat, queue, loss)]
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
-        self.senders = [Sender(random.uniform(0.3, 1.5) * bw, [self.links[0], self.links[1]], 0, self.features, history_len=self.history_len)]
+        if self.congestion_control_type == "rl":
+            self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                                   [self.links[0], self.links[1]], 0,
+                                   self.features,
+                                   history_len=self.history_len)]
+        elif self.congestion_control_type == "cubic":
+            self.senders = [TCPCubicSender(random.uniform(0.3, 1.5) * bw,
+                                          [self.links[0], self.links[1]], 0,
+                                          self.features,
+                                          history_len=self.history_len)]
+        else:
+            raise RuntimeError("Unrecognized congestion_control_type {}".format(
+                self.congestion_control_type))
         self.run_dur = 3 * lat
 
     def reset(self):
