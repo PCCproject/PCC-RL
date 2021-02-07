@@ -136,7 +136,7 @@ class Network():
         last_time = self.cur_time
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped = heapq.heappop(self.q)
-            #print("Got event %s, to link %d, latency %f at time %f" % (event_type, next_hop, cur_latency, event_time))
+            # print("Got event %s, to link %d, latency %f at time %f" % (event_type, next_hop, cur_latency, event_time))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -393,7 +393,8 @@ class TCPCubicSender(Sender):
         super().__init__(rate, path, dest, features, cwnd, history_len)
 
         # slow start threshold, arbitrarily high at start
-        self.ssthresh = 100
+        self.ssthresh = MAX_CWND
+        self.pkt_loss_wait_time = 0
 
         self.reset()
 
@@ -412,6 +413,7 @@ class TCPCubicSender(Sender):
         # incremented only when cwnd_cnt > cwnd; then, cwnd_cnt is set to 0.
         # initialie to 0
         self.cwnd_cnt = 0
+        self.pkt_loss_wait_time = 0
 
     def apply_rate_delta(self, delta):
         # place holder
@@ -459,21 +461,25 @@ class TCPCubicSender(Sender):
                 # print("in congestion avoidance, inc cwnd_cnt by 1")
                 self.cwnd_cnt += 1
         self.rate = self.cwnd / rtt
+        if self.pkt_loss_wait_time > 0:
+            self.pkt_loss_wait_time -= 1
 
     def on_packet_lost(self, rtt):
         self.lost += 1
         self.bytes_in_flight -= BYTES_PER_PACKET
 
-        self.epoch_start = 0
-        if self.cwnd < self.W_last_max and self.fast_convergence:
-            self.W_last_max = self.cwnd * (2 - self.beta) / 2
-        else:
-            self.W_last_max = self.cwnd
-        old_cwnd = self.cwnd
-        self.cwnd  = self.cwnd * (1 - self.beta)
-        self.ssthresh = self.cwnd
-        # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
-        self.rate = self.cwnd / rtt
+        if self.pkt_loss_wait_time <= 0:
+            self.epoch_start = 0
+            if self.cwnd < self.W_last_max and self.fast_convergence:
+                self.W_last_max = self.cwnd * (2 - self.beta) / 2
+            else:
+                self.W_last_max = self.cwnd
+            old_cwnd = self.cwnd
+            self.cwnd  = self.cwnd * (1 - self.beta)
+            self.ssthresh = self.cwnd
+            # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
+            self.rate = self.cwnd / rtt
+            self.pkt_loss_wait_time = int(self.cwnd)
 
     def cubic_update(self):
         self.ack_cnt += 1
@@ -647,23 +653,23 @@ class SimulatedNetworkEnv(gym.Env):
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "rl":
-            # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
-            #                        [self.links[0], self.links[1]], 0,
-            #                        self.features,
-            #                        history_len=self.history_len)]
-            self.senders = [Sender(1.1 * bw,
+            self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
                                    [self.links[0], self.links[1]], 0,
                                    self.features,
                                    history_len=self.history_len)]
+            # self.senders = [Sender(1.1 * bw,
+            #                        [self.links[0], self.links[1]], 0,
+            #                        self.features,
+            #                        history_len=self.history_len)]
         elif self.congestion_control_type == "cubic":
-            # self.senders = [TCPCubicSender(random.uniform(0.3, 1.5) * bw,
-            #                               [self.links[0], self.links[1]], 0,
-            #                               self.features,
-            #                               history_len=self.history_len)]
-            self.senders = [TCPCubicSender(1.1 * bw,
+            self.senders = [TCPCubicSender(random.uniform(0.3, 1.5) * bw,
                                           [self.links[0], self.links[1]], 0,
                                           self.features,
                                           history_len=self.history_len)]
+            # self.senders = [TCPCubicSender(1.1 * bw,
+            #                               [self.links[0], self.links[1]], 0,
+            #                               self.features,
+            #                               history_len=self.history_len)]
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
@@ -700,6 +706,9 @@ class SimulatedNetworkEnv(gym.Env):
             json.dump(self.event_record, f, indent=4)
         with open(os.path.splitext(filename)[0]+'.csv', 'w') as f:
             writer = csv.writer(f, lineterminator='\n')
+            writer.writerow(['timestamp', 'cwnd', 'ssthresh', 'link0_bw',
+                             'link1_bw', 'throughput', 'reward', 'loss'])
+
             writer.writerows(self.net.result_log)
 
 
