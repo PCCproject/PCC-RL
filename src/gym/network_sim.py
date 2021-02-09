@@ -39,7 +39,8 @@ MIN_RATE = 40
 
 REWARD_SCALE = 0.001
 
-MAX_STEPS = 400
+# MAX_STEPS = 400
+MAX_STEPS = 100
 # MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
@@ -53,8 +54,6 @@ LOSS_PENALTY = 1.0
 USE_LATENCY_NOISE = False
 MAX_LATENCY_NOISE = 1.1
 
-# USE_CWND = False
-USE_CWND = True
 
 class Link():
 
@@ -65,13 +64,18 @@ class Link():
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
         self.max_queue_delay = queue_size / self.bw
+        self.queue_size = queue_size
 
     def get_cur_queue_delay(self, event_time):
-        # print('Event Time: {}, Queue_delay_update_time: {}'.format(event_time, self.queue_delay_update_time))
-        return max(0.0, self.queue_delay - (event_time - self.queue_delay_update_time))
+        cur_queue_delay = max(0.0, self.queue_delay - (event_time - self.queue_delay_update_time))
+        # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
+        #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
+        return cur_queue_delay
 
     def get_cur_latency(self, event_time):
-        return self.dl + self.get_cur_queue_delay(event_time)
+        q_delay = self.get_cur_queue_delay(event_time)
+        # print('queue delay: ', q_delay)
+        return self.dl + q_delay
 
     def packet_enters_link(self, event_time):
         if (random.random() < self.lr):
@@ -102,25 +106,23 @@ class Link():
 class Network():
 
     def __init__(self, senders, links):
+        self.event_count = 0
         self.q = []
         self.cur_time = 0.0
         self.senders = senders
         self.links = links
         self.queue_initial_packets()
-        self.last_time = 0
-        self.last_time_cwnd = 0
         self.result_log = []
 
     def queue_initial_packets(self):
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False))
+            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count))
+            self.event_count += 1
 
     def reset(self):
         self.cur_time = 0.0
-        self.last_time = 0.0
-        self.last_time_cwnd = 0.0
         self.q = []
         [link.reset() for link in self.links]
         [sender.reset() for sender in self.senders]
@@ -133,10 +135,9 @@ class Network():
         end_time = self.cur_time + dur
         for sender in self.senders:
             sender.reset_obs()
-        last_time = self.cur_time
         while self.cur_time < end_time:
-            event_time, sender, event_type, next_hop, cur_latency, dropped = heapq.heappop(self.q)
-            # print("Got event %s, to link %d, latency %f at time %f" % (event_type, next_hop, cur_latency, event_time))
+            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id = heapq.heappop(self.q)
+            # print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d , dropped %s, event_q length %f" % (self.event_count, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q)))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -144,12 +145,6 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
-            # print(self.cur_time, last_time, self.cur_time - last_time)
-            if self.cur_time - self.last_time_cwnd > 0.01:
-                # print("{}, {}, {}, {}".format(
-                #     self.cur_time, self.senders[0].cwnd,
-                #     self.senders[0].ssthresh, self.senders[0].sent), file=sys.stderr)
-                self.last_time_cwnd = self.cur_time
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     if dropped:
@@ -172,7 +167,7 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False))
+                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False, event_id))
 
                 else:
                     push_new_event = True
@@ -189,12 +184,11 @@ class Network():
                 new_dropped = not sender.path[next_hop].packet_enters_link(self.cur_time)
 
             if push_new_event:
-                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped))
+                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped, self.event_count))
+                self.event_count += 1
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
-        # if self.cur_time - self.last_time > 1:
-        self.last_time = self.cur_time
         latency = sender_mi.get("avg latency")
         loss = sender_mi.get("loss ratio")
         bw_cutoff = self.links[0].bw * 0.8
@@ -220,7 +214,7 @@ class Network():
         self.result_log.append([
             self.cur_time, self.senders[0].cwnd, ssthresh,
             self.links[0].bw, self.links[1].bw,
-            throughput/(8 * BYTES_PER_PACKET), reward, loss])
+            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         # print(self.cur_time)
 
         # High thpt
@@ -255,6 +249,7 @@ class Sender():
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
         self.cwnd = cwnd
+        self.use_cwnd = False
 
     _next_id = 1
     def _get_next_id():
@@ -279,7 +274,7 @@ class Sender():
             self.set_cwnd(self.cwnd / (1.0 - delta))
 
     def can_send_packet(self):
-        if USE_CWND:
+        if self.use_cwnd:
             return int(self.bytes_in_flight) / BYTES_PER_PACKET < self.cwnd
         else:
             return True
@@ -389,12 +384,15 @@ class TCPCubicSender(Sender):
     beta = 0.2
     C = 0.4
 
-    def __init__(self, rate, path, dest, features, cwnd=25, history_len=10):
+    def __init__(self, rate, path, dest, features, cwnd=10, history_len=10):
         super().__init__(rate, path, dest, features, cwnd, history_len)
+        # TCP inital cwnd value is configured to 10 MSS. Refer to
+        # https://developers.google.com/speed/pagespeed/service/tcp_initcwnd_paper.pdf
 
         # slow start threshold, arbitrarily high at start
         self.ssthresh = MAX_CWND
         self.pkt_loss_wait_time = 0
+        self.use_cwnd = True
 
         self.reset()
 
@@ -525,8 +523,13 @@ class SimulatedNetworkEnv(gym.Env):
         assert congestion_control_type in {"rl", "cubic"}, \
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
+        random.seed(42)
         self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
+        if self.congestion_control_type == 'rl':
+            self.use_cwnd = False
+        elif self.congestion_control_type == 'cubic':
+            self.use_cwnd = True
         self.viewer = None
         self.rand = None
 
@@ -551,7 +554,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.last_thpt = None
         self.last_rate = None
 
-        if USE_CWND:
+        if self.use_cwnd:
             self.action_space = spaces.Box(np.array([-1e12, -1e12]), np.array([1e12, 1e12]), dtype=np.float32)
         else:
             self.action_space = spaces.Box(np.array([-1e12]), np.array([1e12]), dtype=np.float32)
@@ -595,11 +598,12 @@ class SimulatedNetworkEnv(gym.Env):
     def step(self, actions):
         #print("Actions: %s" % str(actions))
         #print(actions)
+        t_start = time.time()
         for i in range(0, 1):#len(actions)):
             #print("Updating rate for sender %d" % i)
             action = actions
             self.senders[i].apply_rate_delta(action[0])
-            if USE_CWND:
+            if self.use_cwnd:
                 self.senders[i].apply_cwnd_delta(action[1])
         #print("Running for %fs" % self.run_dur)
         reward = self.net.run_for_dur(self.run_dur)
@@ -630,6 +634,7 @@ class SimulatedNetworkEnv(gym.Env):
         should_stop = False
 
         self.reward_sum += reward
+        # print('env step: {}s'.format(time.time() - t_start))
         return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {}
 
     def print_debug(self):
@@ -653,23 +658,20 @@ class SimulatedNetworkEnv(gym.Env):
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "rl":
-            self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+            self.senders = [Sender(10,
                                    [self.links[0], self.links[1]], 0,
                                    self.features,
                                    history_len=self.history_len)]
-            # self.senders = [Sender(1.1 * bw,
+            # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
             #                        [self.links[0], self.links[1]], 0,
             #                        self.features,
             #                        history_len=self.history_len)]
+            # else:
         elif self.congestion_control_type == "cubic":
-            self.senders = [TCPCubicSender(random.uniform(0.3, 1.5) * bw,
+            self.senders = [TCPCubicSender(10,
                                           [self.links[0], self.links[1]], 0,
                                           self.features,
                                           history_len=self.history_len)]
-            # self.senders = [TCPCubicSender(1.1 * bw,
-            #                               [self.links[0], self.links[1]], 0,
-            #                               self.features,
-            #                               history_len=self.history_len)]
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
@@ -707,7 +709,8 @@ class SimulatedNetworkEnv(gym.Env):
         with open(os.path.splitext(filename)[0]+'.csv', 'w') as f:
             writer = csv.writer(f, lineterminator='\n')
             writer.writerow(['timestamp', 'cwnd', 'ssthresh', 'link0_bw',
-                             'link1_bw', 'throughput', 'reward', 'loss'])
+                             'link1_bw', 'throughput', 'reward', 'loss',
+                             'latency'])
 
             writer.writerows(self.net.result_log)
 
