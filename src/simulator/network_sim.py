@@ -13,23 +13,25 @@
 # limitations under the License.
 
 import csv
-import gym
-from gym import spaces
-from gym.utils import seeding
-from gym.envs.registration import register
-import numpy as np
 import heapq
-import time
-import random
 import json
 import os
+import random
 import sys
-import inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir)
-from common import sender_obs, config
-from common.simple_arg_parse import arg_or_default
+import time
+
+import gym
+from gym import spaces
+from gym.envs.registration import register
+from gym.utils import seeding
+import numpy as np
+
+from common import config, sender_obs
+
+# import inspect
+# currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+# parentdir = os.path.dirname(currentdir)
+# sys.path.insert(0,parentdir)
 
 MAX_CWND = 5000
 MIN_CWND = 4
@@ -53,6 +55,9 @@ LOSS_PENALTY = 1.0
 
 USE_LATENCY_NOISE = False
 MAX_LATENCY_NOISE = 1.1
+
+# DEBUG = True
+DEBUG = False
 
 
 class Link():
@@ -137,7 +142,9 @@ class Network():
             sender.reset_obs()
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, event_id = heapq.heappop(self.q)
-            # print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d , dropped %s, event_q length %f" % (self.event_count, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q)))
+            if DEBUG:
+                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d , dropped %s, event_q length %f, sender rate %f, duration: %f" % (
+                    self.event_count, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -510,13 +517,9 @@ class TCPCubicSender(Sender):
 
 class SimulatedNetworkEnv(gym.Env):
 
-    def __init__(self,
-                 history_len=arg_or_default("--history-len", default=10),
-                 features=arg_or_default("--input-features",
-                    default="sent latency inflation,"
-                          + "latency ratio,"
-                          + "send ratio"), congestion_control_type="rl",
-                 log_dir=""):
+    def __init__(self, history_len=10,
+                 features="sent latency inflation,latency ratio,send ratio",
+                 congestion_control_type="rl", log_dir=""):
         """Network environment used in simulation.
         congestion_control_type: rl is pcc-rl. cubic is TCPCubic.
         """
@@ -715,6 +718,4 @@ class SimulatedNetworkEnv(gym.Env):
             writer.writerows(self.net.result_log)
 
 
-register(id='PccNs-v0', entry_point='network_sim:SimulatedNetworkEnv')
-#env = SimulatedNetworkEnv()
-#env.step([1.0])
+register(id='PccNs-v0', entry_point='simulator.network_sim:SimulatedNetworkEnv')
