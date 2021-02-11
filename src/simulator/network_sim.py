@@ -24,6 +24,7 @@ import gym
 from gym import spaces
 from gym.envs.registration import register
 from gym.utils import seeding
+import ipdb
 import numpy as np
 
 from common import config, sender_obs
@@ -118,7 +119,7 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count))
+            heapq.heappush(self.q, (1.0 / sender.rate, sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto))
             self.event_count += 1
 
     def reset(self):
@@ -136,7 +137,7 @@ class Network():
         for sender in self.senders:
             sender.reset_obs()
         while self.cur_time < end_time:
-            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id = heapq.heappop(self.q)
+            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto = heapq.heappop(self.q)
             if DEBUG:
                 print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f" % (
                       event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
@@ -147,8 +148,11 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
+            if cur_latency > rto:#  sender.timeout(cur_latency):
+                sender.timeout()
+                # new_dropped = True
             # TODO: call TCP timeout logic
-            if event_type == EVENT_TYPE_ACK:
+            elif event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
                     #     sender.timeout(cur_latency)
@@ -169,13 +173,13 @@ class Network():
                     new_latency += link_latency
                     new_event_time += link_latency
                     push_new_event = True
-            if event_type == EVENT_TYPE_SEND:
+            elif event_type == EVENT_TYPE_SEND:
                 if next_hop == 0:
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count))
+                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto))
                     self.event_count += 1
 
                 else:
@@ -195,13 +199,15 @@ class Network():
             if push_new_event:
                 if new_event_type == EVENT_TYPE_SEND:
                     event_id_push = self.event_count
+                    rto = sender.rto
                     self.event_count += 1
                 elif new_event_type == EVENT_TYPE_ACK:
                     event_id_push = event_id
-                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped, event_id_push))
+                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped, event_id_push, rto))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
+        send_throughput = sender_mi.get("send rate")  # bits/sec
         latency = sender_mi.get("avg latency")
         loss = sender_mi.get("loss ratio")
         bw_cutoff = self.links[0].bw * 0.8
@@ -225,8 +231,9 @@ class Network():
         #     self.links[0].bw, self.links[1].bw,
         #     throughput/(8 * BYTES_PER_PACKET), reward, loss))
         self.result_log.append([
-            self.cur_time, self.senders[0].cwnd, ssthresh,
+            self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
             self.links[0].bw, self.links[1].bw,
+            send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         # print(self.cur_time)
 
@@ -381,6 +388,9 @@ class Sender():
         self.reset_obs()
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
+    def timeout(self):
+        # placeholder
+        pass
 
 
 class TCPCubicSender(Sender):
@@ -394,10 +404,15 @@ class TCPCubicSender(Sender):
         cwnd: congestion window size. Unit: number of packets.
         history_len:
     """
+    # used byb Cubic
     tcp_friendliness = 1
     fast_convergence = 1
     beta = 0.2
     C = 0.4
+
+    # used by srtt
+    ALPHA = 0.8
+    BETA = 1.5
 
     def __init__(self, rate, path, dest, features, cwnd=10, history_len=10):
         super().__init__(rate, path, dest, features, cwnd, history_len)
@@ -408,6 +423,9 @@ class TCPCubicSender(Sender):
         self.ssthresh = MAX_CWND
         self.pkt_loss_wait_time = 0
         self.use_cwnd = True
+        self.rto = 3  # retransmission timeout (seconds)
+        # initialize rto to 3s for waiting SYC packets of TCP handshake
+        self.srtt = None # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
 
         self.cubic_reset()
 
@@ -474,6 +492,7 @@ class TCPCubicSender(Sender):
                 # print("in congestion avoidance, inc cwnd_cnt by 1")
                 self.cwnd_cnt += 1
         if not self.rtt_samples and not self.prev_rtt_samples:
+            print(self.srtt)
             raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
         elif not self.rtt_samples:
             avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
@@ -484,6 +503,11 @@ class TCPCubicSender(Sender):
             self.pkt_loss_wait_time -= 1
 
         # TODO: update RTO
+        if self.srtt is None:
+            self.srtt = rtt
+        else:
+            self.srtt = (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt
+        self.rto = max(1, min(self.BETA * self.srtt, 60))
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -535,15 +559,20 @@ class TCPCubicSender(Sender):
     def reset(self):
         super().reset()
         self.cubic_reset()
+        self.rto = 3  # retransmission timeout (seconds)
+        # initialize rto to 3s for waiting SYC packets of TCP handshake
+        self.srtt = None # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
 
-    def timeout(self, rtt):
+    def timeout(self):
         # if self.pkt_loss_wait_time <= 0:
         # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
         # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
         self.sshthresh = self.cwnd * (1 - self.beta)
         self.cwnd = 1
         if not self.rtt_samples and not self.prev_rtt_samples:
-            raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+            print(self.srtt)
+            # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+            avg_sampled_rtt = self.srtt
         elif not self.rtt_samples:
             avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
         else:
@@ -551,7 +580,8 @@ class TCPCubicSender(Sender):
         self.rate = self.cwnd / avg_sampled_rtt
         self.cubic_reset()
         # self.pkt_loss_wait_time = int(self.cwnd)
-        # print('timeout rate', self.rate, self.cwnd)
+        print('timeout rate', self.rate, self.cwnd)
+        # return True
 
     def cubic_tcp_friendliness(self):
         raise NotImplementedError
@@ -753,9 +783,9 @@ class SimulatedNetworkEnv(gym.Env):
             json.dump(self.event_record, f, indent=4)
         with open(os.path.splitext(filename)[0]+'.csv', 'w') as f:
             writer = csv.writer(f, lineterminator='\n')
-            writer.writerow(['timestamp', 'cwnd', 'ssthresh', 'link0_bw',
-                             'link1_bw', 'throughput', 'reward', 'loss',
-                             'latency'])
+            writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
+                             'link0_bw', 'link1_bw', "send_throughput",
+                             'throughput', 'reward', 'loss', 'latency'])
 
             writer.writerows(self.net.result_log)
 
