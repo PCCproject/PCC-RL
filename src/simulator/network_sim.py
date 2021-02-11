@@ -28,7 +28,6 @@ import numpy as np
 
 from common import config, sender_obs
 
-
 MAX_CWND = 5000
 MIN_CWND = 4
 
@@ -139,8 +138,8 @@ class Network():
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, event_id = heapq.heappop(self.q)
             if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d , dropped %s, event_q length %f, sender rate %f, duration: %f" % (
-                    self.event_count, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
+                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f" % (
+                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -148,8 +147,14 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
+            # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
+                    # if cur_latency > 1.0:
+                    #     sender.timeout(cur_latency)
+                        # import ipdb
+                        # ipdb.set_trace()
+                        # sender.on_packet_lost(cur_latency)
                     if dropped:
                         sender.on_packet_lost(cur_latency)
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
@@ -170,7 +175,8 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False, event_id))
+                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender, EVENT_TYPE_SEND, 0, 0.0, False, self.event_count))
+                    self.event_count += 1
 
                 else:
                     push_new_event = True
@@ -187,8 +193,12 @@ class Network():
                 new_dropped = not sender.path[next_hop].packet_enters_link(self.cur_time)
 
             if push_new_event:
-                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped, self.event_count))
-                self.event_count += 1
+                if new_event_type == EVENT_TYPE_SEND:
+                    event_id_push = self.event_count
+                    self.event_count += 1
+                elif new_event_type == EVENT_TYPE_ACK:
+                    event_id_push = event_id
+                heapq.heappush(self.q, (new_event_time, sender, new_event_type, new_next_hop, new_latency, new_dropped, event_id_push))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
@@ -243,6 +253,7 @@ class Sender():
         self.bytes_in_flight = 0
         self.min_latency = None
         self.rtt_samples = []
+        self.prev_rtt_samples = self.rtt_samples
         self.sample_time = []
         self.net = None
         self.path = path
@@ -349,6 +360,7 @@ class Sender():
         self.sent = 0
         self.acked = 0
         self.lost = 0
+        self.prev_rtt_samples = self.rtt_samples
         self.rtt_samples = []
         self.obs_start_time = self.net.get_cur_time()
 
@@ -397,9 +409,9 @@ class TCPCubicSender(Sender):
         self.pkt_loss_wait_time = 0
         self.use_cwnd = True
 
-        self.reset()
+        self.cubic_reset()
 
-    def reset(self):
+    def cubic_reset(self):
         self.W_last_max = 0
         self.epoch_start = 0
         self.origin_point = 0
@@ -461,9 +473,17 @@ class TCPCubicSender(Sender):
             else:
                 # print("in congestion avoidance, inc cwnd_cnt by 1")
                 self.cwnd_cnt += 1
-        self.rate = self.cwnd / rtt
+        if not self.rtt_samples and not self.prev_rtt_samples:
+            raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+        elif not self.rtt_samples:
+            avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
+        else:
+            avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
+        self.rate = self.cwnd / avg_sampled_rtt
         if self.pkt_loss_wait_time > 0:
             self.pkt_loss_wait_time -= 1
+
+        # TODO: update RTO
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -476,10 +496,16 @@ class TCPCubicSender(Sender):
             else:
                 self.W_last_max = self.cwnd
             old_cwnd = self.cwnd
-            self.cwnd  = self.cwnd * (1 - self.beta)
+            self.cwnd = self.cwnd * (1 - self.beta)
             self.ssthresh = self.cwnd
             # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
-            self.rate = self.cwnd / rtt
+            if not self.rtt_samples and not self.prev_rtt_samples:
+                raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+            elif not self.rtt_samples:
+                avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
+            else:
+                avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
+            self.rate = self.cwnd / avg_sampled_rtt
             self.pkt_loss_wait_time = int(self.cwnd)
 
     def cubic_update(self):
@@ -506,6 +532,26 @@ class TCPCubicSender(Sender):
         # TODO: call friendliness
         return cnt
 
+    def reset(self):
+        super().reset()
+        self.cubic_reset()
+
+    def timeout(self, rtt):
+        # if self.pkt_loss_wait_time <= 0:
+        # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
+        # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
+        self.sshthresh = self.cwnd * (1 - self.beta)
+        self.cwnd = 1
+        if not self.rtt_samples and not self.prev_rtt_samples:
+            raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+        elif not self.rtt_samples:
+            avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
+        else:
+            avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
+        self.rate = self.cwnd / avg_sampled_rtt
+        self.cubic_reset()
+        # self.pkt_loss_wait_time = int(self.cwnd)
+        # print('timeout rate', self.rate, self.cwnd)
 
     def cubic_tcp_friendliness(self):
         raise NotImplementedError
