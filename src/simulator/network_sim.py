@@ -28,10 +28,6 @@ import numpy as np
 
 from common import config, sender_obs
 
-# import inspect
-# currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.insert(0,parentdir)
 
 MAX_CWND = 5000
 MIN_CWND = 4
