@@ -48,10 +48,12 @@ def main():
     # queue_list = [1, 3, 5, 7]
     # loss_list = [0.0, 0.02, 0.04]
     # bw_list = [1, 5, 10, 100, 500, 1000, 2000, 5000, 8000]
-    bw_list = [50, 80, 100, 300, 500, 800, 1000, 1500, 2000, 3000, 4000, 5000]
-    # bw_list = [1000] #, 2000, 5000, 8000]
+    # bw_list = [50, 80, 100, 300, 500, 800, 1000, 1500, 2000, 3000, 4000, 5000]
+    bw_list = [100] #, 2000, 5000, 8000]
     lat_list = [0.05]
     queue_list = [5]
+    queue_list = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    # queue_list = [8]
     loss_list = [0.0]
 
     param_sets = itertools.product(bw_list, lat_list, loss_list, queue_list)

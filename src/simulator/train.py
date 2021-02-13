@@ -29,6 +29,7 @@ from stable_baselines.results_plotter import load_results, ts2xy
 import tensorflow as tf
 
 from simulator import network_sim
+from utils import read_json_file
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -40,6 +41,8 @@ def parse_args():
                         help="direcotry to save the model.")
     parser.add_argument('--gamma', type=float, default=0.99, help='gamma.')
     # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
+    parser.add_argument('--config', type=str, required=True,
+                        help="UDR config file.")
     parser.add_argument('--range-id', type=int, default=0, help='range id.')
     parser.add_argument('--seed', type=int, default=42, help='seed')
 
@@ -107,7 +110,8 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                            for val_env in self.val_envs]
             self.val_log_writer.writerow(
                 [self.n_calls, self.num_timesteps, np.mean(np.array(val_rewards))])
-            print("{}steps: {}s".format(self.check_freq, time.time() - self.t_start))
+            print("{}steps: {}s".format(
+                self.check_freq, time.time() - self.t_start))
             self.t_start = time.time()
             # if self.patience == 0:
             #     return False
@@ -132,7 +136,8 @@ def test(model, env, env_id=0):
         reward_list.append(rewards)
         if dones:
             break
-    env.dump_events_to_file(os.path.join(env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
+    env.dump_events_to_file(os.path.join(
+        env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
     return reward_list
 
 
@@ -155,62 +160,73 @@ def main():
     env = gym.make('PccNs-v0', log_dir=log_dir)
     env.seed(args.seed)
     env = Monitor(env, log_dir)
-    if args.range_id == 0:
-        env.set_ranges(50, 100, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 60, 70, 80, 90, 100]
-    elif args.range_id == 1:
-        env.set_ranges(50, 500, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 100, 200, 300, 400, 500]
-    elif args.range_id == 2:
-        env.set_ranges(50, 1000, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 200, 400, 600, 800,1000]
-    elif args.range_id == 3:
-        env.set_ranges(50, 1500, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 200, 500, 800, 1000, 1500]
-    elif args.range_id == 4:
-        env.set_ranges(50, 2000, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 500, 800, 1000, 1500, 2000]
-    elif args.range_id == 5:
-        env.set_ranges(50, 3000, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 500, 1000, 1000, 2000, 3000]
-    elif args.range_id == 6:
-        env.set_ranges(50, 5000, 0.05, 0.05, 0, 0, 5, 5)
-        bw_list = [50, 500, 1000, 1000, 2000, 5000]
-    else:
-        raise RuntimeError('Invalid range id')
-    print(args.range_id, bw_list)
-    # lat_list = [0.05]
-    # queue_list = [5]
-    # # loss_list = [0.0, 0.02]
-    # loss_list = [0.0]
-    # if args.range_id == 0:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 2)
-    #     env.set_ranges(1, 1000, 0.05, 0.05, 0, 0, 5, 5)
-    #     # queue_list = [1, 2]
-    # elif args.range_id == 1:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 5)
-    #     queue_list = [1, 2, 5]
-    # elif args.range_id == 2:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 10)
-    #     queue_list = [1, 5, 10]
-    # elif args.range_id == 3:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 15)
-    #     queue_list = [1, 8, 15]
-    # elif args.range_id == 4:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 20)
-    #     queue_list = [1, 10, 20]
-    # elif args.range_id == 5:
-    #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 25)
-    #     queue_list = [1, 15, 25]
-    # else:
-    #     raise RuntimeError('Invalid range id')
+    config = read_json_file(args.config)
+    print(config)
+    env.set_ranges(config["train"]["bandwidth"]["min"],
+                   config["train"]["bandwidth"]["max"],
+                   config["train"]["latency"]["min"],
+                   config["train"]["latency"]["max"],
+                   config["train"]["loss"]["min"],
+                   config["train"]["loss"]["max"],
+                   config["train"]["queue"]["min"],
+                   config["train"]["queue"]["max"])
+#     if args.range_id == 0:
+#         env.set_ranges(50, 100, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 60, 70, 80, 90, 100]
+#     elif args.range_id == 1:
+#         env.set_ranges(50, 500, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 100, 200, 300, 400, 500]
+#     elif args.range_id == 2:
+#         env.set_ranges(50, 1000, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 200, 400, 600, 800, 1000]
+#     elif args.range_id == 3:
+#         env.set_ranges(50, 1500, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 200, 500, 800, 1000, 1500]
+#     elif args.range_id == 4:
+#         env.set_ranges(50, 2000, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 500, 800, 1000, 1500, 2000]
+#     elif args.range_id == 5:
+#         env.set_ranges(50, 3000, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 500, 1000, 1000, 2000, 3000]
+#     elif args.range_id == 6:
+#         env.set_ranges(50, 5000, 0.05, 0.05, 0, 0, 5, 5)
+#         bw_list = [50, 500, 1000, 1000, 2000, 5000]
+#     else:
+#         raise RuntimeError('Invalid range id')
+#     print(args.range_id, bw_list)
+#     # lat_list = [0.05]
+#     # queue_list = [5]
+#     # # loss_list = [0.0, 0.02]
+#     # loss_list = [0.0]
+#     # if args.range_id == 0:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 2)
+#     #     env.set_ranges(1, 1000, 0.05, 0.05, 0, 0, 5, 5)
+#     #     # queue_list = [1, 2]
+#     # elif args.range_id == 1:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 5)
+#     #     queue_list = [1, 2, 5]
+#     # elif args.range_id == 2:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 10)
+#     #     queue_list = [1, 5, 10]
+#     # elif args.range_id == 3:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 15)
+#     #     queue_list = [1, 8, 15]
+#     # elif args.range_id == 4:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 20)
+#     #     queue_list = [1, 10, 20]
+#     # elif args.range_id == 5:
+#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 25)
+#     #     queue_list = [1, 15, 25]
+#     # else:
+#     #     raise RuntimeError('Invalid range id')
     # bw_list = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-    lat_list = [0.05]
-    # queue_list = [1, 2]
-    queue_list = [5]
-    # loss_list = [0.0, 0.02]
-    loss_list = [0.0]
-
+    bw_list = config["val"]["bandwidth"]
+    lat_list = config["val"]["latency"]
+    queue_list = config["val"]["queue"]
+    # queue_list = [5]
+#     # loss_list = [0.0, 0.02]
+    loss_list = config["val"]["loss"]
+#
     print("gamma = {}" .format(gamma))
     # model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant',
     #              timesteps_per_actorbatch=8192, optim_batchsize=2048,
@@ -219,11 +235,11 @@ def main():
     #              timesteps_per_actorbatch=4000, optim_batchsize=1024,
     #              gamma=gamma)
     model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed, schedule='constant',
-                 gamma=gamma)
+                 timesteps_per_actorbatch=300, gamma=gamma)
 
     val_envs = []
     for env_cnt, (bw, lat, loss, queue) in enumerate(
-        itertools.product(bw_list, lat_list, loss_list, queue_list)):
+            itertools.product(bw_list, lat_list, loss_list, queue_list)):
         # os.makedirs(f'../../results/tmp', exist_ok=True)
         tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
         tmp_env.seed(args.seed)
@@ -234,7 +250,6 @@ def main():
         check_freq=4000, log_dir=log_dir, val_envs=val_envs)
 
     # print(np.mean([test(model, val_env, env_id) for env_id, val_env in enumerate(val_envs)]))
-
 
     # model.learn(total_timesteps=(2 * 1600 * 410), callback=callback)
     # model.learn(total_timesteps=(10000), callback=callback)
