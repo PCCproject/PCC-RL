@@ -148,7 +148,7 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
-            if cur_latency > rto:#  sender.timeout(cur_latency):
+            if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
                 sender.timeout()
                 # new_dropped = True
             # TODO: call TCP timeout logic
@@ -271,6 +271,7 @@ class Sender():
                                                 self.features, self.id)
         self.cwnd = cwnd
         self.use_cwnd = False
+        self.rto = -1
 
     _next_id = 1
     def _get_next_id():
