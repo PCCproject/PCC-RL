@@ -12,23 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import loaded_agent
+from common.simple_arg_parse import arg_or_default
+from common import sender_obs
 import inspect
 import os
 import random
 import sys
 
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+currentdir = os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 grandparentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir)
 sys.path.insert(0, grandparentdir)
-    
-from common import sender_obs
-from common.simple_arg_parse import arg_or_default
-import loaded_agent
+
 
 if not hasattr(sys, 'argv'):
-    sys.argv  = ['']
+    sys.argv = ['']
 
 MIN_RATE = 0.5
 MAX_RATE = 300.0
@@ -53,10 +54,11 @@ for arg in sys.argv:
         RESET_RATE_MIN = float(arg_str)
         RESET_RATE_MAX = float(arg_str)
 
+
 class PccGymDriver():
-    
+
     flow_lookup = {}
-    
+
     def __init__(self, flow_id):
         global RESET_RATE_MIN
         global RESET_RATE_MAX
@@ -67,8 +69,8 @@ class PccGymDriver():
         self.history_len = arg_or_default("--history-len", 10)
         self.features = arg_or_default("--input-features",
                                        default="sent latency inflation,"
-                                             + "latency ratio,"
-                                             + "send ratio").split(",")
+                                       + "latency ratio,"
+                                       + "send ratio").split(",")
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features,
                                                 self.id)
@@ -82,6 +84,7 @@ class PccGymDriver():
         if self.has_data():
             rate_delta = self.agent.act(self.history.as_array())
             self.rate = apply_rate_delta(self.rate, rate_delta)
+            print("New rate:", self.rate, "delta:", rate_delta)
         return self.rate * 1e6
 
     def has_data(self):
@@ -129,19 +132,28 @@ class PccGymDriver():
     def get_by_flow_id(flow_id):
         return PccGymDriver.flow_lookup[flow_id]
 
+
 def give_sample(flow_id, bytes_sent, bytes_acked, bytes_lost,
                 send_start_time, send_end_time, recv_start_time,
                 recv_end_time, rtt_samples, packet_size, utility):
+    # print('flow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {}, \n'
+    #       'send_start_time: {}, send_end_time: {}, \n'
+    #       'recv_start_time: {}, recv_end_time: {}, \n'
+    #       'rtt_samples: {}, packet: {}, utility: {}'.format(
+    #           flow_id, bytes_sent, bytes_acked, bytes_lost,
+    #           send_start_time, send_end_time, recv_start_time,
+    #           recv_end_time, rtt_samples, packet_size, utility), file=sys.stderr)
     driver = PccGymDriver.get_by_flow_id(flow_id)
     driver.give_sample(bytes_sent, bytes_acked, bytes_lost,
                        send_start_time, send_end_time, recv_start_time,
                        recv_end_time, rtt_samples, packet_size, utility)
 
+
 def apply_rate_delta(rate, rate_delta):
     global MIN_RATE
     global MAX_RATE
     global DELTA_SCALE
-    
+
     rate_delta *= DELTA_SCALE
 
     # We want a string of actions with average 0 to result in a rate change
@@ -151,7 +163,7 @@ def apply_rate_delta(rate, rate_delta):
         rate *= (1.0 + rate_delta)
     elif rate_delta < 0:
         rate /= (1.0 - rate_delta)
-    
+
     # For practical purposes, we may have maximum and minimum rates allowed.
     if rate < MIN_RATE:
         rate = MIN_RATE
@@ -159,15 +171,18 @@ def apply_rate_delta(rate, rate_delta):
         rate = MAX_RATE
 
     return rate
-    
+
+
 def reset(flow_id):
     driver = PccGymDriver.get_by_flow_id(flow_id)
     driver.reset()
 
+
 def get_rate(flow_id):
-    #print("Getting rate")
+    # print("Getting rate")
     driver = PccGymDriver.get_by_flow_id(flow_id)
     return driver.get_rate()
+
 
 def init(flow_id):
     driver = PccGymDriver(flow_id)
