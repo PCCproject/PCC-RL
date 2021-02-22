@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ipdb
 import numpy as np
+import sys
 
 # The monitor interval class used to pass data from the PCC subsystem to
 # the machine learning module.
@@ -52,6 +54,17 @@ class SenderMonitorInterval():
     # Convert the observation parts of the monitor interval into a numpy array
     def as_array(self, features):
         return np.array([self.get(f) / SenderMonitorIntervalMetric.get_by_name(f).scale for f in features])
+
+    def debug_print(self):
+        print('\tflow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {},\n'
+              '\tsend_start_time: {}, send_end_time: {},\n\trecv_start_time: {}, '
+              'recv_end_time: {},\n\trtt_samples: {}, packet: {}'.format(
+                  self.sender_id, self.bytes_sent * self.packet_size,
+                  self.bytes_acked * self.packet_size,
+                  self.bytes_lost * self.packet_size,
+                  self.send_start, self.send_end, self.recv_start,
+                  self.recv_end, np.mean(self.rtt_samples), self.packet_size),
+              file=sys.stderr)
 
 class SenderHistory():
     def __init__(self, length, features, sender_id):
@@ -93,7 +106,7 @@ class SenderMonitorIntervalMetric():
         return SenderMonitorIntervalMetric._all_metrics[name]
 
 def get_min_obs_vector(feature_names):
-    print("Getting min obs for %s" % feature_names)
+    # print("Getting min obs for %s" % feature_names)
     result = []
     for feature_name in feature_names:
         feature = SenderMonitorIntervalMetric.get_by_name(feature_name)
