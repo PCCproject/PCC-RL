@@ -38,13 +38,13 @@ MIN_RATE = 40
 REWARD_SCALE = 0.001
 
 # MAX_STEPS = 400
-MAX_STEPS = 100
+MAX_STEPS = 600
 # MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
 EVENT_TYPE_ACK = 'A'
 
-BYTES_PER_PACKET = 1500
+BYTES_PER_PACKET = 1400
 
 LATENCY_PENALTY = 1.0
 LOSS_PENALTY = 1.0
@@ -52,8 +52,10 @@ LOSS_PENALTY = 1.0
 USE_LATENCY_NOISE = False
 MAX_LATENCY_NOISE = 1.1
 
-# DEBUG = True
-DEBUG = False
+DEBUG = True
+# DEBUG = False
+
+start_int_id = 0
 
 
 class Link():
@@ -139,7 +141,9 @@ class Network():
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto = heapq.heappop(self.q)
             if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f" % (
+                # print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f" % (
+                #       event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
+                print("%d,%s,%d,%f,%f,%d,%s,%f,%f,%f" % (
                       event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
             self.cur_time = event_time
             new_event_time = event_time
@@ -148,11 +152,11 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
-            if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
-                sender.timeout()
+            # if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
+            #     sender.timeout()
                 # new_dropped = True
             # TODO: call TCP timeout logic
-            elif event_type == EVENT_TYPE_ACK:
+            if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
                     #     sender.timeout(cur_latency)
@@ -173,7 +177,7 @@ class Network():
                     new_latency += link_latency
                     new_event_time += link_latency
                     push_new_event = True
-            elif event_type == EVENT_TYPE_SEND:
+            if event_type == EVENT_TYPE_SEND:
                 if next_hop == 0:
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
@@ -272,6 +276,13 @@ class Sender():
         self.cwnd = cwnd
         self.use_cwnd = False
         self.rto = -1
+        self.first_pkt_ack_time = None
+        self.last_pkt_ack_time = None
+        self.first_pkt_send_time = None
+        self.last_pkt_send_time = None
+
+        self.got_data = False  # flag used to track whether data is received in a monitor interval
+
 
     _next_id = 1
     def _get_next_id():
@@ -280,12 +291,14 @@ class Sender():
         return result
 
     def apply_rate_delta(self, delta):
+        # print(config.DELTA_SCALE)
         delta *= config.DELTA_SCALE
-        #print("Applying delta %f" % delta)
         if delta >= 0.0:
             self.set_rate(self.rate * (1.0 + delta))
         else:
             self.set_rate(self.rate / (1.0 - delta))
+        # print("current rate {} after applying delta {}".format(self.rate, delta))
+        # print("rate %f" % delta)
 
     def apply_cwnd_delta(self, delta):
         delta *= config.DELTA_SCALE
@@ -307,13 +320,20 @@ class Sender():
     def on_packet_sent(self):
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
+        if self.first_pkt_send_time is None:
+            self.first_pkt_send_time = self.net.get_cur_time()
+        self.last_pkt_send_time = self.net.get_cur_time()
 
     def on_packet_acked(self, rtt):
+        self.got_data = True
         self.acked += 1
         self.rtt_samples.append(rtt)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
+        if self.first_pkt_ack_time is None:
+            self.first_pkt_ack_time = self.net.get_cur_time()
+        self.last_pkt_ack_time = self.net.get_cur_time()
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -322,10 +342,10 @@ class Sender():
     def set_rate(self, new_rate):
         self.rate = new_rate
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        if self.rate > MAX_RATE:
-            self.rate = MAX_RATE
-        if self.rate < MIN_RATE:
-            self.rate = MIN_RATE
+        # if self.rate > MAX_RATE:
+        #     self.rate = MAX_RATE
+        # if self.rate < MIN_RATE:
+        #     self.rate = MIN_RATE
 
     def set_cwnd(self, new_cwnd):
         self.cwnd = int(new_cwnd)
@@ -337,7 +357,9 @@ class Sender():
 
     def record_run(self):
         smi = self.get_run_data()
+        smi.debug_print()
         self.history.step(smi)
+        # print(self.history.as_array(), file=sys.stderr)
 
     def get_obs(self):
         return self.history.as_array()
@@ -346,23 +368,44 @@ class Sender():
         obs_end_time = self.net.get_cur_time()
 
         #obs_dur = obs_end_time - self.obs_start_time
-        #print("Got %d acks in %f seconds" % (self.acked, obs_dur))
-        #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
-        #print("self.rate = %f" % self.rate)
+        # print("Got %d acks in %f seconds" % (self.acked, obs_dur))
+        # print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
+        # print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
-
-        return sender_obs.SenderMonitorInterval(
-            self.id,
-            bytes_sent=self.sent * BYTES_PER_PACKET,
-            bytes_acked=self.acked * BYTES_PER_PACKET,
-            bytes_lost=self.lost * BYTES_PER_PACKET,
-            send_start=self.obs_start_time,
-            send_end=obs_end_time,
-            recv_start=self.obs_start_time,
-            recv_end=obs_end_time,
-            rtt_samples=self.rtt_samples,
-            packet_size=BYTES_PER_PACKET
-        )
+        # print(self.rtt_samples)
+        if self.got_data:
+            return sender_obs.SenderMonitorInterval(
+                self.id,
+                bytes_sent=self.sent * BYTES_PER_PACKET,
+                bytes_acked=self.acked * BYTES_PER_PACKET,
+                bytes_lost=self.lost * BYTES_PER_PACKET,
+                # send_start=self.first_pkt_send_time,
+                # send_end=self.last_pkt_send_time,
+                # recv_start=self.first_pkt_ack_time,
+                # recv_end=self.last_pkt_ack_time,
+                send_start=self.obs_start_time,
+                send_end=obs_end_time,
+                recv_start=self.obs_start_time,
+                recv_end=obs_end_time,
+                rtt_samples=self.rtt_samples,
+                packet_size=BYTES_PER_PACKET
+            )
+        else:
+            global start_int_id
+            start_int_id += 1
+            print([self.net.links[0].dl * 2 - 0.0001 * start_int_id])
+            return sender_obs.SenderMonitorInterval(
+                self.id,
+                bytes_sent=self.sent * BYTES_PER_PACKET,
+                bytes_acked=self.sent * BYTES_PER_PACKET,
+                bytes_lost=0 * BYTES_PER_PACKET,
+                send_start=self.obs_start_time,
+                send_end=obs_end_time,
+                recv_start=self.obs_start_time,
+                recv_end=obs_end_time,
+                rtt_samples=[self.net.links[0].dl * 2- 0.0003 * i for i in range(5)],
+                packet_size=BYTES_PER_PACKET
+            )
 
     def reset_obs(self):
         self.sent = 0
@@ -371,6 +414,10 @@ class Sender():
         self.prev_rtt_samples = self.rtt_samples
         self.rtt_samples = []
         self.obs_start_time = self.net.get_cur_time()
+        self.first_pkt_ack_time = None
+        self.last_pkt_ack_time = None
+        self.first_pkt_send_time = None
+        self.last_pkt_send_time = None
 
     def print_debug(self):
         print("Sender:")
@@ -389,6 +436,8 @@ class Sender():
         self.reset_obs()
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
+        self.got_data = False
+
     def timeout(self):
         # placeholder
         pass
@@ -581,7 +630,7 @@ class TCPCubicSender(Sender):
         self.rate = self.cwnd / avg_sampled_rtt
         self.cubic_reset()
         # self.pkt_loss_wait_time = int(self.cwnd)
-        print('timeout rate', self.rate, self.cwnd)
+        # print('timeout rate', self.rate, self.cwnd)
         # return True
 
     def cubic_tcp_friendliness(self):
@@ -614,9 +663,9 @@ class SimulatedNetworkEnv(gym.Env):
         self.min_queue, self.max_queue = (0, 8)
         self.min_loss, self.max_loss = (0.0, 0.05)
         self.history_len = history_len
-        print("History length: %d" % history_len)
+        # print("History length: %d" % history_len)
         self.features = features.split(",")
-        print("Features: %s" % str(self.features))
+        # print("Features: %s" % str(self.features))
 
         self.links = None
         self.senders = None
@@ -649,6 +698,7 @@ class SimulatedNetworkEnv(gym.Env):
 
         self.event_record = {"Events":[]}
         self.episodes_run = -1
+        print('event_id,event_type,next_hop,cur_latency,event_time,next_hop,dropped,event_q_length,send_rate,duration')
 
     def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
         self.min_bw = min_bw
@@ -672,8 +722,8 @@ class SimulatedNetworkEnv(gym.Env):
         return sender_obs
 
     def step(self, actions):
-        #print("Actions: %s" % str(actions))
-        #print(actions)
+        # print("Actions: %s" % str(actions))
+        # print(actions)
         t_start = time.time()
         for i in range(0, 1):#len(actions)):
             #print("Updating rate for sender %d" % i)
@@ -681,13 +731,13 @@ class SimulatedNetworkEnv(gym.Env):
             self.senders[i].apply_rate_delta(action[0])
             if self.use_cwnd:
                 self.senders[i].apply_cwnd_delta(action[1])
-        #print("Running for %fs" % self.run_dur)
+        print("{}\t\t{}".format(self.run_dur, self.senders[0].rate*8*BYTES_PER_PACKET/1e6), file=sys.stderr)
         reward = self.net.run_for_dur(self.run_dur)
+        sender_obs = self._get_all_sender_obs()
+        sender_mi = self.senders[0].get_run_data()
         for sender in self.senders:
             sender.record_run()
         self.steps_taken += 1
-        sender_obs = self._get_all_sender_obs()
-        sender_mi = self.senders[0].get_run_data()
         event = {}
         event["Name"] = "Step"
         event["Time"] = self.steps_taken
@@ -702,9 +752,24 @@ class SimulatedNetworkEnv(gym.Env):
         event["Send Ratio"] = sender_mi.get("send ratio")
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
+        # print(
+        #
+        # event["Send Rate"] = sender_mi.get("send rate")
+        # event["Throughput"] = sender_mi.get("recv rate")
+        # event["Latency"] = sender_mi.get("avg latency")
+        # event["Loss Rate"] = sender_mi.get("loss ratio")
+        # event["Latency Inflation"] = sender_mi.get("sent latency inflation")
+        # event["Latency Ratio"] = sender_mi.get("latency ratio")
+        # event["Send Ratio"] = sender_mi.get("send ratio")
+        #
+        #
+        #         )
         self.event_record["Events"].append(event)
-        if event["Latency"] > 0.0:
-            self.run_dur = 0.5 * sender_mi.get("avg latency")
+        if self.senders[0].got_data and event["Latency"] > 0.0:
+            self.run_dur = max(0.5 * sender_mi.get("avg latency"),
+                 5 / self.senders[0].rate);
+        else:
+            self.run_dur = 5 / self.senders[0].rate
         #print("Sender obs: %s" % sender_obs)
 
         should_stop = False
@@ -734,7 +799,7 @@ class SimulatedNetworkEnv(gym.Env):
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "rl":
-            self.senders = [Sender(10,
+            self.senders = [Sender(500,
                                    [self.links[0], self.links[1]], 0,
                                    self.features,
                                    history_len=self.history_len)]
@@ -751,7 +816,8 @@ class SimulatedNetworkEnv(gym.Env):
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
-        self.run_dur = 3 * lat
+        # self.run_dur = 3 * lat
+        self.run_dur = max(0.5 * 0, 5 / self.senders[0].rate);
 
     def reset(self):
         self.steps_taken = 0
@@ -764,7 +830,9 @@ class SimulatedNetworkEnv(gym.Env):
                 os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
         self.event_record = {"Events":[]}
         self.net.run_for_dur(self.run_dur)
-        self.net.run_for_dur(self.run_dur)
+        for sender in self.senders:
+            sender.record_run()
+        # self.net.run_for_dur(self.run_dur) # TODO: remove one
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
         # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
