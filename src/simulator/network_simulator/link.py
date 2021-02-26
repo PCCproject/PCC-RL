@@ -54,3 +54,7 @@ class Link():
     def reset(self):
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
+
+    def __str__(self):
+        return "Link bw={}pkts, delay={}s, loss={}, queue={}pkts".format(
+            self.bw, self.dl, self.lr, self.queue_size)

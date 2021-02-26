@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from common.utils import read_json_file
-from simulator import network_sim
+from simulator import good_network_sim as network_sim
 
 
 def parse_args():

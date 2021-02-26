@@ -31,7 +31,7 @@ from common import config, sender_obs
 from simulator.network_simulator.constants import (BITS_PER_BYTE,
                                                    BYTES_PER_PACKET)
 from simulator.network_simulator.link import Link
-from simulator.network_simulator.sender import Sender
+from simulator.network_simulator.sender import Sender, TCPCubicSender
 
 MAX_CWND = 5000
 MIN_CWND = 4
@@ -41,8 +41,8 @@ MIN_RATE = 40
 
 REWARD_SCALE = 0.001
 
-MAX_STEPS = 300
-# MAX_STEPS = 100
+# MAX_STEPS = 1000
+MAX_STEPS = 100
 # MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
@@ -88,14 +88,16 @@ class Network():
         [link.reset() for link in self.links]
         [sender.reset() for sender in self.senders]
         self.queue_initial_packets()
+        self.result_log = []
 
     def get_cur_time(self):
         return self.cur_time
 
+    # @profile
     def run_for_dur(self):
         dur = self.senders[0].compute_mi_duration()
         end_time = self.cur_time + dur
-        print(self.cur_time, dur)
+        # print(self.cur_time, dur)
         mi_id = self.senders[0].create_mi(self.cur_time, end_time)
         # for sender in self.senders:
         #     sender.reset_obs()
@@ -152,8 +154,6 @@ class Network():
                 if next_hop == 0:
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
-                        # import ipdb
-                        # ipdb.set_trace()
                         sender.on_packet_sent(pkt_mi_id)
                         push_new_event = True
                     if self.cur_time + round(1.0 / sender.rate, 5) < end_time:
@@ -273,6 +273,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.min_lat, self.max_lat = (0.05, 0.5)  # latency second
         self.min_queue, self.max_queue = (0, 8)
         self.min_loss, self.max_loss = (0.0, 0.05)
+        self.min_mss, self.max_mss = (1500, 1500)
         self.history_len = history_len
         # print("History length: %d" % history_len)
         self.features = features.split(",")
@@ -313,7 +314,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.episodes_run = -1
         print('event_id,event_type,next_hop,cur_latency,event_time,next_hop,dropped,event_q_length,send_rate,duration')
 
-    def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
+    def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue, min_mss, max_mss):
         self.min_bw = min_bw
         self.max_bw = max_bw
         self.min_lat = min_lat
@@ -322,6 +323,8 @@ class SimulatedNetworkEnv(gym.Env):
         self.max_loss = max_loss
         self.min_queue = min_queue
         self.max_queue = max_queue
+        self.min_mss = min_mss
+        self.max_mss = max_mss
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
@@ -333,6 +336,7 @@ class SimulatedNetworkEnv(gym.Env):
         # print(sender_obs)
         return sender_obs
 
+    # @profile
     def step(self, actions):
         # print("Actions: %s" % str(actions))
         # print(actions)
@@ -387,8 +391,11 @@ class SimulatedNetworkEnv(gym.Env):
         should_stop = False
 
         self.reward_sum += reward
-        # print('env step: {}s'.format(time.time() - t_start))
-        return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {}, valid
+        # print('env step: {:.4f}s, result_log: {}, mi_cache: {}, {}, network event queue: {} sender rtt samples: {}'.format(
+        #     time.time() - t_start, len(self.net.result_log),
+        #     len(self.senders[0].mi_cache), str(self.links[0]), len(self.net.q), len(self.senders[0].rtt_samples)))
+        # h.heap()
+        return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {"valid": valid}
 
     def print_debug(self):
         print("---Link Debug---")
@@ -422,11 +429,11 @@ class SimulatedNetworkEnv(gym.Env):
             #                        self.features,
             #                        history_len=self.history_len)]
             # else:
-        # elif self.congestion_control_type == "cubic":
-        #     self.senders = [TCPCubicSender(10,
-        #                                   [self.links[0], self.links[1]], 0,
-        #                                   self.features,
-        #                                   history_len=self.history_len)]
+        elif self.congestion_control_type == "cubic":
+            self.senders = [TCPCubicSender(10,
+                                          [self.links[0], self.links[1]], 0,
+                                          self.features,
+                                          history_len=self.history_len)]
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
@@ -450,7 +457,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.reward_ewma += 0.01 * self.reward_sum
         # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
-        return self._get_all_sender_obs(), False
+        return self._get_all_sender_obs()#, False
 
     def render(self, mode='human'):
         pass

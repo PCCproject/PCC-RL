@@ -38,13 +38,13 @@ MIN_RATE = 40
 REWARD_SCALE = 0.001
 
 # MAX_STEPS = 400
-MAX_STEPS = 600
-# MAX_STEPS = 3000
+# MAX_STEPS = 600
+MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
 EVENT_TYPE_ACK = 'A'
 
-BYTES_PER_PACKET = 1400
+BYTES_PER_PACKET = 1500
 
 LATENCY_PENALTY = 1.0
 LOSS_PENALTY = 1.0
@@ -154,7 +154,7 @@ class Network():
             push_new_event = False
             # if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
             #     sender.timeout()
-                # new_dropped = True
+            #     new_dropped = True
             # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -350,10 +350,10 @@ class Sender():
     def set_cwnd(self, new_cwnd):
         self.cwnd = int(new_cwnd)
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        if self.cwnd > MAX_CWND:
-            self.cwnd = MAX_CWND
-        if self.cwnd < MIN_CWND:
-            self.cwnd = MIN_CWND
+        # if self.cwnd > MAX_CWND:
+        #     self.cwnd = MAX_CWND
+        # if self.cwnd < MIN_CWND:
+        #     self.cwnd = MIN_CWND
 
     def record_run(self):
         smi = self.get_run_data()
@@ -816,8 +816,8 @@ class SimulatedNetworkEnv(gym.Env):
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
-        # self.run_dur = 3 * lat
-        self.run_dur = max(0.5 * 0, 5 / self.senders[0].rate);
+        self.run_dur = 3 * lat
+        # self.run_dur = max(0.5 * 0, 5 / self.senders[0].rate);
 
     def reset(self):
         self.steps_taken = 0

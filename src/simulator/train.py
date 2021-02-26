@@ -21,15 +21,16 @@ from typing import List
 
 import gym
 import numpy as np
+import tensorflow as tf
 from stable_baselines import PPO1
 from stable_baselines.bench import Monitor
 from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
-import tensorflow as tf
 
-from simulator import network_sim
-from utils import read_json_file
+from common.utils import read_json_file
+# from simulator import network_sim
+from simulator.network_simulator import network
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -45,6 +46,8 @@ def parse_args():
                         help="UDR config file.")
     parser.add_argument('--range-id', type=int, default=0, help='range id.')
     parser.add_argument('--seed', type=int, default=42, help='seed')
+    parser.add_argument("--total-timesteps", type=int, default=2000000,
+                        help="Total number of steps to be trained.")
 
     return parser.parse_args()
 
@@ -60,7 +63,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     :param verbose: (int)
     """
 
-    def __init__(self, check_freq: int, log_dir: str, val_envs: List = [], verbose=1, patience=10):
+    def __init__(self, check_freq: int, log_dir: str, val_envs: List = [], verbose=0, patience=10):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
@@ -106,22 +109,24 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         saver = tf.train.Saver()
                         saver.save(self.model.sess,
                                    os.path.join(self.log_dir, "pcc_model_best.ckpt"))
-            val_rewards = [test(self.model, val_env)
-                           for val_env in self.val_envs]
-            self.val_log_writer.writerow(
-                [self.n_calls, self.num_timesteps, np.mean(np.array(val_rewards))])
-            print("{}steps: {}s".format(
-                self.check_freq, time.time() - self.t_start))
-            self.t_start = time.time()
-            # if self.patience == 0:
-            #     return False
-            if np.mean(np.array(val_rewards)) > self.best_val_reward:  # type: ignore
-                self.best_val_reward = np.mean(np.array(val_rewards))
-                self.patience = 10
-                print('val improved')
-            else:
-                self.patience -= 1
-                print('val no improvement, patience {}'.format(self.patience))
+                    export_dir = os.path.join(os.path.join(self.log_dir, "best_model_to_serve/"))
+                    save_model_to_serve(self.model, export_dir)
+            # val_rewards = [test(self.model, val_env)
+            #                for val_env in self.val_envs]
+            # self.val_log_writer.writerow(
+            #     [self.n_calls, self.num_timesteps, np.mean(np.array(val_rewards))])
+            # print("{}steps: {}s".format(
+            #     self.check_freq, time.time() - self.t_start))
+            # self.t_start = time.time()
+            # # if self.patience == 0:
+            # #     return False
+            # if np.mean(np.array(val_rewards)) > self.best_val_reward:  # type: ignore
+            #     self.best_val_reward = np.mean(np.array(val_rewards))
+            #     self.patience = 10
+            #     print('val improved')
+            # else:
+            #     self.patience -= 1
+            #     print('val no improvement, patience {}'.format(self.patience))
         return True
 
 
@@ -169,63 +174,15 @@ def main():
                    config["train"]["loss"]["min"],
                    config["train"]["loss"]["max"],
                    config["train"]["queue"]["min"],
-                   config["train"]["queue"]["max"])
-#     if args.range_id == 0:
-#         env.set_ranges(50, 100, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 60, 70, 80, 90, 100]
-#     elif args.range_id == 1:
-#         env.set_ranges(50, 500, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 100, 200, 300, 400, 500]
-#     elif args.range_id == 2:
-#         env.set_ranges(50, 1000, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 200, 400, 600, 800, 1000]
-#     elif args.range_id == 3:
-#         env.set_ranges(50, 1500, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 200, 500, 800, 1000, 1500]
-#     elif args.range_id == 4:
-#         env.set_ranges(50, 2000, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 500, 800, 1000, 1500, 2000]
-#     elif args.range_id == 5:
-#         env.set_ranges(50, 3000, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 500, 1000, 1000, 2000, 3000]
-#     elif args.range_id == 6:
-#         env.set_ranges(50, 5000, 0.05, 0.05, 0, 0, 5, 5)
-#         bw_list = [50, 500, 1000, 1000, 2000, 5000]
-#     else:
-#         raise RuntimeError('Invalid range id')
-#     print(args.range_id, bw_list)
-#     # lat_list = [0.05]
-#     # queue_list = [5]
-#     # # loss_list = [0.0, 0.02]
-#     # loss_list = [0.0]
-#     # if args.range_id == 0:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 2)
-#     #     env.set_ranges(1, 1000, 0.05, 0.05, 0, 0, 5, 5)
-#     #     # queue_list = [1, 2]
-#     # elif args.range_id == 1:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 5)
-#     #     queue_list = [1, 2, 5]
-#     # elif args.range_id == 2:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 10)
-#     #     queue_list = [1, 5, 10]
-#     # elif args.range_id == 3:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 15)
-#     #     queue_list = [1, 8, 15]
-#     # elif args.range_id == 4:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 20)
-#     #     queue_list = [1, 10, 20]
-#     # elif args.range_id == 5:
-#     #     env.set_ranges(1000, 1000, 0.05, 0.05, 0, 0, 1, 25)
-#     #     queue_list = [1, 15, 25]
-#     # else:
-#     #     raise RuntimeError('Invalid range id')
-    # bw_list = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+                   config["train"]["queue"]["max"],
+                   config["train"]["mss"]["min"],
+                   config["train"]["mss"]["max"])
+
     bw_list = config["val"]["bandwidth"]
     lat_list = config["val"]["latency"]
     queue_list = config["val"]["queue"]
-    # queue_list = [5]
-#     # loss_list = [0.0, 0.02]
     loss_list = config["val"]["loss"]
+    mss_list = config["val"]["mss"]
 #
     print("gamma = {}" .format(gamma))
     # model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant',
@@ -238,12 +195,13 @@ def main():
                  timesteps_per_actorbatch=300, gamma=gamma)
 
     val_envs = []
-    for env_cnt, (bw, lat, loss, queue) in enumerate(
-            itertools.product(bw_list, lat_list, loss_list, queue_list)):
+    for env_cnt, (bw, lat, loss, queue, mss) in enumerate(
+            itertools.product(bw_list, lat_list, loss_list, queue_list, mss_list)):
         # os.makedirs(f'../../results/tmp', exist_ok=True)
         tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
         tmp_env.seed(args.seed)
-        tmp_env.set_ranges(bw, bw, lat, lat, loss, loss, queue, queue)
+        tmp_env.set_ranges(bw, bw, lat, lat, loss,
+                           loss, queue, queue, mss, mss)
         val_envs.append(tmp_env)
     # Create the callback: check every 1000 steps
     callback = SaveOnBestTrainingRewardCallback(
@@ -258,7 +216,7 @@ def main():
     # model.learn(total_timesteps=(1000000), callback=callback)
     # model.learn(total_timesteps=(2000000), callback=callback)
     # model.learn(total_timesteps=(80000), callback=callback)
-    model.learn(total_timesteps=(5000000), callback=callback)
+    model.learn(total_timesteps=args.total_timesteps, callback=callback)
 
     with model.graph.as_default():
         saver = tf.train.Saver()
