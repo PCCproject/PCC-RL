@@ -89,6 +89,7 @@ def eval_cubic(delay):
             break
     return np.mean(np.array(rewards))
 
+
 def eval_aurora(delay):
     env = gym.make('PccNs-v0', log_dir="/tmp/rl_log")
     env.seed(42)
@@ -113,76 +114,70 @@ def reward_gap_btwn_baseline_aurora(delay):
     Return
          (cubic - aurora) reward
     '''
-    # instantiate environment
-    # TODO: 1. run Cubic
-    # TODO: 2. run Aurora
-    # path = os.path.join(RESULTS_DIR, 'model_saved')
-    # latest_model_path = latest_actor_from(path)
+    return eval_cubic(delay) - eval_aurora(delay)
 
-    # x_map = map_log_to_lin(x)
 
-    # command = "python rl_test.py  \
-    #             --CURRENT_PARAM_BW={current_max_BW_param} \
-    #             --CURRENT_PARAM_TS={current_max_TS_param} \
-    #             --test_trace_dir='../data/example_traces/' \
-    #             --summary_dir='../MPC_RL_test_results/' \
-    #             --model_path='{model_path}' \
-    #             ".format(current_max_BW_param=x_map, current_max_TS_param=y, model_path=latest_model_path)
-    eval_cubic(delay)
-    eval_aurora(delay)
+def main():
+    # Example Flow:
+    for i in range(12):
+        # if i > 0:
+        pbounds = {'delay': (0, 500)}
+        optimizer = BayesianOptimization(
+            f=black_box_function,
+            pbounds=pbounds
+            # random_state=2
+        )
 
-    # r = float(subprocess.check_output(command, shell=True, text=True).strip())
-    # return r
-    raise NotImplementedError
+        optimizer.maximize(
+            init_points=13,
+            n_iter=2,
+            kappa=20,
+            xi=0.1
+        )
+        next = optimizer.max
+        delay = next.get('params').get('delay')
+        # param_TS = next.get('params').get('y')
 
-# Example Flow:
-for i in range(12):
-    # if i > 0:
-    pbounds = {'x': (0, 1), 'y': (2, 14)}
-    optimizer = BayesianOptimization(
-        f=black_box_function,
-        pbounds=pbounds
-        # random_state=2
-    )
+        print("BO chose this best param........", delay)
 
-    optimizer.maximize(
-        init_points=13,
-        n_iter=2,
-        kappa=20,
-        xi=0.1
-    )
-    next = optimizer.max
-    param_BW = next.get('params').get('x')
-    param_TS = next.get('params').get('y')
+        # Use the new param, add more traces into Pensieve, train more based on
+        # before
+        path = os.path.join(RESULTS_DIR, 'model_saved')
+        latest_model_path = latest_actor_from(path)
 
-    bo_best_param_BW = map_log_to_lin(param_BW)
-    bo_best_param_TS = round(param_TS)
+        # train Aurora with new parameter
 
-    print("BO chose this best param........",
-          param_BW, bo_best_param_BW, bo_best_param_TS)
+        command = "python multi_agent.py \
+                        --TOTAL_EPOCH=5000\
+                        --train_trace_dir={training_dir} \
+                        --val_trace_dir='{val_dir}'\
+                        --summary_dir={results_dir}\
+                        --description='first-run' \
+                        --nn_model={model_path} \
+                        --CURRENT_PARAM_BW={bo_output_param_BW} \
+                        --CURRENT_PARAM_TS={bo_output_param_TS} \
+                        ".format(training_dir=TRAINING_DATA_DIR, val_dir=VAL_TRACE_DIR,
+                                 results_dir=RESULTS_DIR, model_path=latest_model_path,
+                                 bo_output_param_BW=bo_best_param_BW, bo_output_param_TS=bo_best_param_TS)
 
-    # Use the new param, add more traces into Pensieve, train more based on before
-    path = os.path.join(RESULTS_DIR, 'model_saved')
-    latest_model_path = latest_actor_from(path)
+        command = "python multi_agent.py \
+                        --TOTAL_EPOCH=5000\
+                        --train_trace_dir={training_dir} \
+                        --val_trace_dir='{val_dir}'\
+                        --summary_dir={results_dir}\
+                        --description='first-run' \
+                        --nn_model={model_path} \
+                        --CURRENT_PARAM_BW={bo_output_param_BW} \
+                        --CURRENT_PARAM_TS={bo_output_param_TS} \
+                        ".format(training_dir=TRAINING_DATA_DIR, val_dir=VAL_TRACE_DIR,
+                                 results_dir=RESULTS_DIR, model_path=latest_model_path,
+                                 bo_output_param_BW=bo_best_param_BW, bo_output_param_TS=bo_best_param_TS)
+        os.system(command)
 
-    # train Aurora with new parameter
+        print("Get the file and pass it to the training script, if it exists.\n")
+        print("Running training:", i)
+        i += 1
 
-    command = "python multi_agent.py \
-                    --TOTAL_EPOCH=5000\
-                    --train_trace_dir={training_dir} \
-                    --val_trace_dir='{val_dir}'\
-                    --summary_dir={results_dir}\
-                    --description='first-run' \
-                    --nn_model={model_path} \
-                    --CURRENT_PARAM_BW={bo_output_param_BW} \
-                    --CURRENT_PARAM_TS={bo_output_param_TS} \
-                    ".format(training_dir=TRAINING_DATA_DIR, val_dir=VAL_TRACE_DIR,
-                             results_dir=RESULTS_DIR, model_path=latest_model_path,
-                             bo_output_param_BW=bo_best_param_BW, bo_output_param_TS=bo_best_param_TS)
-    os.system(command)
 
-    print("Get the file and pass it to the training script, if it exists.\n")
-    print("Running training:", i)
-    i += 1
-
-print("Hooray!")
+if "__name__" == "__main__":
+    main()

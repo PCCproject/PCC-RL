@@ -29,7 +29,7 @@ class Sender():
         self.rate = rate
         self.bytes_in_flight = 0
         self.min_latency = None
-        self.rtt_samples = []
+        self.rtt_sample = 0
         self.net = None
         self.path = path
         self.dest = dest
@@ -81,7 +81,7 @@ class Sender():
         self.mi_cache[mi_id].on_packet_sent(self.net.get_cur_time())
 
     def on_packet_acked(self, rtt, mi_id):
-        self.rtt_samples.append(rtt)
+        self.rtt_sample = rtt
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
@@ -170,16 +170,13 @@ class Sender():
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
         self.got_data = False
-        self.rtt_samples = []
 
     def timeout(self):
         # placeholder
         pass
 
     def compute_mi_duration(self):
-        if not self.rtt_samples:
-            return round(MIN_PKTS_PER_MI / self.rate, 5)
-        return round(max(0.5 * np.mean(self.rtt_samples),
+        return round(max(0.5 * self.rtt_sample,
                    MIN_PKTS_PER_MI / self.rate), 5)
 
     def create_mi(self, start_t, end_t):
@@ -196,6 +193,7 @@ class Sender():
         mi_id_list = list(sorted(self.mi_cache))
         for mi_id in mi_id_list:
             mi = self.mi_cache[mi_id]
+            print(mi_id, len(mi.rtt_samples))
             if mi.is_finished(cur_time):
                 smi = sender_obs.SenderMonitorInterval(
                     self.id, bytes_sent=mi.bytes_sent,

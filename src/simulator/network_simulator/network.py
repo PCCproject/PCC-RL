@@ -370,18 +370,6 @@ class SimulatedNetworkEnv(gym.Env):
         event["Send Ratio"] = sender_mi.get("send ratio")
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
-        # print(
-        #
-        # event["Send Rate"] = sender_mi.get("send rate")
-        # event["Throughput"] = sender_mi.get("recv rate")
-        # event["Latency"] = sender_mi.get("avg latency")
-        # event["Loss Rate"] = sender_mi.get("loss ratio")
-        # event["Latency Inflation"] = sender_mi.get("sent latency inflation")
-        # event["Latency Ratio"] = sender_mi.get("latency ratio")
-        # event["Send Ratio"] = sender_mi.get("send ratio")
-        #
-        #
-        #         )
         self.event_record["Events"].append(event)
         # if event["Latency"] > 0.0:
         #     self.run_dur = max(0.5 * sender_mi.get("avg latency"),
@@ -391,9 +379,9 @@ class SimulatedNetworkEnv(gym.Env):
         should_stop = False
 
         self.reward_sum += reward
-        # print('env step: {:.4f}s, result_log: {}, mi_cache: {}, {}, network event queue: {} sender rtt samples: {}'.format(
-        #     time.time() - t_start, len(self.net.result_log),
-        #     len(self.senders[0].mi_cache), str(self.links[0]), len(self.net.q), len(self.senders[0].rtt_samples)))
+        print('env step: {:.4f}s, result_log: {}, mi_cache: {}, {}, network event queue: {} sender rtt samples: {}'.format(
+            time.time() - t_start, len(self.net.result_log),
+            len(self.senders[0].mi_cache), str(self.links[0]), len(self.net.q), len([self.senders[0].rtt_sample])))
         # h.heap()
         return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {"valid": valid}
 
@@ -446,12 +434,11 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links)
         self.episodes_run += 1
-        if self.episodes_run > 0 and self.episodes_run % 100 == 0:
-            self.dump_events_to_file(
-                os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
+        # if self.episodes_run > 0 and self.episodes_run % 100 == 0:
+        #     self.dump_events_to_file(
+        #         os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
         self.event_record = {"Events": []}
         self.net.run_for_dur()
-        # _, _, _, _, valid =
         # self.net.run_for_dur()
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum

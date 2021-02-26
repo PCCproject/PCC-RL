@@ -1,3 +1,5 @@
+import numpy as np
+
 from simulator.network_simulator.constants import BYTES_PER_PACKET
 
 
@@ -47,6 +49,10 @@ class MonitorInterval():
         self.bytes_lost += BYTES_PER_PACKET
 
     def is_finished(self, cur_time):
+        # if not self.rtt_samples:
         return (cur_time >= self.end_time) and \
             ((self.bytes_sent == (self.bytes_acked + self.bytes_lost)))
+        # else:
+        #     return (cur_time >= self.end_time) and \
+        #         ((self.bytes_sent == (self.bytes_acked + self.bytes_lost))) or (cur_time - self.start_time >= 2 * np.mean(self.rtt_samples))
              # or cur_time >= self.hard_stop_time)

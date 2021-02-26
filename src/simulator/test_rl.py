@@ -104,12 +104,12 @@ else:
     # model is a tensorflow model to serve
     model = LoadedModel(args.model_path)
 
-export_dir = os.path.join(os.path.join(os.path.dirname(args.model_path), "model_to_serve/"))
-os.makedirs(export_dir, exist_ok=True)
-print(export_dir)
-save_model_to_serve(model, export_dir)
-
-sys.exit()
+# export_dir = os.path.join(os.path.join(os.path.dirname(args.model_path), "model_to_serve/"))
+# os.makedirs(export_dir, exist_ok=True)
+# print(export_dir)
+# save_model_to_serve(model, export_dir)
+#
+# sys.exit()
 
 #
 # bw_list = [1, 5, 10, 100, 500, 1000, 2000, 5000, 8000]
