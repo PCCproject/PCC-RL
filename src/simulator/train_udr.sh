@@ -8,7 +8,7 @@ for range_id in 2 ; do
     mkdir -p ${save_dir}
     CUDA_VISIBLE_DEVICES="2" python -m memory_profiler train.py --save-dir ${save_dir} \
         --config ../../config/train/rand_5_dims/rand${range_id}.json \
-        --seed 43 > ${save_dir}/out.log &
+        --seed 43 1> ${save_dir}/out.log &
     # CUDA_VISIBLE_DEVICES="" python test_rl.py --save-dir ${save_dir} \
     #     --seed 43
 done

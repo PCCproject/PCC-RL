@@ -56,8 +56,8 @@ USE_LATENCY_NOISE = False
 # USE_LATENCY_NOISE = True
 MAX_LATENCY_NOISE = 1.01
 
-# DEBUG = True
-DEBUG = False
+DEBUG = True
+# DEBUG = False
 START_SENDING_RATE = 500  # packets per second
 
 
@@ -116,7 +116,7 @@ class Network():
                 # sender.rate, dur))
                 print("%d,%s,%d,%f,%f,%d,%s,%f,%f,%f" % (
                       event_id, event_type, next_hop, cur_latency, event_time,
-                      next_hop, dropped, len(self.q), sender.rate, -1))
+                      next_hop, dropped, len(self.q), sender.rate, dur), file=sys.stderr)
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
