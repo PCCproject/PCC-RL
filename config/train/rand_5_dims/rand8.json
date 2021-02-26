@@ -1,0 +1,61 @@
+{
+    "train": {
+        "bandwidth": {
+            "min": 100,
+            "max": 2000,
+            "unit": "packet/second",
+            "description": "Constant link bandwidth."
+        },
+        "latency": {
+            "min": 0.0,
+            "max": 0.08,
+            "unit": "second",
+            "description": "Link latency in single direction."
+        },
+        "loss": {
+            "min": 0,
+            "max": 0.09,
+            "unit": "",
+            "description": "Packet loss rate."
+        },
+        "queue": {
+            "min": 0,
+            "max": 8,
+            "unit": "",
+            "description": "Queue Size = 1 + exp(queue) packets."
+        },
+        "mss": {
+            "min": 1400,
+            "max": 1490,
+            "unit": "",
+            "description": "Maximum Segment Size."
+        }
+    },
+    "val": {
+        "bandwidth": [
+            100,
+            1200,
+            2500
+        ],
+        "latency": [
+            0.05,
+            0.1,
+            0.25
+        ],
+        "loss": [
+            0,
+            0.05,
+            0.1
+        ],
+        "queue": [
+            0,
+            4,
+            8
+        ],
+        "mss": [
+            1400,
+            1450,
+            1500
+        ]
+    }
+}
