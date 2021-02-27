@@ -38,8 +38,8 @@ MIN_RATE = 40
 REWARD_SCALE = 0.001
 
 # MAX_STEPS = 400
-# MAX_STEPS = 600
-MAX_STEPS = 1000
+MAX_STEPS = 600
+# MAX_STEPS = 1000
 
 EVENT_TYPE_SEND = 'S'
 EVENT_TYPE_ACK = 'A'
@@ -71,6 +71,7 @@ class Link():
         cur_queue_delay = max(0.0, self.queue_delay - (event_time - self.queue_delay_update_time))
         # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
         #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
+        print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -86,7 +87,7 @@ class Link():
         extra_delay = 1.0 / self.bw
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
         if extra_delay + self.queue_delay > self.max_queue_delay:
-            # print("\tDrop!")
+            print("{}\tDrop!".format(event_time), file=sys.stderr)
             return False
         self.queue_delay += extra_delay
         # print("\tNew delay = {}".format(self.queue_delay))
@@ -149,10 +150,11 @@ class Network():
             new_dropped = dropped
             push_new_event = False
             if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
+                print("rto-{}\t{}\t{}".format(self.cur_time, cur_latency, rto), file=sys.stderr)
                 sender.timeout()
-                # new_dropped = True
+                new_dropped = True
             # TODO: call TCP timeout logic
-            elif event_type == EVENT_TYPE_ACK:
+            if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
                     #     sender.timeout(cur_latency)
@@ -368,7 +370,8 @@ class Sender():
         self.sent = 0
         self.acked = 0
         self.lost = 0
-        self.prev_rtt_samples = self.rtt_samples
+        if self.rtt_samples:
+            self.prev_rtt_samples = self.rtt_samples
         self.rtt_samples = []
         self.obs_start_time = self.net.get_cur_time()
 
@@ -427,6 +430,7 @@ class TCPCubicSender(Sender):
         self.rto = 3  # retransmission timeout (seconds)
         # initialize rto to 3s for waiting SYC packets of TCP handshake
         self.srtt = None # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
+        self.timeout_cnt = 0
 
         self.cubic_reset()
 
@@ -500,6 +504,7 @@ class TCPCubicSender(Sender):
         else:
             avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
         self.rate = self.cwnd / avg_sampled_rtt
+        print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
         if self.pkt_loss_wait_time > 0:
             self.pkt_loss_wait_time -= 1
 
@@ -532,6 +537,7 @@ class TCPCubicSender(Sender):
                 avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
             self.rate = self.cwnd / avg_sampled_rtt
             self.pkt_loss_wait_time = int(self.cwnd)
+            print("{:.5f}\tloss\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr,)
 
     def cubic_update(self):
         self.ack_cnt += 1
@@ -563,8 +569,10 @@ class TCPCubicSender(Sender):
         self.rto = 3  # retransmission timeout (seconds)
         # initialize rto to 3s for waiting SYC packets of TCP handshake
         self.srtt = None # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
+        self.timeout_cnt = 0
 
     def timeout(self):
+        self.timeout_cnt += 1
         # if self.pkt_loss_wait_time <= 0:
         # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
         # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
@@ -581,7 +589,7 @@ class TCPCubicSender(Sender):
         self.rate = self.cwnd / avg_sampled_rtt
         self.cubic_reset()
         # self.pkt_loss_wait_time = int(self.cwnd)
-        print('timeout rate', self.rate, self.cwnd)
+        # print('timeout rate', self.rate, self.cwnd)
         # return True
 
     def cubic_tcp_friendliness(self):
