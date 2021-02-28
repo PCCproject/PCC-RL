@@ -30,8 +30,8 @@ from stable_baselines.results_plotter import load_results, ts2xy
 
 from common.utils import read_json_file
 # from simulator import network_sim
-from simulator.network_simulator import network
-# from simulator import good_network_sim
+# from simulator.network_simulator import network
+from simulator import good_network_sim
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -47,7 +47,7 @@ def parse_args():
                         help="UDR config file.")
     parser.add_argument('--range-id', type=int, default=0, help='range id.')
     parser.add_argument('--seed', type=int, default=42, help='seed')
-    parser.add_argument("--total-timesteps", type=int, default=2000000,
+    parser.add_argument("--total-timesteps", type=int, default=5000000,
                         help="Total number of steps to be trained.")
 
     return parser.parse_args()
@@ -175,15 +175,16 @@ def main():
                    config["train"]["loss"]["min"],
                    config["train"]["loss"]["max"],
                    config["train"]["queue"]["min"],
-                   config["train"]["queue"]["max"],
-                   config["train"]["mss"]["min"],
-                   config["train"]["mss"]["max"])
+                   config["train"]["queue"]["max"],)
+                   # config["train"]["mss"]["min"],
+                   # config["train"]["mss"]["max"])
 
     bw_list = config["val"]["bandwidth"]
     lat_list = config["val"]["latency"]
     queue_list = config["val"]["queue"]
     loss_list = config["val"]["loss"]
-    mss_list = config["val"]["mss"]
+    # mss_list = config["val"]["mss"]
+    mss_list = [1500, 1500]
 #
     print("gamma = {}" .format(gamma))
     # model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant',
@@ -202,7 +203,7 @@ def main():
         tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
         tmp_env.seed(args.seed)
         tmp_env.set_ranges(bw, bw, lat, lat, loss,
-                           loss, queue, queue, mss, mss)
+                           loss, queue, queue) #, mss, mss)
         val_envs.append(tmp_env)
     # Create the callback: check every 1000 steps
     callback = SaveOnBestTrainingRewardCallback(

@@ -76,7 +76,7 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            # heapq.heappush(self.q, (round(1.0 / sender.rate, 5), sender,
+            # heapq.heappush(self.q, (1.0 / sender.rate, sender,
             #                         EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
             heapq.heappush(self.q, (0, sender,
                                     EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
@@ -147,8 +147,8 @@ class Network():
                         self.cur_time)
                     if USE_LATENCY_NOISE:
                         link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
-                    new_latency += round(link_latency, 5)
-                    new_event_time += round(link_latency, 5)
+                    new_latency += link_latency
+                    new_event_time += link_latency
                     push_new_event = True
             if event_type == EVENT_TYPE_SEND:
                 if next_hop == 0:
@@ -156,12 +156,14 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent(pkt_mi_id)
                         push_new_event = True
-                    if self.cur_time + round(1.0 / sender.rate, 5) < end_time:
-                        heapq.heappush(self.q, (self.cur_time + round(1.0 / sender.rate, 5), sender,
+                    if self.cur_time + 1.0 / sender.rate < end_time:
+                        assert self.cur_time + 1.0 / sender.rate > self.cur_time
+                        heapq.heappush(self.q, (self.cur_time + 1.0 / sender.rate, sender,
                                                 EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, mi_id))
                         self.event_count += 1
                     else:
-                        heapq.heappush(self.q, (self.cur_time + round(1.0 / sender.rate, 5), sender,
+                        assert self.cur_time + 1.0 / sender.rate > self.cur_time
+                        heapq.heappush(self.q, (self.cur_time + 1.0 / sender.rate, sender,
                                                 EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, mi_id+1))
                         self.event_count += 1
 
@@ -176,22 +178,24 @@ class Network():
                     self.cur_time)
                 if USE_LATENCY_NOISE:
                     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
-                new_latency += round(link_latency, 5)
-                new_event_time += round(link_latency, 5)
+                new_latency += link_latency
+                new_event_time += link_latency
                 new_dropped = not sender.path[next_hop].packet_enters_link(
                     self.cur_time)
 
             if push_new_event:
                 if new_event_type == EVENT_TYPE_SEND:
+                    assert new_event_time > self.cur_time
                     heapq.heappush(self.q,
-                                   (round(new_event_time, 5), sender, new_event_type,
+                                   (new_event_time, sender, new_event_type,
                                     new_next_hop, new_latency, new_dropped,
                                     self.event_count, rto, mi_id))
                     rto = sender.rto
                     self.event_count += 1
                 elif new_event_type == EVENT_TYPE_ACK:
+                    assert new_event_time > self.cur_time
                     heapq.heappush(self.q,
-                                   (round(new_event_time, 5), sender, new_event_type,
+                                   (new_event_time, sender, new_event_type,
                                     new_next_hop, new_latency, new_dropped,
                                     event_id, rto, pkt_mi_id))
 
@@ -229,7 +233,7 @@ class Network():
             self.links[0].bw, self.links[1].bw,
             send_throughput / (BITS_PER_BYTE * BYTES_PER_PACKET),
             throughput/(BITS_PER_BYTE * BYTES_PER_PACKET), reward, loss, latency])
-        self.cur_time = round(end_time, 5)
+        self.cur_time = end_time
 
         # print(self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
         #     self.links[0].bw, self.links[1].bw,

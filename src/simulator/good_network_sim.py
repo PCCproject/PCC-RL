@@ -743,7 +743,7 @@ class SimulatedNetworkEnv(gym.Env):
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "rl":
-            self.senders = [Sender(10,
+            self.senders = [Sender(500,
                                    [self.links[0], self.links[1]], 0,
                                    self.features,
                                    history_len=self.history_len)]
