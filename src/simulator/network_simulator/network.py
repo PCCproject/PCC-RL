@@ -273,7 +273,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.min_lat, self.max_lat = (0.05, 0.5)  # latency second
         self.min_queue, self.max_queue = (0, 8)
         self.min_loss, self.max_loss = (0.0, 0.05)
-        self.min_mss, self.max_mss = (1500, 1500)
+        # self.min_mss, self.max_mss = (1500, 1500)
         self.history_len = history_len
         # print("History length: %d" % history_len)
         self.features = features.split(",")
@@ -314,7 +314,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.episodes_run = -1
         print('event_id,event_type,next_hop,cur_latency,event_time,next_hop,dropped,event_q_length,send_rate,duration')
 
-    def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue, min_mss, max_mss):
+    def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
         self.min_bw = min_bw
         self.max_bw = max_bw
         self.min_lat = min_lat
@@ -323,8 +323,8 @@ class SimulatedNetworkEnv(gym.Env):
         self.max_loss = max_loss
         self.min_queue = min_queue
         self.max_queue = max_queue
-        self.min_mss = min_mss
-        self.max_mss = max_mss
+        # self.min_mss = min_mss
+        # self.max_mss = max_mss
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
