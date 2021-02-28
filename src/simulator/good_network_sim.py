@@ -71,7 +71,7 @@ class Link():
         cur_queue_delay = max(0.0, self.queue_delay - (event_time - self.queue_delay_update_time))
         # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
         #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
-        print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
+        # print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -87,7 +87,7 @@ class Link():
         extra_delay = 1.0 / self.bw
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
         if extra_delay + self.queue_delay > self.max_queue_delay:
-            print("{}\tDrop!".format(event_time), file=sys.stderr)
+            # print("{}\tDrop!".format(event_time), file=sys.stderr)
             return False
         self.queue_delay += extra_delay
         # print("\tNew delay = {}".format(self.queue_delay))
@@ -140,8 +140,8 @@ class Network():
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto = heapq.heappop(self.q)
             if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f" % (
-                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur))
+                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f" % (
+                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -150,9 +150,9 @@ class Network():
             new_dropped = dropped
             push_new_event = False
             if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
-                print("rto-{}\t{}\t{}".format(self.cur_time, cur_latency, rto), file=sys.stderr)
+                # print("rto-{}\t{}\t{}".format(self.cur_time, cur_latency, rto), file=sys.stderr)
                 sender.timeout()
-                new_dropped = True
+                dropped = True
             # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -324,18 +324,18 @@ class Sender():
     def set_rate(self, new_rate):
         self.rate = new_rate
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        if self.rate > MAX_RATE:
-            self.rate = MAX_RATE
-        if self.rate < MIN_RATE:
-            self.rate = MIN_RATE
+        # if self.rate > MAX_RATE:
+        #     self.rate = MAX_RATE
+        # if self.rate < MIN_RATE:
+        #     self.rate = MIN_RATE
 
     def set_cwnd(self, new_cwnd):
         self.cwnd = int(new_cwnd)
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        if self.cwnd > MAX_CWND:
-            self.cwnd = MAX_CWND
-        if self.cwnd < MIN_CWND:
-            self.cwnd = MIN_CWND
+        # if self.cwnd > MAX_CWND:
+        #     self.cwnd = MAX_CWND
+        # if self.cwnd < MIN_CWND:
+        #     self.cwnd = MIN_CWND
 
     def record_run(self):
         smi = self.get_run_data()
@@ -504,7 +504,7 @@ class TCPCubicSender(Sender):
         else:
             avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
         self.rate = self.cwnd / avg_sampled_rtt
-        print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
+        # print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
         if self.pkt_loss_wait_time > 0:
             self.pkt_loss_wait_time -= 1
 
@@ -537,7 +537,7 @@ class TCPCubicSender(Sender):
                 avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
             self.rate = self.cwnd / avg_sampled_rtt
             self.pkt_loss_wait_time = int(self.cwnd)
-            print("{:.5f}\tloss\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr,)
+            # print("{:.5f}\tloss\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr,)
 
     def cubic_update(self):
         self.ack_cnt += 1
@@ -622,9 +622,9 @@ class SimulatedNetworkEnv(gym.Env):
         self.min_queue, self.max_queue = (0, 8)
         self.min_loss, self.max_loss = (0.0, 0.05)
         self.history_len = history_len
-        print("History length: %d" % history_len)
+        # print("History length: %d" % history_len)
         self.features = features.split(",")
-        print("Features: %s" % str(self.features))
+        # print("Features: %s" % str(self.features))
 
         self.links = None
         self.senders = None
@@ -664,7 +664,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.min_lat = min_lat
         self.max_lat = max_lat
         self.min_loss= min_loss
-        self.max_loss =  max_loss
+        self.max_loss = max_loss
         self.min_queue= min_queue
         self.max_queue = max_queue
 
@@ -732,7 +732,8 @@ class SimulatedNetworkEnv(gym.Env):
     def create_new_links_and_senders(self):
         bw    = random.uniform(self.min_bw, self.max_bw)
         lat   = random.uniform(self.min_lat, self.max_lat)
-        queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
+        # queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
+        queue = int(random.uniform(self.min_queue, self.max_queue))
         loss  = random.uniform(self.min_loss, self.max_loss)
         # bw    = 1100
         # lat   = 0.02
