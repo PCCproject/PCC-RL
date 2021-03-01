@@ -13,27 +13,35 @@
 # limitations under the License.
 import argparse
 import csv
-import itertools
+import logging
 import os
 import shutil
 import time
+import types
+import warnings
 from typing import List
 
 import gym
 import numpy as np
 import tensorflow as tf
+
+if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
+    tf.contrib._warning = None
+from common.utils import read_json_file, set_tf_loglevel
 from stable_baselines import PPO1
 from stable_baselines.bench import Monitor
 from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
-from common.utils import read_json_file
 # from simulator import network_sim
 # from simulator.network_simulator import network
 from simulator import good_network_sim
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+warnings.filterwarnings("ignore")
+
+set_tf_loglevel(logging.FATAL)
 
 
 def parse_args():
@@ -42,22 +50,34 @@ def parse_args():
     parser.add_argument('--save-dir', type=str, required=True,
                         help="direcotry to save the model.")
     parser.add_argument('--gamma', type=float, default=0.99, help='gamma.')
-    parser.add_argument("--delay", type=float, required=True)
-    parser.add_argument("--bandwidth", type=float, required=True)
-    parser.add_argument("--loss", type=float, required=True)
-    parser.add_argument("--", type=float, required=True)
+    parser.add_argument("--delay", type=float,  nargs=2, required=True)
+    parser.add_argument("--bandwidth", type=float, nargs=2, required=True)
+    parser.add_argument("--loss", type=float, nargs=2, required=True)
+    parser.add_argument("--queue", type=float, nargs=2, required=True)
     # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
     parser.add_argument('--seed', type=int, default=42, help='seed')
     parser.add_argument("--total-timesteps", type=int, default=2000000,
                         help="Total number of steps to be trained.")
+    parser.add_argument("--pretrained-model-path", type=str, default=None,
+                        help="Path to a pretrained Tensorflow checkpoint!")
 
     return parser.parse_args()
+
+
+def check_args(args):
+    """Check arg validity."""
+    assert args.delay[0] <= args.delay[1]
+    assert args.bandwidth[0] <= args.bandwidth[1]
+    assert args.loss[0] <= args.loss[1]
+    assert args.queue[0] <= args.queue[1]
+    assert args.pretrained_model_path.endswith(".ckpt")
 
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
     Callback for saving a model (the check is done every ``check_freq`` steps)
-    based on the training reward (in practice, we recommend using ``EvalCallback``).
+    based on the training reward (in practice, we recommend using
+    ``EvalCallback``).
 
     :param check_freq: (int)
     :param log_dir: (str) Path to the folder where the model will be saved.
@@ -65,7 +85,8 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     :param verbose: (int)
     """
 
-    def __init__(self, check_freq: int, log_dir: str, val_envs: List = [], verbose=0, patience=10):
+    def __init__(self, check_freq: int, log_dir: str, val_envs: List = [],
+                 verbose=0, patience=10):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
@@ -109,9 +130,13 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     # self.model.save(self.save_path)
                     with self.model.graph.as_default():
                         saver = tf.train.Saver()
-                        saver.save(self.model.sess,
-                                   os.path.join(self.log_dir, "pcc_model_best.ckpt"))
-                    export_dir = os.path.join(os.path.join(self.log_dir, "best_model_to_serve/"))
+                        saver.save(
+                            self.model.sess, os.path.join(
+                                self.log_dir,
+                                "best_model_step_{}.ckpt".format(self.n_calls)))
+                    export_dir = os.path.join(os.path.join(
+                        self.log_dir,
+                        "best_model_to_serve_step_{}/".format(self.n_calls)))
                     save_model_to_serve(self.model, export_dir)
             # val_rewards = [test(self.model, val_env)
             #                for val_env in self.val_envs]
@@ -160,32 +185,33 @@ class MyMlpPolicy(FeedForwardPolicy):
 
 def main():
     args = parse_args()
+    min_delay, max_delay = args.delay
+    min_loss, max_loss = args.loss
+    min_queue, max_queue = args.queue
+    min_bandwidth, max_bandwidth = args.bandwidth
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
     gamma = args.gamma
+    print(args)
 
-    env = gym.make('PccNs-v0', log_dir=log_dir)
+    env = gym.make('PccNs-v0', log_dir=log_dir, duration=30)
     env.seed(args.seed)
     env = Monitor(env, log_dir)
-    config = read_json_file(args.config)
-    print(config)
-    env.set_ranges(config["train"]["bandwidth"]["min"],
-                   config["train"]["bandwidth"]["max"],
-                   config["train"]["latency"]["min"],
-                   config["train"]["latency"]["max"],
-                   config["train"]["loss"]["min"],
-                   config["train"]["loss"]["max"],
-                   config["train"]["queue"]["min"],
-                   config["train"]["queue"]["max"],)
-                   # config["train"]["mss"]["min"],
-                   # config["train"]["mss"]["max"])
-
-    bw_list = config["val"]["bandwidth"]
-    lat_list = config["val"]["latency"]
-    queue_list = config["val"]["queue"]
-    loss_list = config["val"]["loss"]
-    mss_list = config["val"]["mss"]
+    # config = read_json_file(args.config)
+    # print(config)
+    env.set_ranges(min_bandwidth, max_bandwidth,
+                   min_delay, max_delay,
+                   min_loss, max_loss,
+                   min_queue, max_queue)
+    # config["train"]["mss"]["min"],
+    # config["train"]["mss"]["max"])
 #
+#     bw_list = config["val"]["bandwidth"]
+#     lat_list = config["val"]["latency"]
+#     queue_list = config["val"]["queue"]
+#     loss_list = config["val"]["loss"]
+#     mss_list = config["val"]["mss"]
+
     print("gamma = {}" .format(gamma))
     # model = PPO1(MyMlpPolicy, env, verbose=1, schedule='constant',
     #              timesteps_per_actorbatch=8192, optim_batchsize=2048,
@@ -193,21 +219,30 @@ def main():
     # model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed, schedule='constant',
     #              timesteps_per_actorbatch=4000, optim_batchsize=1024,
     #              gamma=gamma)
-    model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed, schedule='constant',
-                 timesteps_per_actorbatch=300, gamma=gamma)
 
-    val_envs = []
-    for env_cnt, (bw, lat, loss, queue, mss) in enumerate(
-            itertools.product(bw_list, lat_list, loss_list, queue_list, mss_list)):
-        # os.makedirs(f'../../results/tmp', exist_ok=True)
-        tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
-        tmp_env.seed(args.seed)
-        tmp_env.set_ranges(bw, bw, lat, lat, loss,
-                           loss, queue, queue) #, mss, mss)
-        val_envs.append(tmp_env)
-    # Create the callback: check every 1000 steps
+    # Initialize model and agent policy
+    model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed,
+                 schedule='constant', timesteps_per_actorbatch=300, gamma=gamma)
+
+    # Load pretrained model
+    if args.pretrained_model_path is not None:
+        with model.graph.as_default():
+            saver = tf.train.Saver()
+            saver.restore(model.sess, args.pretrained_model_path)
+
+#     val_envs = []
+#     for env_cnt, (bw, lat, loss, queue, mss) in enumerate(
+#             itertools.product(bw_list, lat_list, loss_list, queue_list, mss_list)):
+#         # os.makedirs(f'../../results/tmp', exist_ok=True)
+#         tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
+#         tmp_env.seed(args.seed)
+#         tmp_env.set_ranges(bw, bw, lat, lat, loss,
+#                            loss, queue, queue)  # , mss, mss)
+#         val_envs.append(tmp_env)
+
+    # Create the callback: check every n steps and save best model
     callback = SaveOnBestTrainingRewardCallback(
-        check_freq=4000, log_dir=log_dir, val_envs=val_envs)
+        check_freq=4000, log_dir=log_dir)  # , val_envs=val_envs)
 
     # print(np.mean([test(model, val_env, env_id) for env_id, val_env in enumerate(val_envs)]))
 
@@ -222,7 +257,7 @@ def main():
 
     with model.graph.as_default():
         saver = tf.train.Saver()
-        saver.save(model.sess, os.path.join(log_dir, "pcc_model.ckpt"))
+        saver.save(model.sess, os.path.join(log_dir, "model_to_serve.ckpt"))
 
     # Save the model to the location specified below.
     export_dir = os.path.join(os.path.join(log_dir, "model_to_serve/"))
@@ -255,11 +290,10 @@ def save_model_to_serve(model, export_dir):
                          signature}
 
         model_builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
-        model_builder.add_meta_graph_and_variables(model.sess,
-                                                   tags=[
-                                                       tf.saved_model.tag_constants.SERVING],
-                                                   signature_def_map=signature_map,
-                                                   clear_devices=True)
+        model_builder.add_meta_graph_and_variables(
+            model.sess, tags=[tf.saved_model.tag_constants.SERVING],
+            signature_def_map=signature_map,
+            clear_devices=True)
         model_builder.save(as_text=True)
 
 
