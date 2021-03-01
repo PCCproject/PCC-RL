@@ -1,4 +1,7 @@
 import json
+import logging
+import os
+
 
 def read_json_file(filename):
     """Load json object from a file."""
@@ -12,5 +15,14 @@ def write_json_file(filename, content):
     with open(filename, 'w') as f:
         json.dump(content, f, indent=4)
 
-# def parse_patheon_tcp_trace(filename):
-#     with open(filename, 'r') as f:
+
+def set_tf_loglevel(level):
+    if level >= logging.FATAL:
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    if level >= logging.ERROR:
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+    if level >= logging.WARNING:
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+    else:
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
+    logging.getLogger('tensorflow').setLevel(level)
