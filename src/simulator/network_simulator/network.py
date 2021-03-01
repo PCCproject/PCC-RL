@@ -42,7 +42,7 @@ MIN_RATE = 40
 REWARD_SCALE = 0.001
 
 # MAX_STEPS = 1000
-MAX_STEPS = 100
+MAX_STEPS = 600
 # MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
@@ -124,9 +124,9 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
-            # if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
-            #     sender.timeout()
-            # new_dropped = True
+            if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
+                sender.timeout()
+                new_dropped = True
             # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -210,6 +210,7 @@ class Network():
         bw_cutoff = self.links[0].bw * 0.8
         lat_cutoff = 2.0 * self.links[0].dl * 1.5
         loss_cutoff = 2.0 * self.links[0].lr * 1.5
+        print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
         #print("thpt %f, bw %f" % (throughput, bw_cutoff))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
 
@@ -400,7 +401,8 @@ class SimulatedNetworkEnv(gym.Env):
     def create_new_links_and_senders(self):
         bw = random.uniform(self.min_bw, self.max_bw)
         lat = random.uniform(self.min_lat, self.max_lat)
-        queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
+        # queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
+        queue = int(random.uniform(self.min_queue, self.max_queue))
         loss = random.uniform(self.min_loss, self.max_loss)
         # bw    = 1100
         # lat   = 0.05

@@ -7,6 +7,8 @@ from simulator.network_simulator.constants import BYTES_PER_PACKET
 from simulator.network_simulator.monitor_interval import MonitorInterval
 
 MIN_PKTS_PER_MI = 5
+MAX_RATE = 4000
+MIN_RATE = 40
 
 class Sender():
 
@@ -99,10 +101,10 @@ class Sender():
     def set_rate(self, new_rate):
         self.rate = new_rate
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        # if self.rate > MAX_RATE:
-        #     self.rate = MAX_RATE
-        # if self.rate < MIN_RATE:
-        #     self.rate = MIN_RATE
+        if self.rate > MAX_RATE:
+            self.rate = MAX_RATE
+        if self.rate < MIN_RATE:
+            self.rate = MIN_RATE
 
     def set_cwnd(self, new_cwnd):
         self.cwnd = int(new_cwnd)
