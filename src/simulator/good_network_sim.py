@@ -32,7 +32,7 @@ from common import config, sender_obs
 MAX_CWND = 5000
 MIN_CWND = 4
 
-MAX_RATE = 1000
+MAX_RATE = 4000
 MIN_RATE = 40
 
 REWARD_SCALE = 0.001
@@ -52,8 +52,8 @@ LOSS_PENALTY = 1.0
 USE_LATENCY_NOISE = False
 MAX_LATENCY_NOISE = 1.1
 
-# DEBUG = True
-DEBUG = False
+DEBUG = True
+# DEBUG = False
 
 
 class Link():
@@ -139,9 +139,6 @@ class Network():
             sender.reset_obs()
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto = heapq.heappop(self.q)
-            if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f" % (
-                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay))
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -150,9 +147,13 @@ class Network():
             new_dropped = dropped
             push_new_event = False
             if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
-                # print("rto-{}\t{}\t{}".format(self.cur_time, cur_latency, rto), file=sys.stderr)
+                print("timeout {}\t{}\t{}".format(self.cur_time, cur_latency, rto))
                 sender.timeout()
                 dropped = True
+                new_dropped = True
+            if DEBUG:
+                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f, rto: %f, cwnd: %f, sender rto %f" % (
+                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay, rto, sender.cwnd, sender.rto))
             # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -215,7 +216,7 @@ class Network():
         bw_cutoff = self.links[0].bw * 0.8
         lat_cutoff = 2.0 * self.links[0].dl * 1.5
         loss_cutoff = 2.0 * self.links[0].lr * 1.5
-        #print("thpt %f, bw %f" % (throughput, bw_cutoff))
+        print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
 
         # Super high throughput
@@ -324,10 +325,10 @@ class Sender():
     def set_rate(self, new_rate):
         self.rate = new_rate
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        # if self.rate > MAX_RATE:
-        #     self.rate = MAX_RATE
-        # if self.rate < MIN_RATE:
-        #     self.rate = MIN_RATE
+        if self.rate > MAX_RATE:
+            self.rate = MAX_RATE
+        if self.rate < MIN_RATE:
+            self.rate = MIN_RATE
 
     def set_cwnd(self, new_cwnd):
         self.cwnd = int(new_cwnd)
