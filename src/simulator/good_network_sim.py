@@ -107,14 +107,15 @@ class Link():
 
 class Network():
 
-    def __init__(self, senders, links):
+    def __init__(self, senders, links, env):
         self.event_count = 0
         self.q = []
         self.cur_time = 0.0
         self.senders = senders
         self.links = links
         self.queue_initial_packets()
-        self.result_log = []
+        # self.result_log = []
+        self.env = env
 
     def queue_initial_packets(self):
         for sender in self.senders:
@@ -233,11 +234,16 @@ class Network():
         #     self.cur_time, self.senders[0].cwnd, ssthresh,
         #     self.links[0].bw, self.links[1].bw,
         #     throughput/(8 * BYTES_PER_PACKET), reward, loss))
-        self.result_log.append([
+        # self.result_log.append([
+        #     self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
+        #     self.links[0].bw, self.links[1].bw,
+        #     send_throughput / (8 * BYTES_PER_PACKET),
+        #     throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
+        self.env.writer.writerow([
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
             self.links[0].bw, self.links[1].bw,
             send_throughput / (8 * BYTES_PER_PACKET),
-            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
+            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency, self.senders[0].sent, self.senders[0].acked])
         # print(self.cur_time)
 
         # High thpt
@@ -497,24 +503,29 @@ class TCPCubicSender(Sender):
             else:
                 # print("in congestion avoidance, inc cwnd_cnt by 1")
                 self.cwnd_cnt += 1
+        # print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
+        if self.pkt_loss_wait_time > 0:
+            self.pkt_loss_wait_time -= 1
+        else:
+            self.rtt_samples.append(rtt)
+            # TODO: update RTO
+            if self.srtt is None:
+                self.srtt = rtt
+            elif self.timeout_mode:
+                self.srtt = rtt
+                self.timeout_mode = False
+            else:
+                self.srtt = (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt
+            self.rto = max(1, min(self.BETA * self.srtt, 60))
+            if (self.min_latency is None) or (rtt < self.min_latency):
+                self.min_latency = rtt
         if not self.rtt_samples and not self.prev_rtt_samples:
-            print(self.srtt)
             raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
         elif not self.rtt_samples:
             avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
         else:
             avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
         self.rate = self.cwnd / avg_sampled_rtt
-        # print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
-        if self.pkt_loss_wait_time > 0:
-            self.pkt_loss_wait_time -= 1
-
-        # TODO: update RTO
-        if self.srtt is None:
-            self.srtt = rtt
-        else:
-            self.srtt = (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt
-        self.rto = max(1, min(self.BETA * self.srtt, 60))
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -573,23 +584,28 @@ class TCPCubicSender(Sender):
         self.timeout_cnt = 0
 
     def timeout(self):
-        self.timeout_cnt += 1
-        # if self.pkt_loss_wait_time <= 0:
-        # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
-        # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
-        self.sshthresh = self.cwnd * (1 - self.beta)
-        self.cwnd = 1
-        if not self.rtt_samples and not self.prev_rtt_samples:
-            print(self.srtt)
-            # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
-            avg_sampled_rtt = self.srtt
-        elif not self.rtt_samples:
-            avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
-        else:
-            avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
-        self.rate = self.cwnd / avg_sampled_rtt
-        self.cubic_reset()
-        # self.pkt_loss_wait_time = int(self.cwnd)
+        self.bytes_in_flight -= BYTES_PER_PACKET
+        if self.pkt_loss_wait_time <= 0:
+            self.timeout_cnt += 1
+            # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
+            # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
+            self.ssthresh = self.cwnd * (1 - self.beta)
+            old_cwnd = self.cwnd
+            self.cwnd = 1
+            if not self.rtt_samples and not self.prev_rtt_samples:
+                # print(self.srtt)
+                # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
+                avg_sampled_rtt = self.srtt
+            elif not self.rtt_samples:
+                avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
+            else:
+                avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
+            self.rate = self.cwnd / avg_sampled_rtt
+            # self.rate = 10
+            self.cubic_reset()
+            self.pkt_loss_wait_time = int(self.bytes_in_flight/ BYTES_PER_PACKET)
+            self.timeout_mode = True
+            # self.pkt_loss_wait_time = old_cwnd
         # print('timeout rate', self.rate, self.cwnd)
         # return True
 
@@ -601,7 +617,7 @@ class SimulatedNetworkEnv(gym.Env):
 
     def __init__(self, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
-                 congestion_control_type="rl", log_dir=""):
+                 congestion_control_type="rl", log_dir="", duration=None):
         """Network environment used in simulation.
         congestion_control_type: rl is pcc-rl. cubic is TCPCubic.
         """
@@ -609,6 +625,7 @@ class SimulatedNetworkEnv(gym.Env):
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
         random.seed(42)
+        self.duration = duration
         self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
         if self.congestion_control_type == 'rl':
@@ -630,7 +647,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.links = None
         self.senders = None
         self.create_new_links_and_senders()
-        self.net = Network(self.senders, self.links)
+        self.net = Network(self.senders, self.links, self)
         self.run_dur = None
         self.run_period = 0.1
         self.steps_taken = 0
@@ -658,6 +675,11 @@ class SimulatedNetworkEnv(gym.Env):
 
         self.event_record = {"Events":[]}
         self.episodes_run = -1
+
+        self.writer = csv.writer(open(os.path.join(self.log_dir, 'cubic_test_log.csv'), 'w'), lineterminator='\n')
+        self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
+                         'link0_bw', 'link1_bw', "send_throughput",
+                         'throughput', 'reward', 'loss', 'latency', "packet_sent", "packet_acked"])
 
     def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
         self.min_bw = min_bw
@@ -716,11 +738,14 @@ class SimulatedNetworkEnv(gym.Env):
             self.run_dur = 0.5 * sender_mi.get("avg latency")
         #print("Sender obs: %s" % sender_obs)
 
-        should_stop = False
+        if self.duration is None:
+            should_stop = (self.steps_taken >= self.max_steps)
+        else:
+            should_stop = self.net.get_cur_time() >= self.duration
 
         self.reward_sum += reward
         # print('env step: {}s'.format(time.time() - t_start))
-        return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {}
+        return sender_obs, reward, should_stop, {}
 
     def print_debug(self):
         print("---Link Debug---")
@@ -767,7 +792,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.steps_taken = 0
         self.net.reset()
         self.create_new_links_and_senders()
-        self.net = Network(self.senders, self.links)
+        self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
         if self.episodes_run > 0 and self.episodes_run % 100 == 0:
             self.dump_events_to_file(
@@ -792,13 +817,6 @@ class SimulatedNetworkEnv(gym.Env):
     def dump_events_to_file(self, filename):
         with open(filename, 'w') as f:
             json.dump(self.event_record, f, indent=4)
-        with open(os.path.splitext(filename)[0]+'.csv', 'w') as f:
-            writer = csv.writer(f, lineterminator='\n')
-            writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
-                             'link0_bw', 'link1_bw', "send_throughput",
-                             'throughput', 'reward', 'loss', 'latency'])
-
-            writer.writerows(self.net.result_log)
 
 
 register(id='PccNs-v0', entry_point='simulator.good_network_sim:SimulatedNetworkEnv')
