@@ -118,7 +118,7 @@ class Sender():
         smi = self.get_run_data()
         # smi.debug_print()
         self.history.step(smi)
-        print(self.history.as_array(), file=sys.stderr)
+        # print(self.history.as_array(), file=sys.stderr)
 
     def get_obs(self):
         return self.history.as_array()
@@ -195,7 +195,7 @@ class Sender():
         mi_id_list = list(sorted(self.mi_cache))
         for mi_id in mi_id_list:
             mi = self.mi_cache[mi_id]
-            print(mi_id, len(mi.rtt_samples))
+            # print(mi_id, len(mi.rtt_samples))
             if mi.is_finished(cur_time):
                 smi = sender_obs.SenderMonitorInterval(
                     self.id, bytes_sent=mi.bytes_sent,

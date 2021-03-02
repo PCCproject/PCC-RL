@@ -42,7 +42,7 @@ MIN_RATE = 40
 REWARD_SCALE = 0.001
 
 # MAX_STEPS = 1000
-MAX_STEPS = 600
+# MAX_STEPS = 600
 # MAX_STEPS = 3000
 
 EVENT_TYPE_SEND = 'S'
@@ -56,14 +56,14 @@ USE_LATENCY_NOISE = False
 # USE_LATENCY_NOISE = True
 MAX_LATENCY_NOISE = 1.01
 
-DEBUG = True
-# DEBUG = False
+# DEBUG = True
+DEBUG = False
 START_SENDING_RATE = 500  # packets per second
 
 
 class Network():
 
-    def __init__(self, senders, links):
+    def __init__(self, senders, links, env):
         self.event_count = 0
         self.q = []
         self.cur_time = 0.0
@@ -71,6 +71,7 @@ class Network():
         self.links = links
         self.queue_initial_packets()
         self.result_log = []
+        self.env = env
 
     def queue_initial_packets(self):
         for sender in self.senders:
@@ -210,7 +211,7 @@ class Network():
         bw_cutoff = self.links[0].bw * 0.8
         lat_cutoff = 2.0 * self.links[0].dl * 1.5
         loss_cutoff = 2.0 * self.links[0].lr * 1.5
-        print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
+        # print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
         #print("thpt %f, bw %f" % (throughput, bw_cutoff))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
 
@@ -229,11 +230,16 @@ class Network():
         #     self.cur_time, self.senders[0].cwnd, ssthresh,
         #     self.links[0].bw, self.links[1].bw,
         #     throughput/(8 * BYTES_PER_PACKET), reward, loss))
-        self.result_log.append([
+        # self.result_log.append([
+        #     self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
+        #     self.links[0].bw, self.links[1].bw,
+        #     send_throughput / (BITS_PER_BYTE * BYTES_PER_PACKET),
+        #     throughput/(BITS_PER_BYTE * BYTES_PER_PACKET), reward, loss, latency])
+        self.env.writer.writerow([
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
             self.links[0].bw, self.links[1].bw,
-            send_throughput / (BITS_PER_BYTE * BYTES_PER_PACKET),
-            throughput/(BITS_PER_BYTE * BYTES_PER_PACKET), reward, loss, latency])
+            send_throughput / (8 * BYTES_PER_PACKET),
+            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         self.cur_time = end_time
 
         # print(self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
@@ -257,7 +263,8 @@ class SimulatedNetworkEnv(gym.Env):
 
     def __init__(self, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
-                 congestion_control_type="rl", log_dir=""):
+                 congestion_control_type="rl", log_dir="", duration=None,
+                 max_steps=400):
         """Network environment used in simulation.
         congestion_control_type: rl is pcc-rl. cubic is TCPCubic.
         """
@@ -265,6 +272,7 @@ class SimulatedNetworkEnv(gym.Env):
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
         random.seed(42)
+        self.duration = duration
         self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
         if self.congestion_control_type == 'rl':
@@ -287,11 +295,11 @@ class SimulatedNetworkEnv(gym.Env):
         self.links = None
         self.senders = None
         self.create_new_links_and_senders()
-        self.net = Network(self.senders, self.links)
+        self.net = Network(self.senders, self.links, self)
         # self.run_dur = None
         self.run_period = 0.1
         self.steps_taken = 0
-        self.max_steps = MAX_STEPS
+        self.max_steps = max_steps
         self.debug_thpt_changes = False
         self.last_thpt = None
         self.last_rate = None
@@ -317,7 +325,12 @@ class SimulatedNetworkEnv(gym.Env):
 
         self.event_record = {"Events": []}
         self.episodes_run = -1
-        print('event_id,event_type,next_hop,cur_latency,event_time,next_hop,dropped,event_q_length,send_rate,duration')
+        # print('event_id,event_type,next_hop,cur_latency,event_time,next_hop,dropped,event_q_length,send_rate,duration')
+
+        self.writer = csv.writer(open(os.path.join(self.log_dir, 'aurora_test_log.csv'), 'w'), lineterminator='\n')
+        self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
+                         'link0_bw', 'link1_bw', "send_throughput",
+                         'throughput', 'reward', 'loss', 'latency'])
 
     def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
         self.min_bw = min_bw
@@ -381,14 +394,16 @@ class SimulatedNetworkEnv(gym.Env):
         #                        5 / self.senders[0].rate)
         #print("Sender obs: %s" % sender_obs)
 
-        should_stop = False
-
         self.reward_sum += reward
-        print('env step: {:.4f}s, result_log: {}, mi_cache: {}, {}, network event queue: {} sender rtt samples: {}'.format(
-            time.time() - t_start, len(self.net.result_log),
-            len(self.senders[0].mi_cache), str(self.links[0]), len(self.net.q), len([self.senders[0].rtt_sample])))
-        # h.heap()
-        return sender_obs, reward, (self.steps_taken >= self.max_steps or should_stop), {"valid": valid}
+        # print('env step: {:.4f}s, result_log: {}, mi_cache: {}, {}, network event queue: {} sender rtt samples: {}'.format(
+        #     time.time() - t_start, len(self.net.result_log),
+        #     len(self.senders[0].mi_cache), str(self.links[0]), len(self.net.q),
+        #     len([self.senders[0].rtt_sample])))
+        if self.duration is None:
+            should_stop = (self.steps_taken >= self.max_steps)
+        else:
+            should_stop = self.net.get_cur_time() >= self.duration
+        return sender_obs, reward, should_stop, {"valid": valid}
 
     def print_debug(self):
         print("---Link Debug---")
@@ -438,7 +453,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.steps_taken = 0
         self.net.reset()
         self.create_new_links_and_senders()
-        self.net = Network(self.senders, self.links)
+        self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
         # if self.episodes_run > 0 and self.episodes_run % 100 == 0:
         #     self.dump_events_to_file(
