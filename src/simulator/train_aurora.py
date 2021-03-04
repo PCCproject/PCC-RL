@@ -20,6 +20,8 @@ import time
 import types
 import warnings
 from typing import List
+import itertools
+import ipdb
 
 import gym
 import numpy as np
@@ -55,11 +57,15 @@ def parse_args():
     parser.add_argument("--loss", type=float, nargs=2, required=True)
     parser.add_argument("--queue", type=float, nargs=2, required=True)
     # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
-    parser.add_argument('--seed', type=int, default=42, help='seed')
-    parser.add_argument("--total-timesteps", type=int, default=2000000,
+    parser.add_argument('--seed', type=int, default=20, help='seed')
+    parser.add_argument("--total-timesteps", type=int, default=1000000,
                         help="Total number of steps to be trained.")
     parser.add_argument("--pretrained-model-path", type=str, default=None,
                         help="Path to a pretrained Tensorflow checkpoint!")
+    parser.add_argument("--val-delay", type=float, nargs="+", required=True)
+    parser.add_argument("--val-bandwidth", type=float, nargs="+", required=True)
+    parser.add_argument("--val-loss", type=float, nargs="+", required=True)
+    parser.add_argument("--val-queue", type=float, nargs="+", required=True)
 
     return parser.parse_args()
 
@@ -86,7 +92,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, check_freq: int, log_dir: str, val_envs: List = [],
-                 verbose=0, patience=10):
+                 verbose=0, patience=10, steps_trained=0):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
@@ -95,13 +101,15 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.val_envs = val_envs
         self.val_log_writer = csv.writer(
             open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
-            lineterminator='\n')
+            delimiter='\t', lineterminator='\n')
         self.val_log_writer.writerow(
-            ['n_calls', 'num_timesteps', 'mean_validation_reward'])
+            ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
+             'throughput', 'latency', 'sending_rate'])
         self.best_val_reward = -np.inf
         self.patience = patience
 
         self.t_start = time.time()
+        self.steps_trained = steps_trained
 
     def _init_callback(self) -> None:
         # Create folder if needed
@@ -128,23 +136,40 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     if self.verbose > 0:
                         print("Saving new best model to {}".format(self.save_path))
                     # self.model.save(self.save_path)
-                    with self.model.graph.as_default():
-                        saver = tf.train.Saver()
-                        saver.save(
-                            self.model.sess, os.path.join(
-                                self.log_dir,
-                                "best_model_step_{}.ckpt".format(self.n_calls)))
-                    export_dir = os.path.join(os.path.join(
-                        self.log_dir,
-                        "best_model_to_serve_step_{}/".format(self.n_calls)))
-                    save_model_to_serve(self.model, export_dir)
-            # val_rewards = [test(self.model, val_env)
-            #                for val_env in self.val_envs]
-            # self.val_log_writer.writerow(
-            #     [self.n_calls, self.num_timesteps, np.mean(np.array(val_rewards))])
-            # print("{}steps: {}s".format(
-            #     self.check_freq, time.time() - self.t_start))
-            # self.t_start = time.time()
+                with self.model.graph.as_default():
+                    saver = tf.train.Saver()
+                    saver.save(
+                        self.model.sess, os.path.join(
+                            self.log_dir,
+                            "model_step_{}.ckpt".format(self.n_calls + self.steps_trained)))
+                export_dir = os.path.join(os.path.join(
+                    self.log_dir,
+                    "model_to_serve_step_{}/".format(self.n_calls + self.steps_trained)))
+                save_model_to_serve(self.model, export_dir)
+                # val_rewards = [test(self.model, val_env)
+                #                for val_env in self.val_envs]
+            avg_rewards = []
+            avg_losses = []
+            avg_tputs = []
+            avg_delays = []
+            avg_send_rates = []
+            for idx, val_env in enumerate(self.val_envs):
+                # print("{}/{} start".format(idx +1, len(self.val_envs)) )
+                # t_start = time.time()
+                val_rewards, loss_list, tput_list, delay_list, send_rate_list = test(self.model, val_env)
+                # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
+                avg_rewards.append(np.mean(np.array(val_rewards)))
+                avg_losses.append(np.mean(np.array(loss_list)))
+                avg_tputs.append(float(np.mean(np.array(tput_list))) / 1e6)
+                avg_delays.append(np.mean(np.array(delay_list)))
+                avg_send_rates.append(float(np.mean(np.array(send_rate_list)))/1e6)
+            self.val_log_writer.writerow(
+                map(lambda t: "%.3f" % t, [float(self.n_calls), float(self.num_timesteps), np.mean(np.array(avg_rewards)),
+                 np.mean(np.array(avg_losses)), np.mean(np.array(avg_tputs)),
+                 np.mean(np.array(avg_delays)), np.mean(np.array(avg_send_rates))]))
+            print("val every{}steps: {}s".format(
+                self.check_freq, time.time() - self.t_start))
+            self.t_start = time.time()
             # # if self.patience == 0:
             # #     return False
             # if np.mean(np.array(val_rewards)) > self.best_val_reward:  # type: ignore
@@ -159,6 +184,10 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
 def test(model, env, env_id=0):
     reward_list = []
+    loss_list = []
+    tput_list = []
+    delay_list = []
+    send_rate_list = []
     obs = env.reset()
     while True:
         action, _states = model.predict(obs)
@@ -166,11 +195,17 @@ def test(model, env, env_id=0):
         # print(rewards, dones, info, step_cnt, env.run_dur,
         # env.links[0].print_debug(), env.links[1].print_debug(), env.senders)
         reward_list.append(rewards)
+        last_event = env.event_record['Events'][-1]
+        loss_list.append(last_event['Loss Rate'])
+        delay_list.append(last_event['Latency'])
+        tput_list.append(last_event['Throughput'])
+        send_rate_list.append(last_event['Send Rate'])
+        # print("last event", last_event['Send Rate']/1500/8)
         if dones:
             break
     env.dump_events_to_file(os.path.join(
         env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
-    return reward_list
+    return reward_list, loss_list, tput_list, delay_list, send_rate_list
 
 
 class MyMlpPolicy(FeedForwardPolicy):
@@ -192,9 +227,8 @@ def main():
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
     gamma = args.gamma
-    print(args)
 
-    env = gym.make('PccNs-v0', log_dir=log_dir, duration=30)
+    env = gym.make('PccNs-v0', log_dir=log_dir, max_steps=200, train_flag=True)
     env.seed(args.seed)
     env = Monitor(env, log_dir)
     # config = read_json_file(args.config)
@@ -221,38 +255,36 @@ def main():
     #              gamma=gamma)
 
     # Initialize model and agent policy
-    model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed,
-                 schedule='constant', timesteps_per_actorbatch=300, gamma=gamma)
+    model = PPO1(MyMlpPolicy, env, verbose=0, seed=args.seed, optim_stepsize=0.001,
+                 schedule='constant', timesteps_per_actorbatch=7200, gamma=gamma)
 
+    steps_trained = 0
     # Load pretrained model
-    if args.pretrained_model_path is not None:
+    if args.pretrained_model_path is not None and args.pretrained_model_path:
         with model.graph.as_default():
             saver = tf.train.Saver()
             saver.restore(model.sess, args.pretrained_model_path)
+        try:
+            steps_trained = int(os.path.splitext(
+                args.pretrained_model_path)[0].split('_')[-1])
+        except:
+            steps_trained = 0
 
-#     val_envs = []
-#     for env_cnt, (bw, lat, loss, queue, mss) in enumerate(
-#             itertools.product(bw_list, lat_list, loss_list, queue_list, mss_list)):
-#         # os.makedirs(f'../../results/tmp', exist_ok=True)
-#         tmp_env = gym.make('PccNs-v0', log_dir=f'../../results/tmp')
-#         tmp_env.seed(args.seed)
-#         tmp_env.set_ranges(bw, bw, lat, lat, loss,
-#                            loss, queue, queue)  # , mss, mss)
-#         val_envs.append(tmp_env)
+    val_envs = []
+    for env_cnt, (bw, lat, loss, queue) in enumerate(
+            itertools.product(args.val_bandwidth, args.val_delay,
+                args.val_loss, args.val_queue)):
+        # os.makedirs(f'../../results/tmp', exist_ok=True)
+        tmp_env = gym.make('PccNs-v0', log_dir=log_dir, max_steps=200)
+        tmp_env.seed(args.seed)
+        tmp_env.set_ranges(bw, bw, lat, lat, loss, loss, queue, queue)
+        val_envs.append(tmp_env)
 
     # Create the callback: check every n steps and save best model
     callback = SaveOnBestTrainingRewardCallback(
-        check_freq=4000, log_dir=log_dir)  # , val_envs=val_envs)
-
-    # print(np.mean([test(model, val_env, env_id) for env_id, val_env in enumerate(val_envs)]))
+        check_freq=7200, log_dir=log_dir, steps_trained=steps_trained, val_envs=val_envs)
 
     # model.learn(total_timesteps=(2 * 1600 * 410), callback=callback)
-    # model.learn(total_timesteps=(10000), callback=callback)
-    # model.learn(total_timesteps=(100000), callback=callback)
-    # model.learn(total_timesteps=(500000), callback=callback)
-    # model.learn(total_timesteps=(1000000), callback=callback)
-    # model.learn(total_timesteps=(2000000), callback=callback)
-    # model.learn(total_timesteps=(80000), callback=callback)
     model.learn(total_timesteps=args.total_timesteps, callback=callback)
 
     with model.graph.as_default():
