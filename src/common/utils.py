@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 
 def read_json_file(filename):
@@ -26,3 +27,11 @@ def set_tf_loglevel(level):
     else:
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
     logging.getLogger('tensorflow').setLevel(level)
+
+
+def natural_sort(l):
+    def convert(text): return int(text) if text.isdigit() else text.lower()
+
+    def alphanum_key(key): return [convert(c)
+                                   for c in re.split('([0-9]+)', key)]
+    return sorted(l, key=alphanum_key)
