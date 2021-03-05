@@ -52,20 +52,23 @@ def parse_args():
     parser.add_argument('--save-dir', type=str, required=True,
                         help="direcotry to save the model.")
     parser.add_argument('--gamma', type=float, default=0.99, help='gamma.')
-    parser.add_argument("--delay", type=float,  nargs=2, required=True)
-    parser.add_argument("--bandwidth", type=float, nargs=2, required=True)
-    parser.add_argument("--loss", type=float, nargs=2, required=True)
-    parser.add_argument("--queue", type=float, nargs=2, required=True)
+    parser.add_argument("--delay", type=float,  nargs=2, default=[0.05, 0.05])
+    parser.add_argument("--bandwidth", type=float, nargs=2, default=[100, 100])
+    parser.add_argument("--loss", type=float, nargs=2, default=[0, 0])
+    parser.add_argument("--queue", type=float, nargs=2, default=[100, 100])
     # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
     parser.add_argument('--seed', type=int, default=20, help='seed')
     parser.add_argument("--total-timesteps", type=int, default=1000000,
                         help="Total number of steps to be trained.")
     parser.add_argument("--pretrained-model-path", type=str, default=None,
                         help="Path to a pretrained Tensorflow checkpoint!")
-    parser.add_argument("--val-delay", type=float, nargs="+", required=True)
-    parser.add_argument("--val-bandwidth", type=float, nargs="+", required=True)
-    parser.add_argument("--val-loss", type=float, nargs="+", required=True)
-    parser.add_argument("--val-queue", type=float, nargs="+", required=True)
+    parser.add_argument("--val-delay", type=float, nargs="+", default=[])
+    parser.add_argument("--val-bandwidth", type=float, nargs="+", default=[])
+    parser.add_argument("--val-loss", type=float, nargs="+", default=[])
+    parser.add_argument("--val-queue", type=float, nargs="+", default=[])
+    parser.add_argument("--randomization-range-file", type=str, default=None,
+                        help="A json file which contains a list of "
+                        "randomization ranges with their probabilites.")
 
     return parser.parse_args()
 
@@ -100,7 +103,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.best_mean_reward = -np.inf
         self.val_envs = val_envs
         self.val_log_writer = csv.writer(
-            open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
+            open(os.path.join(log_dir, 'validation_log.csv'), 'a', 1),
             delimiter='\t', lineterminator='\n')
         self.val_log_writer.writerow(
             ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
@@ -156,17 +159,21 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             for idx, val_env in enumerate(self.val_envs):
                 # print("{}/{} start".format(idx +1, len(self.val_envs)) )
                 # t_start = time.time()
-                val_rewards, loss_list, tput_list, delay_list, send_rate_list = test(self.model, val_env)
+                val_rewards, loss_list, tput_list, delay_list, send_rate_list = test(
+                    self.model, val_env)
                 # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
                 avg_rewards.append(np.mean(np.array(val_rewards)))
                 avg_losses.append(np.mean(np.array(loss_list)))
                 avg_tputs.append(float(np.mean(np.array(tput_list))) / 1e6)
                 avg_delays.append(np.mean(np.array(delay_list)))
-                avg_send_rates.append(float(np.mean(np.array(send_rate_list)))/1e6)
+                avg_send_rates.append(
+                    float(np.mean(np.array(send_rate_list)))/1e6)
             self.val_log_writer.writerow(
-                map(lambda t: "%.3f" % t, [float(self.n_calls), float(self.num_timesteps), np.mean(np.array(avg_rewards)),
-                 np.mean(np.array(avg_losses)), np.mean(np.array(avg_tputs)),
-                 np.mean(np.array(avg_delays)), np.mean(np.array(avg_send_rates))]))
+                map(lambda t: "%.3f" % t, [float(self.n_calls + self.steps_trained),
+                                           float(self.num_timesteps + self.steps_trained), np.mean(np.array(avg_rewards)),
+                                           np.mean(np.array(avg_losses)), np.mean(
+                                               np.array(avg_tputs)),
+                                           np.mean(np.array(avg_delays)), np.mean(np.array(avg_send_rates))]))
             print("val every{}steps: {}s".format(
                 self.check_freq, time.time() - self.t_start))
             self.t_start = time.time()
@@ -228,7 +235,8 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
     gamma = args.gamma
 
-    env = gym.make('PccNs-v0', log_dir=log_dir, max_steps=200, train_flag=True)
+    env = gym.make('PccNs-v0', log_dir=log_dir, max_steps=200, train_flag=True,
+                   randomization_range_file=args.randomization_range_file)
     env.seed(args.seed)
     env = Monitor(env, log_dir)
     # config = read_json_file(args.config)
@@ -255,7 +263,7 @@ def main():
     #              gamma=gamma)
 
     # Initialize model and agent policy
-    model = PPO1(MyMlpPolicy, env, verbose=0, seed=args.seed, optim_stepsize=0.001,
+    model = PPO1(MyMlpPolicy, env, verbose=1, seed=args.seed, optim_stepsize=0.001,
                  schedule='constant', timesteps_per_actorbatch=7200, gamma=gamma)
 
     steps_trained = 0
@@ -273,7 +281,7 @@ def main():
     val_envs = []
     for env_cnt, (bw, lat, loss, queue) in enumerate(
             itertools.product(args.val_bandwidth, args.val_delay,
-                args.val_loss, args.val_queue)):
+                              args.val_loss, args.val_queue)):
         # os.makedirs(f'../../results/tmp', exist_ok=True)
         tmp_env = gym.make('PccNs-v0', log_dir=log_dir, max_steps=200)
         tmp_env.seed(args.seed)
@@ -282,7 +290,8 @@ def main():
 
     # Create the callback: check every n steps and save best model
     callback = SaveOnBestTrainingRewardCallback(
-        check_freq=7200, log_dir=log_dir, steps_trained=steps_trained, val_envs=val_envs)
+        check_freq=7200, log_dir=log_dir, steps_trained=steps_trained,
+        val_envs=val_envs)
 
     # model.learn(total_timesteps=(2 * 1600 * 410), callback=callback)
     model.learn(total_timesteps=args.total_timesteps, callback=callback)

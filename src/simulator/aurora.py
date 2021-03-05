@@ -238,7 +238,7 @@ class Aurora():
                 'PccNs-v0', traces=[trace], log_dir=self.log_dir)
             tmp_env.seed(self.seed)
 
-            reward_list, loss_list, tput_list, delay_list, send_rate_list = test(self.model, tmp_env)
+            ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list = test(self.model, tmp_env)
             result = list(zip(reward_list, loss_list, tput_list, delay_list, send_rate_list))
             # envs.append(tmp_env)
             results.append(result)
