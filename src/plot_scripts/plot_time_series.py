@@ -71,6 +71,7 @@ def main():
     plt.ylim(0, 1)
     plt.legend()
     print(df["loss"].mean())
+    plt.savefig("time_series.png")
     plt.show()
 
 
