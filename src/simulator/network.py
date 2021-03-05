@@ -769,6 +769,8 @@ class SimulatedNetworkEnv(gym.Env):
         event["Send Ratio"] = sender_mi.get("send ratio")
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
+        event["Timestamp"] = self.net.get_cur_time()
+        event["Action"] = self.net.get_cur_time()
         self.event_record["Events"].append(event)
         if event["Latency"] > 0.0:
             self.run_dur = 0.5 * sender_mi.get("avg latency")

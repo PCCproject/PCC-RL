@@ -93,8 +93,8 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int, seed: i
     for env_config in config:
         bw_min, bw_max = env_config['bandwidth']
         delay_min, delay_max = env_config['delay']
-        loss_min, loss_max = env_config['delay']
-        queue_min, queue_max = env_config['delay']
+        loss_min, loss_max = env_config['loss']
+        queue_min, queue_max = env_config['queue']
         trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
         for _ in range(trace_cnt):
             trace = generate_trace(duration, (bw_min, bw_max),

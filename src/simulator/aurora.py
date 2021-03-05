@@ -257,6 +257,8 @@ def test(model, env, env_id=0):
     tput_list = []
     delay_list = []
     send_rate_list = []
+    ts_list = []
+    action_list = []
     obs = env.reset()
     while True:
         if isinstance(model, LoadedModel):
@@ -272,8 +274,10 @@ def test(model, env, env_id=0):
         delay_list.append(last_event['Latency'])
         tput_list.append(last_event['Throughput'])
         send_rate_list.append(last_event['Send Rate'])
+        ts_list.append(last_event['Timestamp'])
+        action_list.append(last_event['Action'])
         if dones:
             break
     # env.dump_events_to_file(os.path.join(
     #     env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
-    return reward_list, loss_list, tput_list, delay_list, send_rate_list
+    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list
