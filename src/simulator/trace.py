@@ -85,8 +85,7 @@ def generate_trace(duration: float, bandwidth_range: Tuple[float, float],
     raise NotImplementedError
 
 
-def generate_traces(config_file: str, tot_trace_cnt: int, duration: int, seed: int):
-    np.random.seed(seed)
+def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
     config = read_json_file(config_file)
     traces = []
 

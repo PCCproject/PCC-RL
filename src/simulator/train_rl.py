@@ -65,14 +65,15 @@ def main():
     min_bandwidth, max_bandwidth = args.bandwidth
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
+    np.random.seed(args.seed)
 
 
     if args.randomization_range_file is not None:
         # generate training traces
         training_traces = generate_traces(args.randomization_range_file, args.total_trace_count,
-                                          args.duration, args.seed)
+                                          args.duration)
         # generate validation traces
-        validation_traces = generate_traces(args.randomization_range_file, 36, args.duration, args.seed)
+        validation_traces = generate_traces(args.randomization_range_file, 36, args.duration)
     else:
         raise NotImplementedError
 

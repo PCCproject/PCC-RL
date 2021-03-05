@@ -196,7 +196,9 @@ class Aurora():
                 self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
-                                  gamma=gamma)
+                                  optim_batchsize=int(timesteps_per_actorbatch/4),
+                                  optim_epochs=4,
+                                  gamma=gamma, tensorboard_log="./aurora_tensorboard/")
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.restore(self.model.sess, pretrained_model_path)
@@ -212,7 +214,9 @@ class Aurora():
             self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
-                              gamma=gamma)
+                              optim_batchsize=int(timesteps_per_actorbatch/4),
+                              optim_epochs=4,
+                              gamma=gamma, tensorboard_log="./aurora_tensorboard/")
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
     def train(self, validation_traces, total_timesteps):
@@ -229,7 +233,7 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_envs=val_envs)
-        self.model.learn(total_timesteps=total_timesteps, callback=callback)
+        self.model.learn(total_timesteps=total_timesteps, tb_log_name="Fixed_optim_batch_size_continue", callback=callback)
 
     def test(self, traces):
         results = []

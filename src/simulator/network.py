@@ -798,7 +798,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.links = [Link(bw, lat, queue, loss), Link(bw, lat, queue, loss)]
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
-                self.senders = [Sender(500, [self.links[0], self.links[1]], 0,
+                self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len)]
             else:

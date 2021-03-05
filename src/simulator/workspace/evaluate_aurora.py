@@ -45,8 +45,10 @@ def main():
     if args.save_dir:
         os.makedirs(args.save_dir, exist_ok=True)
 
-    test_traces = generate_traces(args.config_file, 10, args.duration, args.seed)
-    training_traces = generate_traces(args.config_file, 10, args.duration, args.seed)
+    test_traces = generate_traces(
+        args.config_file, 10, args.duration, args.seed)
+    training_traces = generate_traces(
+        args.config_file, 10, args.duration, args.seed)
     # env = gym.make('PccNs-v0', log_dir=args.save_dir, duration=args.duration)
     # env.seed(args.seed)
 
@@ -55,11 +57,12 @@ def main():
                     pretrained_model_path=args.model_path)
     results = aurora.test(test_traces)
 
-    for trace, result in zip(test_traces, results):
-        with open(os.path.join(args.save_dir, "env" +str(trace) + ".csv"), 'w', 1) as f:
+    for idx, (trace, result) in enumerate(zip(test_traces, results)):
+        with open(os.path.join(args.save_dir, "env_{:.3f}_{:.3f}_{:.3f}_{:.3f}.csv".format(
+                trace.bandwidths[0], trace.delay, trace.loss_rate, trace.queue_size)), 'w', 1) as f:
             log_writer = csv.writer(f, delimiter='\t', lineterminator='\n')
-            log_writer.writerow(['mean_validation_reward', 'loss',
-                                 'throughput', 'latency', 'sending_rate'])
+            log_writer.writerow(['timestamp', 'mean_validation_reward', 'loss',
+                                 'throughput', 'latency', 'sending_rate', 'action'])
             log_writer.writerows(result)
 
 
