@@ -21,6 +21,8 @@ warnings.filterwarnings("ignore")
 def parse_args():
     """Parse arguments from the command line."""
     parser = argparse.ArgumentParser("Training code.")
+    parser.add_argument('--exp-name', type=str, default="",
+                        help="Experiment name.")
     parser.add_argument('--save-dir', type=str, required=True,
                         help="direcotry to save the model.")
     # parser.add_argument('--gamma', type=float, default=0.99, help='gamma.')
@@ -81,7 +83,7 @@ def main():
     # Initialize model and agent policy
     aurora = Aurora(training_traces, args.seed, args.save_dir, 7200,
                              args.pretrained_model_path)
-    aurora.train(validation_traces, args.total_timesteps)
+    aurora.train(validation_traces, args.total_timesteps, args.exp_name)
 
     # with model.graph.as_default():
     #     saver = tf.train.Saver()

@@ -196,7 +196,8 @@ class Aurora():
                 self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
-                                  optim_batchsize=int(timesteps_per_actorbatch/4),
+                                  optim_batchsize=int(
+                                      timesteps_per_actorbatch/4),
                                   optim_epochs=4,
                                   gamma=gamma, tensorboard_log="./aurora_tensorboard/")
                 with self.model.graph.as_default():
@@ -219,7 +220,7 @@ class Aurora():
                               gamma=gamma, tensorboard_log="./aurora_tensorboard/")
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
-    def train(self, validation_traces, total_timesteps):
+    def train(self, validation_traces, total_timesteps, tb_log_name=""):
         assert isinstance(self.model, PPO1)
 
         val_envs = []
@@ -233,7 +234,8 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_envs=val_envs)
-        self.model.learn(total_timesteps=total_timesteps, tb_log_name="Fixed_optim_batch_size_continue", callback=callback)
+        self.model.learn(total_timesteps=total_timesteps,
+                         tb_log_name=tb_log_name, callback=callback)
 
     def test(self, traces):
         results = []
@@ -242,8 +244,10 @@ class Aurora():
                 'PccNs-v0', traces=[trace], log_dir=self.log_dir)
             tmp_env.seed(self.seed)
 
-            ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list = test(self.model, tmp_env)
-            result = list(zip(reward_list, loss_list, tput_list, delay_list, send_rate_list))
+            ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list = test(
+                self.model, tmp_env)
+            result = list(zip(reward_list, loss_list, tput_list,
+                              delay_list, send_rate_list))
             # envs.append(tmp_env)
             results.append(result)
         return results
