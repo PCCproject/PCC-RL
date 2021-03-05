@@ -116,7 +116,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             for idx, val_env in enumerate(self.val_envs):
                 # print("{}/{} start".format(idx +1, len(self.val_envs)) )
                 # t_start = time.time()
-                val_rewards, loss_list, tput_list, delay_list, send_rate_list = test(
+                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list = test(
                     self.model, val_env)
                 # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
                 avg_rewards.append(np.mean(np.array(val_rewards)))
