@@ -62,7 +62,8 @@ def generate_trace(duration: float, bandwidth_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
                    queue_size_range: Tuple[int, int],
-                   constant_bandwidth=True):
+                   seed: int, constant_bandwidth: bool = True):
+    np.random.seed(seed)
     assert len(
         bandwidth_range) == 2 and bandwidth_range[0] <= bandwidth_range[1]
     assert len(delay_range) == 2 and delay_range[0] <= delay_range[1]
@@ -85,37 +86,21 @@ def generate_trace(duration: float, bandwidth_range: Tuple[float, float],
     raise NotImplementedError
 
 
-def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
+def generate_traces(config_file: str, tot_trace_cnt: int, duration: int, seed: int):
     config = read_json_file(config_file)
-    bandwidth_ranges = config['train']['bandwidth']
-    delay_ranges = config['train']['delay']
-    loss_ranges = config['train']['loss']
-    queue_ranges = config['train']['queue']
     traces = []
 
-    for (bandwidth_range, delay_range, loss_range,
-         queue_range) in itertools.product(bandwidth_ranges, delay_ranges,
-                                           loss_ranges, queue_ranges):
-        bw_min, bw_max, bw_prob = bandwidth_range
-        delay_min, delay_max, delay_prob = delay_range
-        loss_min, loss_max, loss_prob = loss_range
-        queue_min, queue_max, queue_prob = queue_range
-        trace_cnt = int(round(bw_prob * delay_prob *
-                              loss_prob * queue_prob * tot_trace_cnt))
+    for env_config in config:
+        bw_min, bw_max = env_config['bandwidth']
+        delay_min, delay_max = env_config['delay']
+        loss_min, loss_max = env_config['delay']
+        queue_min, queue_max = env_config['delay']
+        trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
         for _ in range(trace_cnt):
             trace = generate_trace(duration, (bw_min, bw_max),
                                    (delay_min, delay_max),
                                    (loss_min, loss_max),
-                                   (queue_min, queue_max))
+                                   (queue_min, queue_max), seed)
             traces.append(trace)
 
-    bandwidth_list = config['validation']['bandwidth']
-    delay_list = config['validation']['delay']
-    loss_list = config['validation']['loss']
-    queue_list = config['validation']['queue']
-
-    val_traces = []
-    for bw, lat, loss, queue in itertools.product(bandwidth_list, delay_list,
-                                                  loss_list, queue_list):
-        val_traces.append(Trace([duration], [bw], lat, loss, queue))
-    return traces, val_traces
+    return traces
