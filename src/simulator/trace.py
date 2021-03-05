@@ -62,8 +62,7 @@ def generate_trace(duration: float, bandwidth_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
                    queue_size_range: Tuple[int, int],
-                   seed: int, constant_bandwidth: bool = True):
-    np.random.seed(seed)
+                   constant_bandwidth: bool = True):
     assert len(
         bandwidth_range) == 2 and bandwidth_range[0] <= bandwidth_range[1]
     assert len(delay_range) == 2 and delay_range[0] <= delay_range[1]
@@ -87,6 +86,7 @@ def generate_trace(duration: float, bandwidth_range: Tuple[float, float],
 
 
 def generate_traces(config_file: str, tot_trace_cnt: int, duration: int, seed: int):
+    np.random.seed(seed)
     config = read_json_file(config_file)
     traces = []
 
@@ -100,7 +100,6 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int, seed: i
             trace = generate_trace(duration, (bw_min, bw_max),
                                    (delay_min, delay_max),
                                    (loss_min, loss_max),
-                                   (queue_min, queue_max), seed)
+                                   (queue_min, queue_max))
             traces.append(trace)
-
     return traces
