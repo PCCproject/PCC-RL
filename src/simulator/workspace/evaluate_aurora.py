@@ -1,13 +1,9 @@
 import argparse
-import csv
 import os
-import time
 import warnings
 import logging
 import types
 
-import gym
-import numpy as np
 import tensorflow as tf
 if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
     tf.contrib._warning = None
