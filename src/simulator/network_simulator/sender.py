@@ -80,7 +80,12 @@ class Sender():
 
     def on_packet_sent(self, mi_id):
         self.bytes_in_flight += BYTES_PER_PACKET
-        self.mi_cache[mi_id].on_packet_sent(self.net.get_cur_time())
+        try:
+            self.mi_cache[mi_id].on_packet_sent(self.net.get_cur_time())
+        except:
+            pass
+            import ipdb
+            ipdb.set_trace()
 
     def on_packet_acked(self, rtt, mi_id):
         self.rtt_sample = rtt
@@ -101,8 +106,10 @@ class Sender():
     def set_rate(self, new_rate):
         self.rate = new_rate
         #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
-        if self.rate > MAX_RATE:
-            self.rate = MAX_RATE
+        # if self.rate > MAX_RATE:
+        #     self.rate = MAX_RATE
+        if self.rate >self.net.links[0].bw* 1.5:
+            self.rate = self.net.links[0].bw* 1.5
         if self.rate < MIN_RATE:
             self.rate = MIN_RATE
 
@@ -134,7 +141,8 @@ class Sender():
         # print(self.rtt_samples)
         mi = self.mi_cache[min(self.mi_cache)]
         if mi.rtt_samples:
-            rtt_samples = [[mi.rtt_samples[0], mi.rtt_samples[-1]]]
+            # rtt_samples = [[mi.rtt_samples[0], mi.rtt_samples[-1]]]
+            rtt_samples = mi.rtt_samples
         else:
             rtt_samples = mi.rtt_samples
 
@@ -143,8 +151,9 @@ class Sender():
             bytes_sent=mi.bytes_sent,
             bytes_acked=mi.bytes_acked,
             bytes_lost=mi.bytes_lost,
-            send_start=mi.first_packet_send_time,
-            send_end=mi.last_packet_send_time,
+            # send_start=mi.first_packet_send_time,
+            send_start=mi.start_time,
+            send_end=mi.end_time,
             recv_start=mi.first_packet_ack_time,
             recv_end=mi.last_packet_ack_time,
             rtt_samples=rtt_samples,

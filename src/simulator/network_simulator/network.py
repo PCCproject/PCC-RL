@@ -95,8 +95,9 @@ class Network():
         return self.cur_time
 
     # @profile
-    def run_for_dur(self):
-        dur = self.senders[0].compute_mi_duration()
+    def run_for_dur(self, dur=None, action=0):
+        if dur is None:
+            dur = self.senders[0].compute_mi_duration()
         end_time = self.cur_time + dur
         # print(self.cur_time, dur)
         mi_id = self.senders[0].create_mi(self.cur_time, end_time)
@@ -125,9 +126,9 @@ class Network():
             new_latency = cur_latency
             new_dropped = dropped
             push_new_event = False
-            if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
-                sender.timeout()
-                new_dropped = True
+            # if rto >= 0 and cur_latency > rto:#  sender.timeout(cur_latency):
+            #     sender.timeout()
+            #     new_dropped = True
             # TODO: call TCP timeout logic
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -186,7 +187,7 @@ class Network():
 
             if push_new_event:
                 if new_event_type == EVENT_TYPE_SEND:
-                    assert new_event_time > self.cur_time
+                    # assert new_event_time > self.cur_time
                     heapq.heappush(self.q,
                                    (new_event_time, sender, new_event_type,
                                     new_next_hop, new_latency, new_dropped,
@@ -194,7 +195,7 @@ class Network():
                     rto = sender.rto
                     self.event_count += 1
                 elif new_event_type == EVENT_TYPE_ACK:
-                    assert new_event_time > self.cur_time
+                    # assert new_event_time > self.cur_time
                     heapq.heappush(self.q,
                                    (new_event_time, sender, new_event_type,
                                     new_next_hop, new_latency, new_dropped,
@@ -239,8 +240,7 @@ class Network():
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
             self.links[0].bw, self.links[1].bw,
             send_throughput / (8 * BYTES_PER_PACKET),
-            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
-        self.cur_time = end_time
+            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency, action, self.links[0].get_cur_queue_delay(self.cur_time)/self.links[0].bw])
 
         # print(self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
         #     self.links[0].bw, self.links[1].bw,
@@ -264,7 +264,7 @@ class SimulatedNetworkEnv(gym.Env):
     def __init__(self, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
                  congestion_control_type="rl", log_dir="", duration=None,
-                 max_steps=400):
+                 max_steps=400, train_flag=False):
         """Network environment used in simulation.
         congestion_control_type: rl is pcc-rl. cubic is TCPCubic.
         """
@@ -272,6 +272,7 @@ class SimulatedNetworkEnv(gym.Env):
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
         random.seed(42)
+        self.train_flag = train_flag
         self.duration = duration
         self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
@@ -330,7 +331,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.writer = csv.writer(open(os.path.join(self.log_dir, 'aurora_test_log.csv'), 'w'), lineterminator='\n')
         self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
                          'link0_bw', 'link1_bw', "send_throughput",
-                         'throughput', 'reward', 'loss', 'latency'])
+                         'throughput', 'reward', 'loss', 'latency', 'action', 'queue_delay'])
 
     def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
         self.min_bw = min_bw
@@ -371,7 +372,7 @@ class SimulatedNetworkEnv(gym.Env):
             valid = sender.has_finished_mi()
         #print("Running for %fs" % self.run_dur)
         sender_obs = self._get_all_sender_obs()
-        reward = self.net.run_for_dur()
+        reward = self.net.run_for_dur(action=action[0])
         sender_mi = self.senders[0].get_run_data()
         self.steps_taken += 1
         event = {}
@@ -388,6 +389,7 @@ class SimulatedNetworkEnv(gym.Env):
         event["Send Ratio"] = sender_mi.get("send ratio")
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
+        # print("before append", event['Send Rate']/1500/8)
         self.event_record["Events"].append(event)
         # if event["Latency"] > 0.0:
         #     self.run_dur = max(0.5 * sender_mi.get("avg latency"),
@@ -428,16 +430,17 @@ class SimulatedNetworkEnv(gym.Env):
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "rl":
-            self.senders = [Sender(START_SENDING_RATE,
-                                   # TODO: check dest
-                                   [self.links[0], self.links[1]], 0,
-                                   self.features,
-                                   history_len=self.history_len)]
-            # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
-            #                        [self.links[0], self.links[1]], 0,
-            #                        self.features,
-            #                        history_len=self.history_len)]
-            # else:
+            if not self.train_flag:
+                self.senders = [Sender(START_SENDING_RATE,
+                                       # TODO: check dest
+                                       [self.links[0], self.links[1]], 0,
+                                       self.features,
+                                       history_len=self.history_len)]
+            else:
+                self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                                       [self.links[0], self.links[1]], 0,
+                                       self.features,
+                                       history_len=self.history_len)]
         elif self.congestion_control_type == "cubic":
             self.senders = [TCPCubicSender(10,
                                           [self.links[0], self.links[1]], 0,
@@ -459,7 +462,7 @@ class SimulatedNetworkEnv(gym.Env):
         #     self.dump_events_to_file(
         #         os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
         self.event_record = {"Events": []}
-        self.net.run_for_dur()
+        self.net.run_for_dur(3* self.links[0].dl)
         # self.net.run_for_dur()
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
@@ -482,9 +485,10 @@ class SimulatedNetworkEnv(gym.Env):
             writer = csv.writer(f, lineterminator='\n')
             writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
                              'link0_bw', 'link1_bw', "send_throughput",
-                             'throughput', 'reward', 'loss', 'latency'])
+                             'throughput', 'reward', 'loss', 'latency',
+                             'action'])
 
-            writer.writerows(self.net.result_log)
+            # writer.writerows(self.net.result_log)
 
 
 register(id='PccNs-v0', entry_point='simulator.network_simulator.network:SimulatedNetworkEnv')
