@@ -70,16 +70,23 @@ def main():
                                     trace.bandwidths[0], trace.delay,
                                     trace.loss_rate, trace.queue_size))
         with open(log_path, 'w', 1) as f:
+            obs_header = []
+            for i in range(10):
+                obs_header.append("send_latency_ratio {}".format(i))
+                obs_header.append("latency_ratio {}".format(i))
+                obs_header.append("send_ratio {}".format(i))
+
             f.write("\t".join(['timestamp', 'reward',
                                'sending_rate', 'throughput', 'latency', 'loss',
-                               'action']) + "\n")
+                               'action'] + obs_header)+ "\n")
             for line in result:
-                f.write("{timestamp:.3f}\t{reward:.3f}\t{sending_rate:.3f}\t"
-                        "{throughput:.3f}\t{latency:.3f}\t{loss:.3f}\t"
-                        "{action:.3f}\n".format(
-                            timestamp=line[0], reward=line[1],
-                            sending_rate=line[2], throughput=line[3],
-                            latency=line[4], loss=line[5], action=line[6]))
+                log_line = "{timestamp:.3f}\t{reward:.3f}\t{sending_rate:.3f}\t" \
+                    "{throughput:.3f}\t{latency:.3f}\t{loss:.3f}\t" \
+                    "{action:.3f}\t".format(
+                        timestamp=line[0], reward=line[1],
+                        sending_rate=line[2], throughput=line[3],
+                        latency=line[4], loss=line[5], action=line[6]) + '\t'.join(["{:.3f}".format(ob) for ob in line[7]]) + "\n"
+                f.write(log_line)
 
 
 if __name__ == "__main__":
