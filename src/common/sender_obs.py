@@ -59,9 +59,8 @@ class SenderMonitorInterval():
         print('\tflow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {},\n'
               '\tsend_start_time: {}, send_end_time: {},\n\trecv_start_time: {}, '
               'recv_end_time: {},\n\trtt_samples: {}, packet: {}'.format(
-                  self.sender_id, self.bytes_sent * self.packet_size,
-                  self.bytes_acked * self.packet_size,
-                  self.bytes_lost * self.packet_size,
+                  self.sender_id, self.bytes_sent,
+                  self.bytes_acked, self.bytes_lost,
                   self.send_start, self.send_end, self.recv_start,
                   self.recv_end, np.mean(self.rtt_samples), self.packet_size),
               file=sys.stderr)
@@ -189,7 +188,8 @@ def _mi_metric_conn_min_latency(mi):
             _conn_min_latencies[mi.sender_id] = latency
             return latency
         else:
-            return 0.0
+            # return 0.0
+            return 1e4
 
 
 def _mi_metric_send_ratio(mi):

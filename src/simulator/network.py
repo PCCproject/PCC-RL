@@ -28,14 +28,14 @@ from gym.utils import seeding
 import ipdb
 import numpy as np
 
-from common import config, sender_obs
+from common import sender_obs
 from common.utils import write_json_file, read_json_file
 
 MAX_CWND = 5000
 MIN_CWND = 4
 
 MAX_RATE = 4000
-MIN_RATE = 40
+MIN_RATE = 10
 
 REWARD_SCALE = 0.001
 
@@ -52,29 +52,6 @@ MAX_LATENCY_NOISE = 1.1
 
 # DEBUG = True
 DEBUG = False
-
-
-# class RandomizationRanges():
-#     def __init__(self, filename):
-#         self.rand_ranges = read_json_file(filename)
-#
-#     def get_range(self, metric):
-#         # assume all ranges' probs are sorted
-#         rand_ranges = self.rand_ranges[metric]
-#         probs = [prob for _, _, prob in rand_ranges]
-#         idx = np.random.choice(np.arange(len(rand_ranges)), 1, probs)
-#         val_min, val_max, _ = rand_ranges[idx[0]]
-#         print(metric, "choose", val_min, val_max)
-#         return val_min, val_max
-#
-#     def add_range(self, metric, val_min, val_max, prob=0.3):
-#         new_range_list = [(val_min, val_max, prob)]
-#         for val_min, val_max, prob in self.rand_ranges[metric]:
-#             new_range_list.append((val_min, val_max, prob * 0.7))
-#         self.rand_ranges[metric] = sorted(new_range_list, key=itemgetter(2))
-#
-#     def dump_randomization_ranges(self, filename):
-#         write_json_file(filename, self.rand_ranges)
 
 
 class Link():
@@ -175,8 +152,17 @@ class Network():
             new_dropped = dropped
             push_new_event = False
             if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f, rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, pkt in flight %d, wait time %d" % (
-                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay, rto, sender.cwnd, sender.ssthresh, sender.rto, int(sender.bytes_in_flight/1500), sender.pkt_loss_wait_time))
+                print("Got %d event %s, to link %d, latency %f at time %f, "
+                      "next_hop %d, dropped %s, event_q length %f, "
+                      "sender rate %f, duration: %f, max_queue_delay: %f, "
+                      "rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, "
+                      "pkt in flight %d, wait time %d" % (
+                          event_id, event_type, next_hop, cur_latency,
+                          event_time, next_hop, dropped, len(self.q),
+                          sender.rate, dur, self.links[0].max_queue_delay, rto,
+                          sender.cwnd, sender.ssthresh, sender.rto,
+                          int(sender.bytes_in_flight/1500),
+                          sender.pkt_loss_wait_time))
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
@@ -302,8 +288,10 @@ class Network():
 
 class Sender():
 
-    def __init__(self, rate, path, dest, features, cwnd=25, history_len=10):
+    def __init__(self, rate, path, dest, features, cwnd=25, history_len=10,
+                 delta_scale=0.05):
         self.id = Sender._get_next_id()
+        self.delta_scale = delta_scale
         self.starting_rate = rate
         self.rate = rate
         self.sent = 0
@@ -333,7 +321,7 @@ class Sender():
         return result
 
     def apply_rate_delta(self, delta):
-        delta *= config.DELTA_SCALE
+        delta *= self.delta_scale
         #print("Applying delta %f" % delta)
         if delta >= 0.0:
             self.set_rate(self.rate * (1.0 + delta))
@@ -341,7 +329,7 @@ class Sender():
             self.set_rate(self.rate / (1.0 - delta))
 
     def apply_cwnd_delta(self, delta):
-        delta *= config.DELTA_SCALE
+        delta *= self.delta_scale
         #print("Applying delta %f" % delta)
         if delta >= 0.0:
             self.set_cwnd(self.cwnd * (1.0 + delta))
@@ -403,6 +391,9 @@ class Sender():
         #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
+        rtt_samples = self.rtt_samples if self.rtt_samples else self.prev_rtt_samples
+        # TODO: rtt_samples is empty when there is no packet acked in MI
+        # Solution: inherit from previous rtt_samples.
 
         return sender_obs.SenderMonitorInterval(
             self.id,
@@ -413,7 +404,7 @@ class Sender():
             send_end=obs_end_time,
             recv_start=self.obs_start_time,
             recv_end=obs_end_time,
-            rtt_samples=self.rtt_samples,
+            rtt_samples=rtt_samples,
             packet_size=BYTES_PER_PACKET
         )
 
@@ -666,7 +657,9 @@ class SimulatedNetworkEnv(gym.Env):
 
     def __init__(self, traces, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
-                 congestion_control_type="aurora", log_dir="", train_flag=False):
+                 congestion_control_type="aurora", log_dir="", train_flag=False,
+                 delta_scale=1.0):
+                 # delta_scale=0.05):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
@@ -674,6 +667,7 @@ class SimulatedNetworkEnv(gym.Env):
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
         random.seed(42)
+        self.delta_scale = delta_scale
         self.traces = traces
         self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
@@ -723,7 +717,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.episodes_run = -1
 
         self.writer = csv.writer(open(os.path.join(self.log_dir, '{}_test_log.csv'.format(
-            self.congestion_control_type)), 'w'), lineterminator='\n')
+            self.congestion_control_type)), 'w', 1), lineterminator='\n')
         self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
                               'link0_bw', 'link1_bw', "send_throughput",
                               'throughput', 'reward', 'loss', 'latency',
@@ -770,7 +764,7 @@ class SimulatedNetworkEnv(gym.Env):
         #event["Cwnd"] = sender_mi.cwnd
         #event["Cwnd Used"] = sender_mi.cwnd_used
         event["Timestamp"] = self.net.get_cur_time()
-        event["Action"] = self.net.get_cur_time()
+        event["Action"] = actions[0]
         self.event_record["Events"].append(event)
         if event["Latency"] > 0.0:
             self.run_dur = 0.5 * sender_mi.get("avg latency")
@@ -791,7 +785,7 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
-        bw = self.current_trace.get_bandwidth(0) * 1e6 / 8 /BYTES_PER_PACKET
+        bw = self.current_trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET
         lat = self.current_trace.get_delay() / 1000
         queue = self.current_trace.get_queue_size()
         loss = self.current_trace.get_loss_rate()
@@ -800,12 +794,22 @@ class SimulatedNetworkEnv(gym.Env):
             if not self.train_flag:
                 self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
                                        self.features,
-                                       history_len=self.history_len)]
+                                       history_len=self.history_len,
+                                       delta_scale=self.delta_scale)]
             else:
-                self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                #                        [self.links[0], self.links[1]], 0,
+                #                        self.features,
+                #                        history_len=self.history_len)]
+                # self.senders = [Sender(random.uniform(10/bw, 1.5) * bw,
+                #                        [self.links[0], self.links[1]], 0,
+                #                        self.features,
+                #                        history_len=self.history_len)]
+                self.senders = [Sender(10,
                                        [self.links[0], self.links[1]], 0,
                                        self.features,
-                                       history_len=self.history_len)]
+                                       history_len=self.history_len,
+                                       delta_scale=self.delta_scale)]
         elif self.congestion_control_type == "cubic":
             self.senders = [TCPCubicSender(10,
                                            [self.links[0], self.links[1]], 0,
@@ -814,7 +818,8 @@ class SimulatedNetworkEnv(gym.Env):
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
-        self.run_dur = 3 * lat
+        # self.run_dur = 3 * lat
+        self.run_dur = 1 * lat
         # print("lat is", lat, "run_dur" ,self.run_dur)
 
     def reset(self):
@@ -824,15 +829,15 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
-        if self.episodes_run > 0 and self.episodes_run % 100 == 0:
-            self.dump_events_to_file(
-                os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
+        # if self.episodes_run > 0 and self.episodes_run % 100 == 0:
+        #     self.dump_events_to_file(
+        #         os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
         self.event_record = {"Events": []}
-        self.net.run_for_dur(self.run_dur)
-        self.net.run_for_dur(self.run_dur)
+        # self.net.run_for_dur(self.run_dur)
+        # self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
-        # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
+        print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
 
