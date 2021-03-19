@@ -23,6 +23,7 @@ from stable_baselines.bench import Monitor
 
 from common.utils import read_json_file, set_tf_loglevel
 from simulator import network
+from simulator.trace import generate_trace
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 set_tf_loglevel(logging.FATAL)
@@ -116,15 +117,15 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             for idx, val_env in enumerate(self.val_envs):
                 # print("{}/{} start".format(idx +1, len(self.val_envs)) )
                 # t_start = time.time()
-                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list = test(
+                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list = test(
                     self.model, val_env)
                 # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
                 avg_rewards.append(np.mean(np.array(val_rewards)))
                 avg_losses.append(np.mean(np.array(loss_list)))
-                avg_tputs.append(float(np.mean(np.array(tput_list))) / 1e6)
+                avg_tputs.append(float(np.mean(np.array(tput_list))))
                 avg_delays.append(np.mean(np.array(delay_list)))
                 avg_send_rates.append(
-                    float(np.mean(np.array(send_rate_list)))/1e6)
+                    float(np.mean(np.array(send_rate_list))))
             self.val_log_writer.writerow(
                 map(lambda t: "%.3f" % t,
                     [float(self.n_calls), float(self.num_timesteps),
@@ -181,15 +182,16 @@ def save_model_to_serve(model, export_dir):
 
 
 class Aurora():
-    def __init__(self, training_traces, seed, log_dir, timesteps_per_actorbatch,
-                 pretrained_model_path=None, gamma=0.99):
+    def __init__(self, seed, log_dir, timesteps_per_actorbatch,
+                 pretrained_model_path=None, gamma=0.99, tensorboard_log=None,
+                 delta_scale=0.05):
+        self.delta_scale = delta_scale
         self.seed = seed
-        env = gym.make('PccNs-v0', traces=training_traces,
-                       log_dir=log_dir, train_flag=True)
-        env.seed(seed)
-        env = Monitor(env, log_dir)
         self.log_dir = log_dir
         self.steps_trained = 0
+        dummy_trace = generate_trace(10, (2, 2), (50, 50), (0, 0), (100, 100))
+        env = gym.make('PccNs-v0', traces=[dummy_trace], log_dir=self.log_dir,
+                       train_flag=True, delta_scale=self.delta_scale)
         # Load pretrained model
         if pretrained_model_path is not None:
             if pretrained_model_path.endswith('.ckpt'):
@@ -198,8 +200,8 @@ class Aurora():
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
                                       timesteps_per_actorbatch/4),
-                                  optim_epochs=4,
-                                  gamma=gamma, tensorboard_log="./aurora_tensorboard/")
+                                  optim_epochs=12,
+                                  gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=4)
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.restore(self.model.sess, pretrained_model_path)
@@ -216,17 +218,25 @@ class Aurora():
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
                               optim_batchsize=int(timesteps_per_actorbatch/4),
-                              optim_epochs=4,
-                              gamma=gamma, tensorboard_log="./aurora_tensorboard/")
+                              optim_epochs=12,
+                              gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=4)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
-    def train(self, validation_traces, total_timesteps, tb_log_name=""):
+    def train(self, training_traces, validation_traces, total_timesteps,
+              tb_log_name=""):
         assert isinstance(self.model, PPO1)
+        env = gym.make('PccNs-v0', traces=training_traces,
+                       log_dir=self.log_dir, train_flag=True,
+                       delta_scale=self.delta_scale)
+        env.seed(self.seed)
+        env = Monitor(env, self.log_dir)
+        self.model.set_env(env)
 
         val_envs = []
         for _, trace in enumerate(validation_traces):
             tmp_env = gym.make(
-                'PccNs-v0', traces=[trace], log_dir=self.log_dir)
+                'PccNs-v0', traces=[trace], log_dir=self.log_dir,
+                delta_scale=self.delta_scale)
             tmp_env.seed(self.seed)
             val_envs.append(tmp_env)
 
@@ -240,15 +250,14 @@ class Aurora():
     def test(self, traces):
         results = []
         for _, trace in enumerate(traces):
-            tmp_env = gym.make(
-                'PccNs-v0', traces=[trace], log_dir=self.log_dir)
-            tmp_env.seed(self.seed)
+            env = gym.make('PccNs-v0', traces=[trace], log_dir=self.log_dir,
+                           delta_scale=self.delta_scale)
+            env.seed(self.seed)
 
-            ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list = test(
-                self.model, tmp_env)
-            result = list(zip(reward_list, loss_list, tput_list,
-                              delay_list, send_rate_list))
-            # envs.append(tmp_env)
+            ts_list, reward_list, loss_list, tput_list, delay_list, \
+                send_rate_list, action_list, obs_list = test(self.model, env)
+            result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+                              delay_list, loss_list, action_list, obs_list))
             results.append(result)
         return results
 
@@ -260,14 +269,16 @@ class Aurora():
 
 
 def test(model, env, env_id=0):
-    reward_list = []
-    loss_list = []
-    tput_list = []
-    delay_list = []
-    send_rate_list = []
-    ts_list = []
-    action_list = []
+    reward_list = [0]
+    loss_list = [0]
+    tput_list = [0]
+    delay_list = [0]
+    send_rate_list = [0]
+    ts_list = [0]
+    action_list = [0]
+    obs_list = []
     obs = env.reset()
+    obs_list.append(obs.tolist())
     while True:
         if isinstance(model, LoadedModel):
             obs = obs.reshape(1, -1)
@@ -279,13 +290,14 @@ def test(model, env, env_id=0):
         reward_list.append(rewards)
         last_event = env.event_record['Events'][-1]
         loss_list.append(last_event['Loss Rate'])
-        delay_list.append(last_event['Latency'])
-        tput_list.append(last_event['Throughput'])
-        send_rate_list.append(last_event['Send Rate'])
+        delay_list.append(last_event['Latency'] * 1000)
+        tput_list.append(last_event['Throughput'] / 1e6)
+        send_rate_list.append(last_event['Send Rate']/ 1e6)
         ts_list.append(last_event['Timestamp'])
         action_list.append(last_event['Action'])
+        obs_list.append(obs.tolist())
         if dones:
             break
     # env.dump_events_to_file(os.path.join(
     #     env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
-    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list
+    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list

@@ -59,6 +59,8 @@ def parse_args():
                         help='trace duration. Unit: second.')
     parser.add_argument("--tensorboard-log", type=str, default=None,
                         help="tensorboard log direcotry.")
+    parser.add_argument("--delta-scale", type=float, default=0.05,
+                        help="delta scale.")
 
     return parser.parse_args()
 
@@ -104,7 +106,8 @@ def main():
     # Initialize model and agent policy
     aurora = Aurora(args.seed, args.save_dir, 7200,
                     args.pretrained_model_path,
-                    tensorboard_log=args.tensorboard_log)
+                    tensorboard_log=args.tensorboard_log,
+                    delta_scale=args.delta_scale)
     aurora.train(training_traces, validation_traces, args.total_timesteps, args.exp_name)
 
     # with model.graph.as_default():
