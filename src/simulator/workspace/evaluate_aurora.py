@@ -41,6 +41,8 @@ def parse_args():
                         help="Constant random loss of uplink.")
     parser.add_argument('--queue', type=int, default=100,
                         help="Uplink queue size. Unit: packets.")
+    parser.add_argument('--delta-scale', type=float, default=0.05,
+                        help="Environment delta scale.")
 
     return parser.parse_args()
 
@@ -61,7 +63,8 @@ def main():
 
     aurora = Aurora(args.seed, timesteps_per_actorbatch=10,
                     log_dir=args.save_dir,
-                    pretrained_model_path=args.model_path)
+                    pretrained_model_path=args.model_path,
+                    delta_scale=args.delta_scale)
     results = aurora.test(test_traces)
 
     for _, (trace, result) in enumerate(zip(test_traces, results)):
