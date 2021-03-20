@@ -188,6 +188,7 @@ class Aurora():
         self.delta_scale = delta_scale
         self.seed = seed
         self.log_dir = log_dir
+        self.pretrained_model_path = pretrained_model_path
         self.steps_trained = 0
         dummy_trace = generate_trace(10, (2, 2), (50, 50), (0, 0), (100, 100))
         env = gym.make('PccNs-v0', traces=[dummy_trace], log_dir=self.log_dir,

@@ -189,7 +189,7 @@ class Network():
                     # ipdb.set_trace()
                     # sender.on_packet_lost(cur_latency)
                     if rto >= 0 and cur_latency > rto and sender.pkt_loss_wait_time <= 0:
-                        print("timeout {}\t{}\t{}".format(self.cur_time, cur_latency, rto))
+                        # print("timeout {}\t{}\t{}".format(self.cur_time, cur_latency, rto))
                         sender.timeout()
                         dropped = True
                         new_dropped = True
@@ -603,9 +603,9 @@ class TCPCubicSender(Sender):
                 avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
             self.rate = self.cwnd / avg_sampled_rtt
             self.pkt_loss_wait_time = int(self.cwnd)
-            print("{:.5f}\tloss\t{:.5f}\t{}\tpkt loss wait time={}".format(
-                self.net.get_cur_time(), self.rate,
-                self.timeout_cnt, self.pkt_loss_wait_time), file=sys.stderr,)
+            # print("{:.5f}\tloss\t{:.5f}\t{}\tpkt loss wait time={}".format(
+            #     self.net.get_cur_time(), self.rate,
+            #     self.timeout_cnt, self.pkt_loss_wait_time), file=sys.stderr,)
 
     def cubic_update(self):
         self.ack_cnt += 1
