@@ -167,15 +167,12 @@ class Network():
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
                     #     sender.timeout(cur_latency)
-                    # import ipdb
-                    # ipdb.set_trace()
                     # sender.on_packet_lost(cur_latency)
                     if rto >= 0 and cur_latency > rto and sender.pkt_loss_wait_time <= 0:
                         # print("timeout {}\t{}\t{}".format(self.cur_time, cur_latency, rto))
                         sender.timeout()
                         dropped = True
                         new_dropped = True
-                        # ipdb.set_trace()
                     # TODO: call TCP timeout logic
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
@@ -837,7 +834,7 @@ class SimulatedNetworkEnv(gym.Env):
         # self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
-        print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
+        # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
 
