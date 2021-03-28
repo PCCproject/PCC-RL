@@ -30,6 +30,7 @@ class SenderMonitorInterval():
                  recv_start=0.0,
                  recv_end=0.0,
                  rtt_samples=[],
+                 queue_delay_samples=[],
                  packet_size=1500):
         self.features = {}
         self.sender_id = sender_id
@@ -42,6 +43,7 @@ class SenderMonitorInterval():
         self.recv_end = recv_end
         self.rtt_samples = rtt_samples
         self.packet_size = packet_size
+        self.queue_delay_samples = queue_delay_samples
 
     def get(self, feature):
         if feature in self.features.keys():
@@ -136,6 +138,11 @@ def _mi_metric_avg_latency(mi):
         return np.mean(mi.rtt_samples)
     return 0.0
 
+def _mi_metric_avg_queue_delay(mi):
+    if len(mi.queue_delay_samples) > 0:
+        return np.mean(mi.queue_delay_samples)
+    return 0.0
+
 def _mi_metric_send_rate(mi):
     dur = mi.get("send dur")
     if dur > 0.0:
@@ -212,6 +219,7 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("recv dur", _mi_metric_recv_dur, 0.0, 100.0),
     SenderMonitorIntervalMetric("send dur", _mi_metric_send_dur, 0.0, 100.0),
     SenderMonitorIntervalMetric("avg latency", _mi_metric_avg_latency, 0.0, 100.0),
+    SenderMonitorIntervalMetric("avg queue delay", _mi_metric_avg_queue_delay, 0.0, 100.0),
     SenderMonitorIntervalMetric("loss ratio", _mi_metric_loss_ratio, 0.0, 1.0),
     SenderMonitorIntervalMetric("ack latency inflation", _mi_metric_ack_latency_inflation, -1.0, 10.0),
     SenderMonitorIntervalMetric("sent latency inflation", _mi_metric_sent_latency_inflation, -1.0, 10.0),
