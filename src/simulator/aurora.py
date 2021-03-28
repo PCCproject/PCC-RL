@@ -117,7 +117,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             for idx, val_env in enumerate(self.val_envs):
                 # print("{}/{} start".format(idx +1, len(self.val_envs)) )
                 # t_start = time.time()
-                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list = test(
+                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list = test(
                     self.model, val_env)
                 # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
                 avg_rewards.append(np.mean(np.array(val_rewards)))
@@ -256,9 +256,9 @@ class Aurora():
             env.seed(self.seed)
 
             ts_list, reward_list, loss_list, tput_list, delay_list, \
-                send_rate_list, action_list, obs_list = test(self.model, env)
+                send_rate_list, action_list, obs_list, mi_list = test(self.model, env)
             result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
-                              delay_list, loss_list, action_list, obs_list))
+                              delay_list, loss_list, action_list, obs_list, mi_list))
             results.append(result)
         return results
 
@@ -277,6 +277,7 @@ def test(model, env, env_id=0):
     send_rate_list = [0]
     ts_list = [0]
     action_list = [0]
+    mi_list = []
     obs_list = []
     obs = env.reset()
     obs_list.append(obs.tolist())
@@ -296,9 +297,10 @@ def test(model, env, env_id=0):
         send_rate_list.append(last_event['Send Rate']/ 1e6)
         ts_list.append(last_event['Timestamp'])
         action_list.append(last_event['Action'])
+        mi_list.append(last_event['MI'])
         obs_list.append(obs.tolist())
         if dones:
             break
     # env.dump_events_to_file(os.path.join(
     #     env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
-    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list
+    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list

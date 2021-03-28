@@ -79,16 +79,16 @@ def main():
                 obs_header.append("latency_ratio {}".format(i))
                 obs_header.append("send_ratio {}".format(i))
 
-            f.write("\t".join(['timestamp', 'reward',
-                               'sending_rate', 'throughput', 'latency', 'loss',
+            f.write("\t\t".join(['ts', 'mi', 'reward',
+                               'send_rate', 'throughput', 'latency', 'loss',
                                'action'] + obs_header)+ "\n")
             for line in result:
-                log_line = "{timestamp:.3f}\t{reward:.3f}\t{sending_rate:.3f}\t" \
-                    "{throughput:.3f}\t{latency:.3f}\t{loss:.3f}\t" \
-                    "{action:.3f}\t".format(
-                        timestamp=line[0], reward=line[1],
+                log_line = "{timestamp:.3f}\t\t{mi:.3f}\t\t{reward:.3f}\t\t{sending_rate:.3f}\t\t" \
+                    "{throughput:.3f}\t\t{latency:.3f}\t\t{loss:.3f}\t\t" \
+                    "{action:.3f}\t\t".format(
+                        timestamp=line[0], mi=line[8], reward=line[1],
                         sending_rate=line[2], throughput=line[3],
-                        latency=line[4], loss=line[5], action=line[6]) + '\t'.join(["{:.3f}".format(ob) for ob in line[7]]) + "\n"
+                        latency=line[4], loss=line[5], action=line[6]) + '\t\t'.join(["{:.3f}".format(ob) for ob in line[7]]) + "\n"
                 f.write(log_line)
 
 

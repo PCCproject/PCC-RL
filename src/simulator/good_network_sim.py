@@ -58,29 +58,6 @@ MAX_LATENCY_NOISE = 1.1
 DEBUG = False
 
 
-class RandomizationRanges():
-    def __init__(self, filename):
-        self.rand_ranges = read_json_file(filename)
-
-    def get_range(self, metric):
-        # assume all ranges' probs are sorted
-        rand_ranges = self.rand_ranges[metric]
-        probs = [prob for _, _, prob in rand_ranges]
-        idx = np.random.choice(np.arange(len(rand_ranges)), 1, probs)
-        val_min, val_max, _ = rand_ranges[idx[0]]
-        print(metric, "choose", val_min, val_max)
-        return val_min, val_max
-
-    def add_range(self, metric, val_min, val_max, prob=0.3):
-        new_range_list = [(val_min, val_max, prob)]
-        for val_min, val_max, prob in self.rand_ranges[metric]:
-            new_range_list.append((val_min, val_max, prob * 0.7))
-        self.rand_ranges[metric] = sorted(new_range_list, key=itemgetter(2))
-
-    def dump_randomization_ranges(self, filename):
-        write_json_file(filename, self.rand_ranges)
-
-
 class Link():
 
     def __init__(self, bandwidth, delay, queue_size, loss_rate):
@@ -150,8 +127,8 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (1.0 / sender.rate, sender,
-                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto))
+            heapq.heappush(self.q, (0, sender,
+                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
             self.event_count += 1
 
     def reset(self):
@@ -169,13 +146,14 @@ class Network():
         for sender in self.senders:
             sender.reset_obs()
         while self.cur_time < end_time:
-            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto = heapq.heappop(
+            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto, pkt_queue_delay = heapq.heappop(
                 self.q)
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
             new_next_hop = next_hop
             new_latency = cur_latency
+            new_pkt_queue_delay = pkt_queue_delay
             new_dropped = dropped
             push_new_event = False
             if DEBUG:
@@ -199,10 +177,12 @@ class Network():
                         sender.on_packet_lost(cur_latency)
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
-                        sender.on_packet_acked(cur_latency)
+                        sender.on_packet_acked(cur_latency, pkt_queue_delay)
                         # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                 else:
                     new_next_hop = next_hop + 1
+                    new_pkt_queue_delay += sender.path[next_hop].get_cur_queue_delay(
+                        self.cur_time)
                     link_latency = sender.path[next_hop].get_cur_latency(
                         self.cur_time)
                     if USE_LATENCY_NOISE:
@@ -217,7 +197,7 @@ class Network():
                         sender.on_packet_sent()
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
-                                            EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto))
+                                            EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
                     self.event_count += 1
 
                 else:
@@ -227,6 +207,8 @@ class Network():
                     new_event_type = EVENT_TYPE_ACK
                 new_next_hop = next_hop + 1
 
+                new_pkt_queue_delay += sender.path[next_hop].get_cur_queue_delay(
+                    self.cur_time)
                 link_latency = sender.path[next_hop].get_cur_latency(
                     self.cur_time)
                 if USE_LATENCY_NOISE:
@@ -244,12 +226,13 @@ class Network():
                 elif new_event_type == EVENT_TYPE_ACK:
                     event_id_push = event_id
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
-                                        new_next_hop, new_latency, new_dropped, event_id_push, rto))
+                                        new_next_hop, new_latency, new_dropped, event_id_push, rto, new_pkt_queue_delay))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
         send_throughput = sender_mi.get("send rate")  # bits/sec
         latency = sender_mi.get("avg latency")
+        avg_queue_delay = sender_mi.get("avg queue delay")
         loss = sender_mi.get("loss ratio")
         bw_cutoff = self.links[0].bw * 0.8
         lat_cutoff = 2.0 * self.links[0].dl * 1.5
@@ -288,8 +271,7 @@ class Network():
             send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
-            action,
-            self.links[0].get_cur_queue_delay(self.cur_time)/self.links[0].bw])
+            action, avg_queue_delay])
         # print(self.cur_time)
 
         # High thpt
@@ -316,6 +298,7 @@ class Sender():
         self.bytes_in_flight = 0
         self.min_latency = None
         self.rtt_samples = []
+        self.queue_delay_samples = []
         self.prev_rtt_samples = self.rtt_samples
         self.sample_time = []
         self.net = None
@@ -367,9 +350,10 @@ class Sender():
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
 
-    def on_packet_acked(self, rtt):
+    def on_packet_acked(self, rtt, queue_delay):
         self.acked += 1
         self.rtt_samples.append(rtt)
+        self.queue_delay_samples.append(queue_delay)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
@@ -421,6 +405,7 @@ class Sender():
             recv_start=self.obs_start_time,
             recv_end=obs_end_time,
             rtt_samples=self.rtt_samples,
+            queue_delay_samples=self.queue_delay_samples,
             packet_size=BYTES_PER_PACKET
         )
 
@@ -431,6 +416,7 @@ class Sender():
         if self.rtt_samples:
             self.prev_rtt_samples = self.rtt_samples
         self.rtt_samples = []
+        self.queue_delay_samples = []
         self.obs_start_time = self.net.get_cur_time()
 
     def print_debug(self):
@@ -533,7 +519,7 @@ class TCPCubicSender(Sender):
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
 
-    def on_packet_acked(self, rtt):
+    def on_packet_acked(self, rtt, queue_delay):
         self.acked += 1
         self.bytes_in_flight -= BYTES_PER_PACKET
 
@@ -559,6 +545,7 @@ class TCPCubicSender(Sender):
             self.pkt_loss_wait_time -= 1
         # else:
         self.rtt_samples.append(rtt)
+        self.queue_delay_samples.append(queue_delay)
         # TODO: update RTO
         if self.srtt is None:
             self.srtt = rtt
@@ -818,7 +805,7 @@ class SimulatedNetworkEnv(gym.Env):
         #event["Cwnd Used"] = sender_mi.cwnd_used
         self.event_record["Events"].append(event)
         if event["Latency"] > 0.0:
-            self.run_dur = 0.5 * sender_mi.get("avg latency")
+            self.run_dur = 1.0 * sender_mi.get("avg latency")
         #print("Sender obs: %s" % sender_obs)
 
         if self.duration is None:
@@ -891,8 +878,8 @@ class SimulatedNetworkEnv(gym.Env):
             self.dump_events_to_file(
                 os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
         self.event_record = {"Events": []}
-        self.net.run_for_dur(self.run_dur)
-        self.net.run_for_dur(self.run_dur)
+        # self.net.run_for_dur(self.run_dur)
+        # self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
         # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
