@@ -3,10 +3,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import argparse
+
+
+# def parse_args():
+
 plt.figure()
 for bw in [100, 1000, 1500, 2000, 3000, 5000]:
-        df = pd.read_csv('../../results/rand_bw/bw_50_{}/validation_log.csv'.format(bw))
+        # df = pd.read_csv('../../results/rand_bw/bw_50_{}/validation_log.csv'.format(bw))
+        df = pd.read_csv('../../results/rand_4_dims_2mbps_default_sim/range_0/validation_log.csv', sep='\t')
         plt.plot(df['n_calls'], df['mean_validation_reward'], 'o-', label=str(bw))
+        df = pd.read_csv('../../results/rand_4_dims_2mbps_default_sim/range_2/validation_log.csv', sep='\t')
+        plt.plot(df['n_calls'], df['mean_validation_reward'], 'o-', label='range_2')
+        df = pd.read_csv('./bo_range_1/validation_log.csv', sep='\t')
+        plt.plot(df['n_calls'], df['mean_validation_reward'], 'o-', label='bo_range_1')
 plt.legend()
 #
 # fig, axes = plt.subplots(2, 5, figsize=(20, 6))
@@ -16,12 +26,12 @@ plt.legend()
 #     plt.plot()
 
 # for step in [10000, 100000, 500000, 1000000, 2000000]:
-plt.figure()
-for seed in [42, 43, 44, 45, 46]:
-    for step in [5000000]:
-        df = pd.read_csv('../../results/train_{}_steps_fixed_seed_{}_fixed_send_rate/validation_log.csv'.format(step, seed))
-        plt.plot(df['n_calls'], df['mean_validation_reward'], 'o-', label=str(step) + ', seed ' + str(seed))
-plt.legend()
+# plt.figure()
+# for seed in [42, 43, 44, 45, 46]:
+#     for step in [5000000]:
+#         df = pd.read_csv('../../results/train_{}_steps_fixed_seed_{}_fixed_send_rate/validation_log.csv'.format(step, seed))
+#         plt.plot(df['n_calls'], df['mean_validation_reward'], 'o-', label=str(step) + ', seed ' + str(seed))
+# plt.legend()
 
 # fig, axes = plt.subplots(2, 5, figsize=(20, 6))
 #
