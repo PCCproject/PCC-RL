@@ -65,16 +65,20 @@ class Link():
         self.trace = trace
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
-        self.max_queue_delay = self.trace.get_queue_size() / self.get_bandwidth(0)
+        # self.max_queue_delay = self.trace.get_queue_size() / self.get_bandwidth(0)
 
         self.queue_size = self.trace.get_queue_size()
+        self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
         cur_queue_delay = max(0.0, self.queue_delay -
                               (event_time - self.queue_delay_update_time))
-        # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
-        #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
-        # print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
+        # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time:
+        # {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size:
+        # {}'.format( event_time, self.queue_delay,
+        # self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay,
+        # self.bw, self.queue_size)) print("{}\t{}".format(event_time,
+        # cur_queue_delay), file=sys.stderr)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -86,14 +90,21 @@ class Link():
         if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
+        self.pkt_in_queue = max(0, self.pkt_in_queue -
+                                (event_time - self.queue_delay_update_time) *
+                                self.get_bandwidth(event_time))
         self.queue_delay_update_time = event_time
         extra_delay = 1.0 / self.get_bandwidth(event_time)
-        # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
-        if extra_delay + self.queue_delay > self.max_queue_delay:
-            # print("{}\tDrop!".format(event_time), file=sys.stderr)
+        # print("Time: {},  Extra delay:{}, Current queue delay: {}, Max delay: {}, packets in queue: {}".format(
+        #     event_time, extra_delay, self.queue_delay, self.max_queue_delay, self.pkt_in_queue))
+        # if extra_delay + self.queue_delay > self.max_queue_delay:
+        #     print("{}\tDrop!".format(event_time))
+        #     return False
+        if 1 + self.pkt_in_queue > self.queue_size:
+            # print("{}\tDrop!".format(event_time))
             return False
         self.queue_delay += extra_delay
-        # print("\tNew delay = {}".format(self.queue_delay))
+        self.pkt_in_queue += 1
         return True
 
     def print_debug(self):
@@ -101,7 +112,7 @@ class Link():
         print("Bandwidth: %.3fMbps" % (self.trace.get_bandwidth(0)))
         print("Delay: %.3fms" % (self.trace.get_delay()))
         print("Queue Delay: %.3fms" % (self.queue_delay * 1000))
-        print("Max Queue Delay: %.3fms" % (self.max_queue_delay * 1000))
+        # print("Max Queue Delay: %.3fms" % (self.max_queue_delay * 1000))
         print("One Packet Queue Delay: %.3fms" % (
             1000.0 * 1 / (self.trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET)))
         print("Queue size: %dpackets" % self.queue_size)
@@ -110,6 +121,7 @@ class Link():
     def reset(self):
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
+        self.pkt_in_queue = 0
 
     def get_bandwidth(self, ts):
         return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
@@ -168,14 +180,14 @@ class Network():
             push_new_event = False
             debug_print("Got %d event %s, to link %d, latency %f at time %f, "
                         "next_hop %d, dropped %s, event_q length %f, "
-                        "sender rate %f, duration: %f, max_queue_delay: %f, "
+                        "sender rate %f, duration: %f, queue_size: %f, "
                         "rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, "
                         "pkt in flight %d, wait time %d" % (
                             event_id, event_type, next_hop, cur_latency,
                             event_time, next_hop, dropped, len(self.q),
-                            sender.rate, dur, self.links[0].max_queue_delay,
+                            sender.rate, dur, self.links[0].queue_size,
                             rto, sender.cwnd, sender.ssthresh, sender.rto,
-                            int(sender.bytes_in_flight/1500),
+                            int(sender.bytes_in_flight/BYTES_PER_PACKET),
                             sender.pkt_loss_wait_time))
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
@@ -210,10 +222,12 @@ class Network():
                 if next_hop == 0:
                     if sender.can_send_packet():
                         sender.on_packet_sent()
-                        debug_print('Send packet at {}'.format(self.cur_time))
+                        # print('Send packet at {}'.format(self.cur_time))
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
-                                            EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
+                                            sender, EVENT_TYPE_SEND, 0, 0.0,
+                                            False, self.event_count, sender.rto,
+                                            0))
                     self.event_count += 1
 
                 else:
@@ -235,16 +249,9 @@ class Network():
                     self.cur_time)
 
             if push_new_event:
-                if new_event_type == EVENT_TYPE_SEND:
-                    event_id_push = self.event_count
-                    rto = sender.rto
-                    self.event_count += 1
-                elif new_event_type == EVENT_TYPE_ACK:
-                    event_id_push = event_id
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
                                         new_next_hop, new_latency, new_dropped,
-                                        event_id_push, rto,
-                                        new_event_queue_delay))
+                                        event_id, rto, new_event_queue_delay))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
