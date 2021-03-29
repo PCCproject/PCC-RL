@@ -1,17 +1,18 @@
+from simulator.trace import generate_traces, generate_trace
+from simulator.aurora import Aurora
+from common.utils import natural_sort, read_json_file
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import glob
 import itertools
 import os
 import subprocess
 import time
-from typing import Literal
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from common.utils import natural_sort, read_json_file
-from simulator.aurora import Aurora
-from simulator.trace import generate_traces, generate_trace
+import matplotlib
+matplotlib.use('Agg')
 
 
 def parse_args():
@@ -28,6 +29,8 @@ def parse_args():
                         choices=["bandwidth", "delay", "loss", "queue"])
     parser.add_argument('--config-file', type=str, required=True,
                         help="config file")
+    parser.add_argument('--train-config-dir', type=str, default=None,
+                        help="path to one or more training configs.")
     parser.add_argument('--duration', type=int, required=True,
                         help="trace duration")
     parser.add_argument('--delta-scale', type=float, required=True,
@@ -123,9 +126,10 @@ def main():
     model_paths = args.model_path
     save_root = args.save_dir
     config_file = args.config_file
+    train_config_dir = args.train_config_dir
     print(metric, model_paths, save_root, config_file)
 
-    plt.figure()
+    plt.figure(figsize=(8, 8))
     config = read_json_file(config_file)
     print(config)
     bw_list = config['bandwidth']
@@ -199,18 +203,22 @@ def main():
         if model_idx == 0:
             plt.plot(config[metric], cubic_rewards, 'o-', c="C0",
                      label="TCP Cubic")
-        if model_name == 'range0':
-            env = 'bw=[2, 2]Mbps, delay=[50, 50]ms,\nloss=[0, 0], queue=[10, 10]packets'
-        elif model_name == 'range1':
-            env = 'bw=[1.2, 24]Mbps, delay=[20, 100]ms,\nloss=[0, 0.05], queue=[50, 1000]packets'
-        elif model_name == 'range2':
-            env = 'bw=[0.6, 48]Mbps, delay=[1, 200]ms,\nloss=[0, 0.1], queue=[1, 2000]packets'
+        if train_config_dir is not None:
+            train_config = read_json_file(os.path.join(
+                train_config_dir, model_name+'.json'))
+            env = 'bw=[{}, {}]Mbps, delay=[{}, {}]ms, loss=[{}, {}], queue=[{}, {}]pkt'.format(
+                train_config[0]['bandwidth'][0], train_config[0]['bandwidth'][1],
+                train_config[0]['delay'][0], train_config[0]['delay'][1],
+                train_config[0]['loss'][0], train_config[0]['loss'][1],
+                train_config[0]['queue'][0], train_config[0]['queue'][1])
         else:
-            raise RuntimeError
+            env = ""
+            # raise RuntimeError
         assert ls in {'', '-', '--', '-.', ':', None}
         plt.plot(config[metric], aurora_rewards, marker=marker,
                  linestyle=ls, c=color, label=model_name + ", " + env)
-    plt.legend()
+    plt.legend(bbox_to_anchor=(0.0,1.02,1,0.2), loc="lower left",
+               mode="expand", ncol=1, )
     if metric == "bandwidth":
         unit = "Mbps"
     elif metric == 'delay':
@@ -225,6 +233,7 @@ def main():
     plt.xlabel("{} ({})".format(metric, unit))
     plt.ylabel('Reward')
     # plt.ylabel('log(throughput) - log(delay)')
+    plt.tight_layout()
     plt.savefig(os.path.join(
         args.save_dir, "rand_{}_sim.png".format(metric)))
     plt.close()
