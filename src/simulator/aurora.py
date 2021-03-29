@@ -115,11 +115,9 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             avg_delays = []
             avg_send_rates = []
             for idx, val_env in enumerate(self.val_envs):
-                # print("{}/{} start".format(idx +1, len(self.val_envs)) )
-                # t_start = time.time()
-                ts_list, val_rewards, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list = test(
-                    self.model, val_env)
-                # print(val_env.links[0].print_debug(), "cost {:.3f}".format(time.time() - t_start))
+                ts_list, val_rewards, loss_list, tput_list, delay_list, \
+                    send_rate_list, action_list, obs_list, mi_list = test(
+                        self.model, val_env)
                 avg_rewards.append(np.mean(np.array(val_rewards)))
                 avg_losses.append(np.mean(np.array(loss_list)))
                 avg_tputs.append(float(np.mean(np.array(tput_list))))
@@ -190,7 +188,8 @@ class Aurora():
         self.log_dir = log_dir
         self.pretrained_model_path = pretrained_model_path
         self.steps_trained = 0
-        dummy_trace = generate_trace(10, (2, 2), (50, 50), (0, 0), (100, 100))
+        dummy_trace = generate_trace(
+            (10, 10), (2, 2), (50, 50), (0, 0), (100, 100))
         env = gym.make('PccNs-v0', traces=[dummy_trace], log_dir=self.log_dir,
                        train_flag=True, delta_scale=self.delta_scale)
         # Load pretrained model
@@ -256,7 +255,8 @@ class Aurora():
             env.seed(self.seed)
 
             ts_list, reward_list, loss_list, tput_list, delay_list, \
-                send_rate_list, action_list, obs_list, mi_list = test(self.model, env)
+                send_rate_list, action_list, obs_list, mi_list = test(
+                    self.model, env)
             result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
                               delay_list, loss_list, action_list, obs_list, mi_list))
             results.append(result)
@@ -294,7 +294,7 @@ def test(model, env, env_id=0):
         loss_list.append(last_event['Loss Rate'])
         delay_list.append(last_event['Latency'] * 1000)
         tput_list.append(last_event['Throughput'] / 1e6)
-        send_rate_list.append(last_event['Send Rate']/ 1e6)
+        send_rate_list.append(last_event['Send Rate'] / 1e6)
         ts_list.append(last_event['Timestamp'])
         action_list.append(last_event['Action'])
         mi_list.append(last_event['MI'])

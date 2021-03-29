@@ -3,6 +3,8 @@ import logging
 import os
 import re
 
+import numpy as np
+
 
 def read_json_file(filename):
     """Load json object from a file."""
@@ -35,3 +37,6 @@ def natural_sort(l):
     def alphanum_key(key): return [convert(c)
                                    for c in re.split('([0-9]+)', key)]
     return sorted(l, key=alphanum_key)
+
+def set_seed(seed):
+    np.random.seed(seed)

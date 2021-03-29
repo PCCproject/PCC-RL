@@ -329,6 +329,8 @@ class Sender():
         self.cwnd = cwnd
         self.use_cwnd = False
         self.rto = -1
+        self.ssthresh = 0
+        self.pkt_loss_wait_time = -1
 
     _next_id = 1
 
