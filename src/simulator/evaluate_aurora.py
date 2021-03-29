@@ -1,17 +1,17 @@
 import argparse
-import os
-import warnings
 import logging
+import os
 import types
+import warnings
 
 import tensorflow as tf
+
 if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
     tf.contrib._warning = None
-from common.utils import set_tf_loglevel
-# from simulator.network_simulator import network
-# from simulator import network
+from common.utils import set_tf_loglevel, set_seed
+
 from simulator.aurora import Aurora
-from simulator.trace import generate_traces, generate_trace
+from simulator.trace import generate_trace, generate_traces
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 warnings.filterwarnings("ignore")
@@ -49,13 +49,14 @@ def parse_args():
 
 def main():
     args = parse_args()
+    set_seed(args.seed)
     if args.save_dir:
         os.makedirs(args.save_dir, exist_ok=True)
 
     if args.config_file is not None:
         test_traces = generate_traces(args.config_file, 10, args.duration)
     else:
-        test_traces = [generate_trace(args.duration,
+        test_traces = [generate_trace((args.duration, args.duration),
                                       (args.bandwidth, args.bandwidth),
                                       (args.delay, args.delay),
                                       (args.loss, args.loss),

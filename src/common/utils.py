@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import re
 
 import numpy as np
@@ -38,5 +39,7 @@ def natural_sort(l):
                                    for c in re.split('([0-9]+)', key)]
     return sorted(l, key=alphanum_key)
 
+
 def set_seed(seed):
+    random.seed(seed)
     np.random.seed(seed)

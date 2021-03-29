@@ -19,7 +19,6 @@ import os
 import random
 import sys
 import time
-from operator import itemgetter
 
 import gym
 from gym import spaces
@@ -30,6 +29,7 @@ import numpy as np
 
 from common import sender_obs
 from common.utils import write_json_file, read_json_file
+from simulator.trace import Trace
 
 MAX_CWND = 5000
 MIN_CWND = 4
@@ -61,14 +61,13 @@ def debug_print(msg):
 
 class Link():
 
-    def __init__(self, bandwidth, delay, queue_size, loss_rate):
-        self.bw = float(bandwidth)
-        self.dl = delay
-        self.lr = loss_rate
+    def __init__(self, trace: Trace):
+        self.trace = trace
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
-        self.max_queue_delay = queue_size / self.bw
-        self.queue_size = queue_size
+        self.max_queue_delay = self.trace.get_queue_size() / self.get_bandwidth(0)
+
+        self.queue_size = self.trace.get_queue_size()
 
     def get_cur_queue_delay(self, event_time):
         cur_queue_delay = max(0.0, self.queue_delay -
@@ -81,14 +80,14 @@ class Link():
     def get_cur_latency(self, event_time):
         q_delay = self.get_cur_queue_delay(event_time)
         # print('queue delay: ', q_delay)
-        return self.dl + q_delay
+        return self.trace.get_delay() / 1000.0 + q_delay
 
     def packet_enters_link(self, event_time):
-        if (random.random() < self.lr):
+        if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
         self.queue_delay_update_time = event_time
-        extra_delay = 1.0 / self.bw
+        extra_delay = 1.0 / self.get_bandwidth(event_time)
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
         if extra_delay + self.queue_delay > self.max_queue_delay:
             # print("{}\tDrop!".format(event_time), file=sys.stderr)
@@ -99,17 +98,21 @@ class Link():
 
     def print_debug(self):
         print("Link:")
-        print("Bandwidth: %.3fMbps" % (self.bw * 8 * BYTES_PER_PACKET / 1e6))
-        print("Delay: %.3fms" % (self.dl * 1000))
+        print("Bandwidth: %.3fMbps" % (self.trace.get_bandwidth(0)))
+        print("Delay: %.3fms" % (self.trace.get_delay()))
         print("Queue Delay: %.3fms" % (self.queue_delay * 1000))
         print("Max Queue Delay: %.3fms" % (self.max_queue_delay * 1000))
-        print("One Packet Queue Delay: %.3fms" % (1.0 / self.bw * 1000))
+        print("One Packet Queue Delay: %.3fms" % (
+            1000.0 * 1 / (self.trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET)))
         print("Queue size: %dpackets" % self.queue_size)
-        print("Loss: %.4f" % self.lr)
+        print("Loss: %.4f" % self.trace.get_loss_rate())
 
     def reset(self):
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
+
+    def get_bandwidth(self, ts):
+        return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
 
 
 class Network():
@@ -121,7 +124,6 @@ class Network():
         self.senders = senders
         self.links = links
         self.queue_initial_packets()
-        # self.result_log = []
         self.env = env
 
     def queue_initial_packets(self):
@@ -149,12 +151,13 @@ class Network():
         for sender in self.senders:
             sender.reset_obs()
         while self.cur_time < end_time:
-            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto, event_queue_delay = heapq.heappop(
-                self.q)
-            # if event_time >= end_time:
-            #     heapq.heappush(self.q, (event_time, sender, event_type, next_hop, cur_latency, dropped,
-            #                             event_id, rto, event_queue_delay))
-            #     break
+            event_time, sender, event_type, next_hop, cur_latency, dropped, \
+                event_id, rto, event_queue_delay = heapq.heappop(self.q)
+            if event_time >= end_time:
+                heapq.heappush(self.q, (event_time, sender, event_type,
+                                        next_hop, cur_latency, dropped,
+                                        event_id, rto, event_queue_delay))
+                break
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -239,7 +242,9 @@ class Network():
                 elif new_event_type == EVENT_TYPE_ACK:
                     event_id_push = event_id
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
-                                        new_next_hop, new_latency, new_dropped, event_id_push, rto, new_event_queue_delay))
+                                        new_next_hop, new_latency, new_dropped,
+                                        event_id_push, rto,
+                                        new_event_queue_delay))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
@@ -249,9 +254,9 @@ class Network():
         avg_queue_delay = sender_mi.get('avg queue delay')
         recv_dur = sender_mi.get('recv dur')
         send_dur = sender_mi.get('send dur')
-        bw_cutoff = self.links[0].bw * 0.8
-        lat_cutoff = 2.0 * self.links[0].dl * 1.5
-        loss_cutoff = 2.0 * self.links[0].lr * 1.5
+        # bw_cutoff = self.links[0].bw * 0.8
+        # lat_cutoff = 2.0 * self.links[0].dl * 1.5
+        # loss_cutoff = 2.0 * self.links[0].lr * 1.5
         debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
             throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
@@ -271,19 +276,10 @@ class Network():
         except:
             ssthresh = 0
 
-        # print("{}, {}, {}, {}, {}, {}, {}, {}".format(
-        #     self.cur_time, self.senders[0].cwnd, ssthresh,
-        #     self.links[0].bw, self.links[1].bw,
-        #     send_throughput/(8 * BYTES_PER_PACKET),
-        #     throughput/(8 * BYTES_PER_PACKET), reward, loss))
-        # self.result_log.append([
-        #     self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
-        #     self.links[0].bw, self.links[1].bw,
-        #     send_throughput / (8 * BYTES_PER_PACKET),
-        #     throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         self.env.writer.writerow([
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
-            self.links[0].bw, self.links[1].bw,
+            self.links[0].get_bandwidth(self.cur_time),
+            self.links[1].get_bandwidth(self.cur_time),
             send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
@@ -688,7 +684,6 @@ class SimulatedNetworkEnv(gym.Env):
         assert congestion_control_type in {"aurora", "cubic"}, \
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
-        random.seed(42)
         self.delta_scale = delta_scale
         self.traces = traces
         self.current_trace = np.random.choice(self.traces)
@@ -724,7 +719,7 @@ class SimulatedNetworkEnv(gym.Env):
                 np.array([-1e12]), np.array([1e12]), dtype=np.float32)
 
         self.observation_space = None
-        use_only_scale_free = True
+        # use_only_scale_free = True
         single_obs_min_vec = sender_obs.get_min_obs_vector(self.features)
         single_obs_max_vec = sender_obs.get_max_obs_vector(self.features)
         self.observation_space = spaces.Box(np.tile(single_obs_min_vec, self.history_len),
@@ -809,11 +804,11 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
-        bw = self.current_trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET
-        lat = self.current_trace.get_delay() / 1000
-        queue = self.current_trace.get_queue_size()
-        loss = self.current_trace.get_loss_rate()
-        self.links = [Link(bw, lat, queue, loss), Link(bw, lat, queue, loss)]
+        # bw = self.current_trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET
+        # lat = self.current_trace.get_delay() / 1000
+        # queue = self.current_trace.get_queue_size()
+        # loss = self.current_trace.get_loss_rate()
+        self.links = [Link(self.current_trace), Link(self.current_trace)]
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
                 self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
@@ -854,6 +849,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.steps_taken = 0
         self.net.reset()
         self.current_trace = np.random.choice(self.traces)
+        self.current_trace.reset()
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
