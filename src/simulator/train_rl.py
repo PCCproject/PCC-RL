@@ -45,7 +45,6 @@ def parse_args():
     parser.add_argument("--val-loss", type=float, nargs="+", default=[])
     parser.add_argument("--val-queue", type=float, nargs="+", default=[])
 
-    # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
     parser.add_argument('--seed', type=int, default=20, help='seed')
     parser.add_argument("--total-timesteps", type=int, default=1000000,
                         help="Total number of steps to be trained.")
@@ -61,6 +60,8 @@ def parse_args():
                         help="tensorboard log direcotry.")
     parser.add_argument("--delta-scale", type=float, default=0.05,
                         help="delta scale.")
+    parser.add_argument('--time-variant-bw', action='store_true',
+                        help='Generate time variant bandwidth if specified.')
 
     return parser.parse_args()
 
@@ -86,19 +87,23 @@ def main():
         # generate training traces
         training_traces = generate_traces(args.randomization_range_file,
                                           args.total_trace_count,
-                                          args.duration)
+                                          args.duration,
+                                          constant_bw=not args.time_variant_bw)
         # generate validation traces
         validation_traces = generate_traces(
-            args.randomization_range_file, 36, args.duration)
+            args.randomization_range_file, 36, args.duration,
+            constant_bw=not args.time_variant_bw)
     else:
         # generate training traces
         training_traces = [generate_trace(args.duration, args.bandwidth,
-                                          args.delay, args.loss, args.queue)
+                                          args.delay, args.loss, args.queue,
+                                          constant_bw=not args.time_variant_bw)
                            for _ in range(args.total_trace_count)]
         # generate validation traces
         validation_traces = [generate_trace(args.duration, (bw, bw),
                                             (lat, lat), (loss, loss),
-                                            (queue, queue))
+                                            (queue, queue),
+                                            constant_bw=not args.time_variant_bw)
                              for bw, lat, loss, queue in itertools.product(
             args.val_bandwidth, args.val_delay,
             args.val_loss, args.val_queue)]
@@ -108,7 +113,8 @@ def main():
                     args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log,
                     delta_scale=args.delta_scale)
-    aurora.train(training_traces, validation_traces, args.total_timesteps, args.exp_name)
+    aurora.train(training_traces, validation_traces,
+                 args.total_timesteps, args.exp_name)
 
     # with model.graph.as_default():
     #     saver = tf.train.Saver()

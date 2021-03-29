@@ -75,7 +75,8 @@ def generate_trace(duration_range: Tuple[float, float],
                    cov_range: Union[Tuple[float, float], None] = None,
                    steps_range: Union[Tuple[int, int], None] = None,
                    timestep_range: Union[Tuple[float, float], None] = None,
-                   bandwidth_file: str = ""):
+                   bandwidth_file: str = "",
+                   constant_bw: bool = True):
     """Generate trace for a network flow.
 
     Args:
@@ -111,10 +112,11 @@ def generate_trace(duration_range: Tuple[float, float],
 
     duration = float(np.random.uniform(
         duration_range[0], duration_range[1], 1))
-    if bandwidth_range[0] == bandwidth_range[1]:  # constant bandwidth
+    if constant_bw:
         bw = float(np.random.uniform(
             bandwidth_range[0], bandwidth_range[1], 1))
-        return Trace([duration], [bw], delay, loss_rate, queue_size)
+        ret_trace = Trace([duration], [bw], delay, loss_rate, queue_size)
+        return ret_trace
 
     # use bandwidth generator.
     assert T_l_range is not None and len(
@@ -130,17 +132,19 @@ def generate_trace(duration_range: Tuple[float, float],
     T_l = float(np.random.uniform(T_l_range[0], T_l_range[1], 1))
     T_s = float(np.random.uniform(T_s_range[0], T_s_range[1], 1))
     cov = float(np.random.uniform(cov_range[0], cov_range[1], 1))
-    steps = int(np.random.randint(steps_range[0], steps_range[1], 1))
+    steps = int(np.random.randint(steps_range[0], steps_range[1]+1, 1))
     timestep = float(np.random.uniform(
         timestep_range[0], timestep_range[1], 1))
 
     timestamps, bandwidths = generate_bw_series(
         T_l, T_s, cov, duration, steps, bandwidth_range[0],
         bandwidth_range[1], timestep)
-    return Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
+    ret_trace = Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
+    return ret_trace
 
 
-def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
+def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
+                    constant_bw: bool = True):
     config = read_json_file(config_file)
     traces = []
 
@@ -171,7 +175,8 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
                                    (T_s_min, T_s_max),
                                    (cov_min, cov_max),
                                    (steps_min, steps_max),
-                                   (timestep_min, timestep_max))
+                                   (timestep_min, timestep_max),
+                                   constant_bw=constant_bw)
             traces.append(trace)
     return traces
 
