@@ -19,7 +19,6 @@ import os
 import random
 import sys
 import time
-from operator import itemgetter
 
 import gym
 from gym import spaces
@@ -30,6 +29,7 @@ import numpy as np
 
 from common import config, sender_obs
 from common.utils import write_json_file, read_json_file
+from simulator.trace import Trace
 
 MAX_CWND = 5000
 MIN_CWND = 4
@@ -60,14 +60,16 @@ DEBUG = False
 
 class Link():
 
-    def __init__(self, bandwidth, delay, queue_size, loss_rate):
-        self.bw = float(bandwidth)
-        self.dl = delay
-        self.lr = loss_rate
+    def __init__(self, trace: Trace):
+        # self.bw = float(bandwidth)
+        # self.dl = delay
+        # self.lr = loss_rate
+        self.trace = trace
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
-        self.max_queue_delay = queue_size / self.bw
-        self.queue_size = queue_size
+        self.queue_size = self.trace.get_queue_size()
+        self.max_queue_delay = self.queue_size / self.get_bandwidth(0)
+        self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
         cur_queue_delay = max(0.0, self.queue_delay -
@@ -80,35 +82,43 @@ class Link():
     def get_cur_latency(self, event_time):
         q_delay = self.get_cur_queue_delay(event_time)
         # print('queue delay: ', q_delay)
-        return self.dl + q_delay
+        return self.trace.get_delay() / 1000.0 + q_delay
 
     def packet_enters_link(self, event_time):
-        if (random.random() < self.lr):
+        if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
         self.queue_delay_update_time = event_time
-        extra_delay = 1.0 / self.bw
+        extra_delay = 1.0 / self.get_bandwidth(event_time)
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
         if extra_delay + self.queue_delay > self.max_queue_delay:
             # print("{}\tDrop!".format(event_time), file=sys.stderr)
             return False
+        # if 1 + self.pkt_in_queue > self.queue_size:
+        #     # print("{}\tDrop!".format(event_time))
+        #     return False
         self.queue_delay += extra_delay
+        self.pkt_in_queue += 1
         # print("\tNew delay = {}".format(self.queue_delay))
         return True
 
     def print_debug(self):
         print("Link:")
-        print("Bandwidth: %f" % self.bw)
-        print("Delay: %f" % self.dl)
+        print("Bandwidth: %f" % self.get_bandwidth(0))
+        print("Delay: %f" % self.trace.get_delay())
         print("Queue Delay: %f" % self.queue_delay)
-        print("Max Queue Delay: %f" % self.max_queue_delay)
-        print("One Packet Queue Delay: %f" % (1.0 / self.bw))
+        # print("Max Queue Delay: %f" % self.max_queue_delay)
+        print("One Packet Queue Delay: %f" % (1.0 / self.get_bandwidth(0)))
         print("Queue size: %d" % self.queue_size)
-        print("Loss: %f" % self.lr)
+        print("Loss: %f" % self.trace.get_loss_rate())
 
     def reset(self):
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
+        self.pkt_in_queue = 0
+
+    def get_bandwidth(self, ts):
+        return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
 
 
 class Network():
@@ -219,14 +229,9 @@ class Network():
                     self.cur_time)
 
             if push_new_event:
-                if new_event_type == EVENT_TYPE_SEND:
-                    event_id_push = self.event_count
-                    rto = sender.rto
-                    self.event_count += 1
-                elif new_event_type == EVENT_TYPE_ACK:
-                    event_id_push = event_id
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
-                                        new_next_hop, new_latency, new_dropped, event_id_push, rto, new_pkt_queue_delay))
+                                        new_next_hop, new_latency, new_dropped,
+                                        event_id, rto, new_pkt_queue_delay))
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
@@ -234,9 +239,9 @@ class Network():
         latency = sender_mi.get("avg latency")
         avg_queue_delay = sender_mi.get("avg queue delay")
         loss = sender_mi.get("loss ratio")
-        bw_cutoff = self.links[0].bw * 0.8
-        lat_cutoff = 2.0 * self.links[0].dl * 1.5
-        loss_cutoff = 2.0 * self.links[0].lr * 1.5
+        # bw_cutoff = self.links[0].bw * 0.8
+        # lat_cutoff = 2.0 * self.links[0].dl * 1.5
+        # loss_cutoff = 2.0 * self.links[0].lr * 1.5
         # print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
         #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
 
@@ -267,7 +272,8 @@ class Network():
         #     throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         self.env.writer.writerow([
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
-            self.links[0].bw, self.links[1].bw,
+            self.links[0].get_bandwidth(self.cur_time),
+            self.links[1].get_bandwidth(self.cur_time),
             send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
@@ -660,20 +666,20 @@ class TCPCubicSender(Sender):
 
 class SimulatedNetworkEnv(gym.Env):
 
-    def __init__(self, history_len=10,
+    def __init__(self, traces, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
-                 congestion_control_type="aurora", log_dir="", duration=None,
-                 max_steps=400, train_flag=False,
-                 randomization_range_file=None):
+                 congestion_control_type="aurora", log_dir="",
+                 # duration=None, max_steps=400,
+                 train_flag=False):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
         assert congestion_control_type in {"aurora", "cubic"}, \
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
-        random.seed(42)
+        self.traces = traces
+        self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
-        self.duration = duration
         self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
         if self.congestion_control_type == 'aurora':
@@ -683,21 +689,11 @@ class SimulatedNetworkEnv(gym.Env):
         self.viewer = None
         self.rand = None
 
-        if randomization_range_file is not None:
-            self.rand_ranges = RandomizationRanges(randomization_range_file)
-            self.min_bw, self.max_bw = self.rand_ranges.get_range(
-                'bandwidth')  # packet per second
-            self.min_lat, self.max_lat = self.rand_ranges.get_range(
-                'delay')  # latency second
-            self.min_queue, self.max_queue = self.rand_ranges.get_range(
-                'queue')
-            self.min_loss, self.max_loss = self.rand_ranges.get_range('loss')
-        else:
-            self.rand_ranges = None
-            self.min_bw, self.max_bw = (100, 500)  # packet per second
-            self.min_lat, self.max_lat = (0.05, 0.5)  # latency second
-            self.min_queue, self.max_queue = (0, 8)
-            self.min_loss, self.max_loss = (0.0, 0.05)
+        self.rand_ranges = None
+        # self.min_bw, self.max_bw = (100, 500)  # packet per second
+        # self.min_lat, self.max_lat = (0.05, 0.5)  # latency second
+        # self.min_queue, self.max_queue = (0, 8)
+        # self.min_loss, self.max_loss = (0.0, 0.05)
         self.history_len = history_len
         # print("History length: %d" % history_len)
         self.features = features.split(",")
@@ -710,7 +706,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.run_dur = None
         self.run_period = 0.1
         self.steps_taken = 0
-        self.max_steps = max_steps
+        # self.max_steps = max_steps
         self.debug_thpt_changes = False
         self.last_thpt = None
         self.last_rate = None
@@ -744,15 +740,15 @@ class SimulatedNetworkEnv(gym.Env):
                               'throughput', 'reward', 'loss', 'latency',
                               "packet_sent", "packet_acked", "action", "queue_delay"])
 
-    def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
-        self.min_bw = min_bw
-        self.max_bw = max_bw
-        self.min_lat = min_lat
-        self.max_lat = max_lat
-        self.min_loss = min_loss
-        self.max_loss = max_loss
-        self.min_queue = min_queue
-        self.max_queue = max_queue
+    # def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
+    #     self.min_bw = min_bw
+    #     self.max_bw = max_bw
+    #     self.min_lat = min_lat
+    #     self.max_lat = max_lat
+    #     self.min_loss = min_loss
+    #     self.max_loss = max_loss
+    #     self.min_queue = min_queue
+    #     self.max_queue = max_queue
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
@@ -808,10 +804,11 @@ class SimulatedNetworkEnv(gym.Env):
             self.run_dur = 1.0 * sender_mi.get("avg latency")
         #print("Sender obs: %s" % sender_obs)
 
-        if self.duration is None:
-            should_stop = (self.steps_taken >= self.max_steps)
-        else:
-            should_stop = self.net.get_cur_time() >= self.duration
+        # if self.duration is None:
+        #     should_stop = (self.steps_taken >= self.max_steps)
+        # else:
+        #     should_stop = self.net.get_cur_time() >= self.duration
+        should_stop = self.current_trace.is_finished(self.net.get_cur_time())
 
         self.reward_sum += reward
         # print('env step: {}s'.format(time.time() - t_start))
@@ -826,16 +823,16 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
-        bw = random.uniform(self.min_bw, self.max_bw)
-        lat = random.uniform(self.min_lat, self.max_lat)
-        # queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
-        queue = int(random.uniform(self.min_queue, self.max_queue))
-        loss = random.uniform(self.min_loss, self.max_loss)
+        # bw = random.uniform(self.min_bw, self.max_bw)
+        # lat = random.uniform(self.min_lat, self.max_lat)
+        # # queue = 1 + int(np.exp(random.uniform(self.min_queue, self.max_queue)))
+        # queue = int(random.uniform(self.min_queue, self.max_queue))
+        # loss = random.uniform(self.min_loss, self.max_loss)
         # bw    = 1100
         # lat   = 0.02
         # queue = 5
         # loss  = 0.0
-        self.links = [Link(bw, lat, queue, loss), Link(bw, lat, queue, loss)]
+        self.links = [Link(self.current_trace), Link(self.current_trace)]
         #self.senders = [Sender(0.3 * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         #self.senders = [Sender(random.uniform(0.2, 0.7) * bw, [self.links[0], self.links[1]], 0, self.history_len)]
         if self.congestion_control_type == "aurora":
@@ -845,7 +842,11 @@ class SimulatedNetworkEnv(gym.Env):
                                        self.features,
                                        history_len=self.history_len)]
             else:
-                self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+                #                        [self.links[0], self.links[1]], 0,
+                #                        self.features,
+                #                        history_len=self.history_len)]
+                self.senders = [Sender(10,
                                        [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len)]
@@ -857,20 +858,17 @@ class SimulatedNetworkEnv(gym.Env):
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
-        self.run_dur = 3 * lat
+        self.run_dur = 3 * 0.05
+        # if not self.senders[0].rtt_samples:
+        #     # self.run_dur = 0.473
+        #     self.run_dur = 5 / self.senders[0].rate
         # print("lat is", lat, "run_dur" ,self.run_dur)
 
     def reset(self):
         self.steps_taken = 0
         self.net.reset()
-        if self.rand_ranges is not None:
-            self.min_bw, self.max_bw = self.rand_ranges.get_range(
-                'bandwidth')  # packet per second
-            self.min_lat, self.max_lat = self.rand_ranges.get_range(
-                'delay')  # latency second
-            self.min_queue, self.max_queue = self.rand_ranges.get_range(
-                'queue')
-            self.min_loss, self.max_loss = self.rand_ranges.get_range('loss')
+        self.current_trace = np.random.choice(self.traces)
+        self.current_trace.reset()
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
@@ -885,14 +883,6 @@ class SimulatedNetworkEnv(gym.Env):
         # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
-
-    def render(self, mode='human'):
-        pass
-
-    def close(self):
-        if self.viewer:
-            self.viewer.close()
-            self.viewer = None
 
     def dump_events_to_file(self, filename):
         with open(filename, 'w') as f:
