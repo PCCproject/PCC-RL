@@ -57,6 +57,8 @@ MAX_LATENCY_NOISE = 1.1
 # DEBUG = True
 DEBUG = False
 
+MI_RTT_PROPORTION = 1.0
+
 
 class Link():
 
@@ -88,15 +90,18 @@ class Link():
         if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
+        self.pkt_in_queue = max(0, self.pkt_in_queue -
+                                (event_time - self.queue_delay_update_time) *
+                                self.get_bandwidth(event_time))
         self.queue_delay_update_time = event_time
         extra_delay = 1.0 / self.get_bandwidth(event_time)
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
-        if extra_delay + self.queue_delay > self.max_queue_delay:
-            # print("{}\tDrop!".format(event_time), file=sys.stderr)
-            return False
-        # if 1 + self.pkt_in_queue > self.queue_size:
-        #     # print("{}\tDrop!".format(event_time))
+        # if extra_delay + self.queue_delay > self.max_queue_delay:
+        #     # print("{}\tDrop!".format(event_time), file=sys.stderr)
         #     return False
+        if 1 + self.pkt_in_queue > self.queue_size:
+            # print("{}\tDrop!".format(event_time))
+            return False
         self.queue_delay += extra_delay
         self.pkt_in_queue += 1
         # print("\tNew delay = {}".format(self.queue_delay))
@@ -801,7 +806,7 @@ class SimulatedNetworkEnv(gym.Env):
         #event["Cwnd Used"] = sender_mi.cwnd_used
         self.event_record["Events"].append(event)
         if event["Latency"] > 0.0:
-            self.run_dur = 1.0 * sender_mi.get("avg latency")
+            self.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency")
         #print("Sender obs: %s" % sender_obs)
 
         # if self.duration is None:

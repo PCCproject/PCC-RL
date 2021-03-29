@@ -53,6 +53,7 @@ MAX_LATENCY_NOISE = 1.1
 # DEBUG = True
 DEBUG = False
 
+MI_RTT_PROPORTION = 1.0
 
 def debug_print(msg):
     if DEBUG:
@@ -760,7 +761,6 @@ class SimulatedNetworkEnv(gym.Env):
     def step(self, actions):
         #print("Actions: %s" % str(actions))
         # print(actions)
-        t_start = time.time()
         for i in range(0, 1):  # len(actions)):
             #print("Updating rate for sender %d" % i)
             action = actions
@@ -793,7 +793,7 @@ class SimulatedNetworkEnv(gym.Env):
         event["MI"] = self.run_dur
         self.event_record["Events"].append(event)
         if event["Latency"] > 0.0:
-            self.run_dur = 1.0 * sender_mi.get("avg latency")
+            self.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency")
         #print("Sender obs: %s" % sender_obs)
 
         should_stop = self.current_trace.is_finished(self.net.get_cur_time())
