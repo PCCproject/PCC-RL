@@ -55,6 +55,7 @@ DEBUG = False
 
 MI_RTT_PROPORTION = 1.0
 
+
 def debug_print(msg):
     if DEBUG:
         print(msg, file=sys.stderr, flush=True)
@@ -72,14 +73,9 @@ class Link():
         self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
-        cur_queue_delay = max(0.0, self.queue_delay -
-                              (event_time - self.queue_delay_update_time))
-        # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time:
-        # {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size:
-        # {}'.format( event_time, self.queue_delay,
-        # self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay,
-        # self.bw, self.queue_size)) print("{}\t{}".format(event_time,
-        # cur_queue_delay), file=sys.stderr)
+        # cur_queue_delay = max(0.0, self.queue_delay -
+        #                       (event_time - self.queue_delay_update_time))
+        cur_queue_delay = self.pkt_in_queue / self.get_bandwidth(event_time)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -96,8 +92,10 @@ class Link():
                                 self.get_bandwidth(event_time))
         self.queue_delay_update_time = event_time
         extra_delay = 1.0 / self.get_bandwidth(event_time)
-        # print("Time: {},  Extra delay:{}, Current queue delay: {}, Max delay: {}, packets in queue: {}".format(
-        #     event_time, extra_delay, self.queue_delay, self.max_queue_delay, self.pkt_in_queue))
+        # print("Time: {},  Extra delay:{}, Current queue delay: {}, "
+        #       "Max delay: {}, packets in queue: {}".format(
+        #           event_time, extra_delay, self.queue_delay, self.queue_size,
+        #           self.pkt_in_queue))
         # if extra_delay + self.queue_delay > self.max_queue_delay:
         #     print("{}\tDrop!".format(event_time))
         #     return False
@@ -166,11 +164,11 @@ class Network():
         while self.cur_time < end_time:
             event_time, sender, event_type, next_hop, cur_latency, dropped, \
                 event_id, rto, event_queue_delay = heapq.heappop(self.q)
-            if event_time >= end_time:
-                heapq.heappush(self.q, (event_time, sender, event_type,
-                                        next_hop, cur_latency, dropped,
-                                        event_id, rto, event_queue_delay))
-                break
+            # if event_time >= end_time:
+            #     heapq.heappush(self.q, (event_time, sender, event_type,
+            #                             next_hop, cur_latency, dropped,
+            #                             event_id, rto, event_queue_delay))
+            #     break
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -196,18 +194,14 @@ class Network():
                     #     sender.timeout(cur_latency)
                     # sender.on_packet_lost(cur_latency)
                     if rto >= 0 and cur_latency > rto and sender.pkt_loss_wait_time <= 0:
-                        # print("timeout {}\t{}\t{}".format(self.cur_time, cur_latency, rto))
                         sender.timeout()
                         dropped = True
                         new_dropped = True
-                    # TODO: call TCP timeout logic
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
-                        sender.on_packet_acked(cur_latency, event_queue_delay)
+                        sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
-                        # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                 else:
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -248,6 +242,8 @@ class Network():
                 new_event_time += link_latency
                 new_dropped = not sender.path[next_hop].packet_enters_link(
                     self.cur_time)
+                if not new_dropped:
+                    sender.queue_delay_samples.append(new_event_queue_delay)
 
             if push_new_event:
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
@@ -291,7 +287,8 @@ class Network():
             send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
-            action, avg_queue_delay, dur, send_dur, recv_dur])
+            action, avg_queue_delay, dur, send_dur, recv_dur,
+            self.senders[0].pkt_in_queue, self.links[0].queue_size])
         # print(self.cur_time)
 
         # High thpt
@@ -372,9 +369,8 @@ class Sender():
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
 
-    def on_packet_acked(self, rtt, queue_delay):
+    def on_packet_acked(self, rtt):
         self.acked += 1
-        self.queue_delay_samples.append(queue_delay)
         self.rtt_samples.append(rtt)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
@@ -416,7 +412,7 @@ class Sender():
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
         rtt_samples = self.rtt_samples if self.rtt_samples else self.prev_rtt_samples
-        # TODO: rtt_samples is empty when there is no packet acked in MI
+        # rtt_samples is empty when there is no packet acked in MI
         # Solution: inherit from previous rtt_samples.
 
         return sender_obs.SenderMonitorInterval(
@@ -747,7 +743,8 @@ class SimulatedNetworkEnv(gym.Env):
                               'link0_bw', 'link1_bw', "send_throughput",
                               'throughput', 'reward', 'loss', 'latency',
                               "packet_sent", "packet_acked", "action",
-                              "queue_delay", "MI", 'send_dur', 'recv dur'])
+                              "queue_delay", "MI", 'send_dur', 'recv dur',
+                              'packet_in_queue', 'queue_size'])
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)

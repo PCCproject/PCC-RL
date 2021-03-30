@@ -27,8 +27,6 @@ def main():
         df = pd.read_csv(log_file)
         fig, axes = plt.subplots(7, 1, figsize=(18, 16))
         if "queue_delay" in df:
-            axes[0].plot(df['timestamp'], df['queue_delay']*1000,
-                         label='queue_delay avg {:.3f}ms'.format(df['queue_delay'].mean() * 1000))
             axes[0].set_xlabel("Time(s)")
             axes[0].set_ylabel("Queue Delay(ms)")
             axes[0].legend()
@@ -40,6 +38,8 @@ def main():
                      label='send rate, avg {:.3f}mbps'.format(df['send_throughput'].mean() * 1500 * 8 / 1000000))
         axes[1].plot(df['timestamp'], df['link0_bw'] * 1500 * 8 / 1000000,
                      label='bw, avg {:.3f}mbps'.format(df['link0_bw'].mean() * 1500 * 8 / 1000000))
+        # axes[1].plot(np.arange(0, 11, 0.1), 2.0 * np.sin(2*np.arange(0, 11, 0.1)) + 2,
+        #              label='bw, avg {:.3f}mbps'.format(df['link0_bw'].mean() * 1500 * 8 / 1000000))
         axes[1].set_xlabel("Time(s)")
         axes[1].set_ylabel("mbps")
         axes[1].legend()
@@ -47,14 +47,16 @@ def main():
         axes[1].set_xlim(0, )
 
         axes[2].plot(df['timestamp'], df['latency']*1000,
-                     label='latency avg {:.3f}ms'.format(df['latency'].mean()*1000))
+                     label='RTT avg {:.3f}ms'.format(df['latency'].mean()*1000))
+        axes[2].plot(df['timestamp'], df['queue_delay']*1000,
+                     label='Queue Delay avg {:.3f}ms'.format(df['queue_delay'].mean() * 1000))
         axes[2].set_xlabel("Time(s)")
         axes[2].set_ylabel("Latency(ms)")
         axes[2].legend()
         axes[2].set_xlim(0, )
 
         axes[3].plot(df['timestamp'], df['reward'],
-                     label='rewards avg {:3f}'.format(df['reward'].mean()))
+                     label='rewards avg {:.3f}'.format(df['reward'].mean()))
         axes[3].set_xlabel("Time(s)")
         axes[3].set_ylabel("Reward")
         axes[3].legend()

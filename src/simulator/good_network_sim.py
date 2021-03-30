@@ -74,8 +74,9 @@ class Link():
         self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
-        cur_queue_delay = max(0.0, self.queue_delay -
-                              (event_time - self.queue_delay_update_time))
+        # cur_queue_delay = max(0.0, self.queue_delay -
+        #                       (event_time - self.queue_delay_update_time))
+        cur_queue_delay = self.pkt_in_queue / self.get_bandwidth(event_time)
         # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
         #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
         # print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
@@ -192,7 +193,7 @@ class Network():
                         sender.on_packet_lost(cur_latency)
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
-                        sender.on_packet_acked(cur_latency, pkt_queue_delay)
+                        sender.on_packet_acked(cur_latency)
                         # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                 else:
                     new_next_hop = next_hop + 1
@@ -232,6 +233,8 @@ class Network():
                 new_event_time += link_latency
                 new_dropped = not sender.path[next_hop].packet_enters_link(
                     self.cur_time)
+                if not new_dropped:
+                    sender.queue_delay_samples.append(new_pkt_queue_delay)
 
             if push_new_event:
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
@@ -282,7 +285,8 @@ class Network():
             send_throughput / (8 * BYTES_PER_PACKET),
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
-            action, avg_queue_delay])
+            action, avg_queue_delay,
+            self.senders[0].pkt_in_queue, self.links[0].queue_size])
         # print(self.cur_time)
 
         # High thpt
@@ -361,10 +365,10 @@ class Sender():
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
 
-    def on_packet_acked(self, rtt, queue_delay):
+    def on_packet_acked(self, rtt):
         self.acked += 1
         self.rtt_samples.append(rtt)
-        self.queue_delay_samples.append(queue_delay)
+        # self.queue_delay_samples.append(queue_delay)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
@@ -530,7 +534,7 @@ class TCPCubicSender(Sender):
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
 
-    def on_packet_acked(self, rtt, queue_delay):
+    def on_packet_acked(self, rtt):
         self.acked += 1
         self.bytes_in_flight -= BYTES_PER_PACKET
 
@@ -743,7 +747,8 @@ class SimulatedNetworkEnv(gym.Env):
         self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
                               'link0_bw', 'link1_bw', "send_throughput",
                               'throughput', 'reward', 'loss', 'latency',
-                              "packet_sent", "packet_acked", "action", "queue_delay"])
+                              "packet_sent", "packet_acked", "action",
+                              "queue_delay", 'packet_in_queue', 'queue_size'])
 
     # def set_ranges(self, min_bw, max_bw, min_lat, max_lat, min_loss, max_loss, min_queue, max_queue):
     #     self.min_bw = min_bw
