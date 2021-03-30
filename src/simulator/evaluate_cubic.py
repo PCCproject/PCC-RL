@@ -33,6 +33,8 @@ def parse_args():
                         help='Flow duration in seconds.')
     parser.add_argument("--config-file", type=str, default=None,
                         help='config file.')
+    parser.add_argument('--time-variant-bw', action='store_true',
+                        help='Generate time variant bandwidth if specified.')
 
     return parser.parse_args()
 
@@ -44,13 +46,15 @@ def main():
         os.makedirs(args.save_dir, exist_ok=True)
 
     if args.config_file is not None:
-        test_traces = generate_traces(args.config_file, 10, args.duration)
+        test_traces = generate_traces(args.config_file, 1, args.duration,
+                                      constant_bw=not args.time_variant_bw)
     else:
         test_traces = [generate_trace((args.duration, args.duration),
                                       (args.bandwidth, args.bandwidth),
                                       (args.delay, args.delay),
                                       (args.loss, args.loss),
-                                      (args.queue, args.queue))]
+                                      (args.queue, args.queue),
+                                      constant_bw=not args.time_variant_bw)]
     for _, trace in enumerate(test_traces):
         # log_path = os.path.join(args.save_dir,
         #                         "env_{:.3f}_{:.3f}_{:.3f}_{:.3f}.csv".format(

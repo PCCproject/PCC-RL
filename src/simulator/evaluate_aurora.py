@@ -43,6 +43,8 @@ def parse_args():
                         help="Uplink queue size. Unit: packets.")
     parser.add_argument('--delta-scale', type=float, default=0.05,
                         help="Environment delta scale.")
+    parser.add_argument('--time-variant-bw', action='store_true',
+                        help='Generate time variant bandwidth if specified.')
 
     return parser.parse_args()
 
@@ -54,13 +56,15 @@ def main():
         os.makedirs(args.save_dir, exist_ok=True)
 
     if args.config_file is not None:
-        test_traces = generate_traces(args.config_file, 10, args.duration)
+        test_traces = generate_traces(args.config_file, 1, args.duration,
+                                      constant_bw=not args.time_variant_bw)
     else:
         test_traces = [generate_trace((args.duration, args.duration),
                                       (args.bandwidth, args.bandwidth),
                                       (args.delay, args.delay),
                                       (args.loss, args.loss),
-                                      (args.queue, args.queue))]
+                                      (args.queue, args.queue),
+                                      constant_bw=not args.time_variant_bw)]
 
     aurora = Aurora(args.seed, timesteps_per_actorbatch=10,
                     log_dir=args.save_dir,
