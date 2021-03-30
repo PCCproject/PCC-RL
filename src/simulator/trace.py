@@ -70,7 +70,7 @@ def generate_trace(duration_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
                    queue_size_range: Tuple[int, int],
-                   T_l_range: Union[Tuple[float, float], None] = None,
+                   prob_stay_range: Union[Tuple[float, float], None] = None,
                    T_s_range: Union[Tuple[float, float], None] = None,
                    cov_range: Union[Tuple[float, float], None] = None,
                    steps_range: Union[Tuple[int, int], None] = None,
@@ -119,8 +119,9 @@ def generate_trace(duration_range: Tuple[float, float],
         return ret_trace
 
     # use bandwidth generator.
-    assert T_l_range is not None and len(
-        T_l_range) == 2 and T_l_range[0] <= T_l_range[1]
+    assert prob_stay_range is not None and len(prob_stay_range) == 2 and \
+        prob_stay_range[0] <= prob_stay_range[1] and \
+        0 <= prob_stay_range[0] <= 1  and 0 <= prob_stay_range[1] <= 1
     assert T_s_range is not None and len(
         T_s_range) == 2 and T_s_range[0] <= T_s_range[1]
     assert cov_range is not None and len(
@@ -129,7 +130,8 @@ def generate_trace(duration_range: Tuple[float, float],
         steps_range) == 2 and steps_range[0] <= steps_range[1]
     assert timestep_range is not None and len(
         timestep_range) == 2 and timestep_range[0] <= timestep_range[1]
-    T_l = float(np.random.uniform(T_l_range[0], T_l_range[1], 1))
+    prob_stay = float(np.random.uniform(
+        prob_stay_range[0], prob_stay_range[1], 1))
     T_s = float(np.random.uniform(T_s_range[0], T_s_range[1], 1))
     cov = float(np.random.uniform(cov_range[0], cov_range[1], 1))
     steps = int(np.random.randint(steps_range[0], steps_range[1]+1, 1))
@@ -137,7 +139,7 @@ def generate_trace(duration_range: Tuple[float, float],
         timestep_range[0], timestep_range[1], 1))
 
     timestamps, bandwidths = generate_bw_series(
-        T_l, T_s, cov, duration, steps, bandwidth_range[0],
+        prob_stay, T_s, cov, duration, steps, bandwidth_range[0],
         bandwidth_range[1], timestep)
     ret_trace = Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
     return ret_trace
@@ -159,11 +161,11 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
             duration_min, duration_max = duration, duration
 
         # used by bandwidth generation
-        T_l_min, T_l_max = env_config['T_l'] if 'T_l' in env_config else 50, 50
-        T_s_min, T_s_max = env_config['T_s'] if 'T_s' in env_config else 10, 10
-        cov_min, cov_max = env_config['cov'] if 'cov' in env_config else 0.2, 0.2
-        steps_min, steps_max = env_config['steps'] if 'steps' in env_config else 10, 10
-        timestep_min, timestep_max = env_config['timestep'] if 'timestep' in env_config else 1, 1
+        prob_stay_min, prob_stay_max = env_config['prob_stay'] if 'prob_stay' in env_config else (0.5, 0.5)
+        T_s_min, T_s_max = env_config['T_s'] if 'T_s' in env_config else (2, 2)
+        cov_min, cov_max = env_config['cov'] if 'cov' in env_config else (0.2, 0.2)
+        steps_min, steps_max = env_config['steps'] if 'steps' in env_config else (10, 10)
+        timestep_min, timestep_max = env_config['timestep'] if 'timestep' in env_config else (1, 1)
         trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
         for _ in range(trace_cnt):
             trace = generate_trace((duration_min, duration_max),
@@ -171,7 +173,7 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
                                    (delay_min, delay_max),
                                    (loss_min, loss_max),
                                    (queue_min, queue_max),
-                                   (T_l_min, T_l_max),
+                                   (prob_stay_min, prob_stay_max),
                                    (T_s_min, T_s_max),
                                    (cov_min, cov_max),
                                    (steps_min, steps_max),
@@ -193,13 +195,13 @@ def load_bandwidth_from_file(filename: str):
     return timestamps, bandwidths
 
 
-def generate_bw_series(T_l: float, T_s: float, cov: float, duration: float,
+def generate_bw_series(prob_stay: float, T_s: float, cov: float, duration: float,
                        steps: int, min_bw: float, max_bw: float,
                        timestep: float = 1):
     """Generate a time-variant bandwidth series.
 
     Args:
-        T_l: prob of staying in one state = 1 - 1 / T_l. Value range: [0, inf)
+        prob_stay: probability of staying in one state. Value range: [0, 1].
         T_s: how often the noise is changing. Value range: [0, inf)
         cov: maximum percentage of noise with resepect current bandwidth
             value. Value range: [0, 1].
@@ -230,9 +232,6 @@ def generate_bw_series(T_l: float, T_s: float, cov: float, duration: float,
     # actual scenario)
     for z in range(1, steps-1):
         transition_probs.append(1/(switch_parameter**z))
-
-    # probability to stay in same state
-    prob_stay = 1 - 1 / T_l
 
     # takes a state and decides what the next state is
     current_state = np.random.randint(0, len(bw_states)-1)

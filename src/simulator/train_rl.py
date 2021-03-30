@@ -7,12 +7,10 @@ import warnings
 import ipdb
 import numpy as np
 
-# from simulator import network_sim
-# from simulator.network_simulator import network
-# from simulator import good_network_sim
 from simulator import network
 from simulator.trace import generate_trace, generate_traces
 from simulator.aurora import Aurora
+from common.utils import set_seed
 
 warnings.filterwarnings("ignore")
 
@@ -81,7 +79,7 @@ def main():
     check_args(args)
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
-    np.random.seed(args.seed)
+    set_seed(args.seed)
 
     if args.randomization_range_file is not None:
         # generate training traces
@@ -115,14 +113,6 @@ def main():
                     delta_scale=args.delta_scale)
     aurora.train(training_traces, validation_traces,
                  args.total_timesteps, args.exp_name)
-
-    # with model.graph.as_default():
-    #     saver = tf.train.Saver()
-    #     saver.save(model.sess, os.path.join(log_dir, "model_to_serve.ckpt"))
-    #
-    # # Save the model to the location specified below.
-    # export_dir = os.path.join(os.path.join(log_dir, "model_to_serve/"))
-    # save_model_to_serve(model, export_dir)
 
 
 if __name__ == '__main__':

@@ -286,7 +286,7 @@ class Network():
             throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
             self.senders[0].sent, self.senders[0].acked,
             action, avg_queue_delay,
-            self.senders[0].pkt_in_queue, self.links[0].queue_size])
+            self.links[0].pkt_in_queue, self.links[0].queue_size])
         # print(self.cur_time)
 
         # High thpt
