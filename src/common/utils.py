@@ -43,3 +43,24 @@ def natural_sort(l):
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
+
+
+def learnability_objective_function(throughput, delay):
+    """Objective function used in https://cs.stanford.edu/~keithw/www/Learnability-SIGCOMM2014.pdf
+    throughput: Mbps
+    delay: ms
+    """
+    score = np.log(throughput) - np.log(delay)
+    # print(throughput, delay, score)
+    score = score.replace([np.inf, -np.inf], np.nan).dropna()
+
+    return score
+
+
+def pcc_aurora_reward(throughput, delay, loss):
+    """PCC Aurora reward.
+    throughput: packets per second
+    delay: second
+    loss:
+    """
+    return 10 * throughput - 1000 * delay - 2000 * loss
