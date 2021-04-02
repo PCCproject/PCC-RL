@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ipdb
 import numpy as np
+import sys
 
 # The monitor interval class used to pass data from the PCC subsystem to
 # the machine learning module.
@@ -29,6 +31,7 @@ class SenderMonitorInterval():
                  recv_start=0.0,
                  recv_end=0.0,
                  rtt_samples=[],
+                 queue_delay_samples=[],
                  packet_size=1420):
         self.features = {}
         self.sender_id = sender_id
@@ -41,9 +44,9 @@ class SenderMonitorInterval():
         self.recv_end = recv_end
         self.rtt_samples = rtt_samples
         self.packet_size = packet_size
+        self.queue_delay_samples = queue_delay_samples
         self.mi_id = SenderMonitorInterval.next_mi_id
         SenderMonitorInterval.next_mi_id += 1
-
 
     def get(self, feature):
         if feature in self.features.keys():
@@ -56,6 +59,16 @@ class SenderMonitorInterval():
     # Convert the observation parts of the monitor interval into a numpy array
     def as_array(self, features):
         return np.array([self.get(f) / SenderMonitorIntervalMetric.get_by_name(f).scale for f in features])
+
+    def debug_print(self):
+        print('\tflow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {},\n'
+              '\tsend_start_time: {}, send_end_time: {},\n\trecv_start_time: {}, '
+              'recv_end_time: {},\n\trtt_samples: {}, packet: {}'.format(
+                  self.sender_id, self.bytes_sent,
+                  self.bytes_acked, self.bytes_lost,
+                  self.send_start, self.send_end, self.recv_start,
+                  self.recv_end, np.mean(self.rtt_samples), self.packet_size),
+              file=sys.stderr)
 
 class SenderHistory():
     def __init__(self, length, features, sender_id):
@@ -97,7 +110,7 @@ class SenderMonitorIntervalMetric():
         return SenderMonitorIntervalMetric._all_metrics[name]
 
 def get_min_obs_vector(feature_names):
-    print("Getting min obs for %s" % feature_names)
+    # print("Getting min obs for %s" % feature_names)
     result = []
     for feature_name in feature_names:
         feature = SenderMonitorIntervalMetric.get_by_name(feature_name)
@@ -126,6 +139,11 @@ def _mi_metric_recv_dur(mi):
 def _mi_metric_avg_latency(mi):
     if len(mi.rtt_samples) > 0:
         return np.mean(mi.rtt_samples)
+    return 0.0
+
+def _mi_metric_avg_queue_delay(mi):
+    if len(mi.queue_delay_samples) > 0:
+        return np.mean(mi.queue_delay_samples)
     return 0.0
 
 def _mi_metric_send_rate(mi):
@@ -206,6 +224,7 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("recv dur", _mi_metric_recv_dur, 0.0, 100.0),
     SenderMonitorIntervalMetric("send dur", _mi_metric_send_dur, 0.0, 100.0),
     SenderMonitorIntervalMetric("avg latency", _mi_metric_avg_latency, 0.0, 100.0),
+    SenderMonitorIntervalMetric("avg queue delay", _mi_metric_avg_queue_delay, 0.0, 100.0),
     SenderMonitorIntervalMetric("loss ratio", _mi_metric_loss_ratio, 0.0, 1.0),
     SenderMonitorIntervalMetric("ack latency inflation", _mi_metric_ack_latency_inflation, -1.0, 10.0),
     SenderMonitorIntervalMetric("sent latency inflation", _mi_metric_sent_latency_inflation, -1.0, 10.0),

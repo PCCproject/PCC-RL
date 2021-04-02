@@ -1,0 +1,144 @@
+WARNING:tensorflow:
+The TensorFlow contrib module will not be included in TensorFlow 2.0.
+For more information, please see:
+  * https://github.com/tensorflow/community/blob/master/rfcs/20180907-contrib-sunset.md
+  * https://github.com/tensorflow/addons
+  * https://github.com/tensorflow/io (for I/O related ops)
+If you depend on functionality not listed there, please file an issue.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:191: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:200: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/policies.py:116: The name tf.variable_scope is deprecated. Please use tf.compat.v1.variable_scope instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/input.py:25: The name tf.placeholder is deprecated. Please use tf.compat.v1.placeholder instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/policies.py:561: flatten (from tensorflow.python.layers.core) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use keras.layers.flatten instead.
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/layers/core.py:332: Layer.apply (from tensorflow.python.keras.engine.base_layer) is deprecated and will be removed in a future version.
+Instructions for updating:
+Please use `layer.__call__` method instead.
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_layers.py:123: The name tf.get_variable is deprecated. Please use tf.compat.v1.get_variable instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/distributions.py:418: The name tf.random_normal is deprecated. Please use tf.random.normal instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/ppo1/pposgd_simple.py:152: The name tf.summary.scalar is deprecated. Please use tf.compat.v1.summary.scalar instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:449: The name tf.get_collection is deprecated. Please use tf.compat.v1.get_collection instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:449: The name tf.GraphKeys is deprecated. Please use tf.compat.v1.GraphKeys instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/ppo1/pposgd_simple.py:162: The name tf.assign is deprecated. Please use tf.compat.v1.assign instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:241: The name tf.global_variables is deprecated. Please use tf.compat.v1.global_variables instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/common/tf_util.py:242: The name tf.variables_initializer is deprecated. Please use tf.compat.v1.variables_initializer instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/stable_baselines/ppo1/pposgd_simple.py:190: The name tf.summary.merge_all is deprecated. Please use tf.compat.v1.summary.merge_all instead.
+
+WARNING:tensorflow:From /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/ops/math_grad.py:1424: where (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.where in 2.0, which has the same broadcast rule as np.where
+WARNING:tensorflow:From test_ppo1.py:39: The name tf.train.Saver is deprecated. Please use tf.compat.v1.train.Saver instead.
+
+Traceback (most recent call last):
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1365, in _do_call
+    return fn(*args)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1350, in _run_fn
+    target_list, run_metadata)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1443, in _call_tf_sessionrun
+    run_metadata)
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Assign requires shapes of both tensors to match. lhs shape= [2] rhs shape= [1]
+	 [[{{node save/Assign_22}}]]
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 1290, in restore
+    {self.saver_def.filename_tensor_name: save_path})
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 956, in run
+    run_metadata_ptr)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1180, in _run
+    feed_dict_tensor, options, run_metadata)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1359, in _do_run
+    run_metadata)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/client/session.py", line 1384, in _do_call
+    raise type(e)(node_def, op, message)
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Assign requires shapes of both tensors to match. lhs shape= [2] rhs shape= [1]
+	 [[node save/Assign_22 (defined at /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py:1748) ]]
+
+Original stack trace for 'save/Assign_22':
+  File "test_ppo1.py", line 39, in <module>
+    saver = tf.train.Saver()  # save neural net parameters
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 828, in __init__
+    self.build()
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 840, in build
+    self._build(self._filename, build_save=True, build_restore=True)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 878, in _build
+    build_restore=build_restore)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 508, in _build_internal
+    restore_sequentially, reshape)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 350, in _AddRestoreOps
+    assign_ops.append(saveable.restore(saveable_tensors, shapes))
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saving/saveable_object_util.py", line 73, in restore
+    self.op.get_shape().is_fully_defined())
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/ops/state_ops.py", line 227, in assign
+    validate_shape=validate_shape)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/ops/gen_state_ops.py", line 66, in assign
+    use_locking=use_locking, name=name)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/op_def_library.py", line 794, in _apply_op_helper
+    op_def=op_def)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/util/deprecation.py", line 507, in new_func
+    return func(*args, **kwargs)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 3357, in create_op
+    attrs, op_def, compute_device)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 3426, in _create_op_internal
+    op_def=op_def)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 1748, in __init__
+    self._traceback = tf_stack.extract_stack()
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "test_ppo1.py", line 42, in <module>
+    saver.restore(training_sess, nn_model)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 1326, in restore
+    err, "a mismatch between the current graph and the graph")
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Restoring from checkpoint failed. This is most likely due to a mismatch between the current graph and the graph from the checkpoint. Please ensure that you have not altered the graph expected based on the checkpoint. Original error:
+
+Assign requires shapes of both tensors to match. lhs shape= [2] rhs shape= [1]
+	 [[node save/Assign_22 (defined at /data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py:1748) ]]
+
+Original stack trace for 'save/Assign_22':
+  File "test_ppo1.py", line 39, in <module>
+    saver = tf.train.Saver()  # save neural net parameters
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 828, in __init__
+    self.build()
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 840, in build
+    self._build(self._filename, build_save=True, build_restore=True)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 878, in _build
+    build_restore=build_restore)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 508, in _build_internal
+    restore_sequentially, reshape)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saver.py", line 350, in _AddRestoreOps
+    assign_ops.append(saveable.restore(saveable_tensors, shapes))
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/training/saving/saveable_object_util.py", line 73, in restore
+    self.op.get_shape().is_fully_defined())
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/ops/state_ops.py", line 227, in assign
+    validate_shape=validate_shape)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/ops/gen_state_ops.py", line 66, in assign
+    use_locking=use_locking, name=name)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/op_def_library.py", line 794, in _apply_op_helper
+    op_def=op_def)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/util/deprecation.py", line 507, in new_func
+    return func(*args, **kwargs)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 3357, in create_op
+    attrs, op_def, compute_device)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 3426, in _create_op_internal
+    op_def=op_def)
+  File "/data2/zxxia/virtualenvs/pcc/lib/python3.6/site-packages/tensorflow_core/python/framework/ops.py", line 1748, in __init__
+    self._traceback = tf_stack.extract_stack()
+
