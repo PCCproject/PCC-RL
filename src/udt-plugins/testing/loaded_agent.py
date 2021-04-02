@@ -15,6 +15,8 @@
 import tensorflow as tf
 import numpy as np
 import io
+import sys
+import time
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 class LoadedModel():
@@ -22,8 +24,10 @@ class LoadedModel():
     def __init__(self, model_path):
         self.sess = tf.Session()
         self.model_path = model_path
+        t_start = time.time()
         self.metagraph = tf.saved_model.loader.load(self.sess,
             [tf.saved_model.tag_constants.SERVING], self.model_path)
+        print('load', time.time() - t_start, file=sys.stderr, flush=True)
         sig = self.metagraph.signature_def["serving_default"]
         input_dict = dict(sig.inputs)
         output_dict = dict(sig.outputs)

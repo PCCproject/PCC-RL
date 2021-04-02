@@ -18,6 +18,7 @@ import numpy as np
 # the machine learning module.
 #
 class SenderMonitorInterval():
+    next_mi_id = 0
     def __init__(self,
                  sender_id,
                  bytes_sent=0.0,
@@ -28,7 +29,7 @@ class SenderMonitorInterval():
                  recv_start=0.0,
                  recv_end=0.0,
                  rtt_samples=[],
-                 packet_size=1500):
+                 packet_size=1420):
         self.features = {}
         self.sender_id = sender_id
         self.bytes_acked = bytes_acked
@@ -40,6 +41,9 @@ class SenderMonitorInterval():
         self.recv_end = recv_end
         self.rtt_samples = rtt_samples
         self.packet_size = packet_size
+        self.mi_id = SenderMonitorInterval.next_mi_id
+        SenderMonitorInterval.next_mi_id += 1
+
 
     def get(self, feature):
         if feature in self.features.keys():
@@ -176,7 +180,8 @@ def _mi_metric_conn_min_latency(mi):
             _conn_min_latencies[mi.sender_id] = latency
             return latency
         else:
-            return 0.0
+            # return 0.0
+            return 1e4
 
 
 def _mi_metric_send_ratio(mi):
@@ -184,6 +189,8 @@ def _mi_metric_send_ratio(mi):
     send_rate = mi.get("send rate")
     if (thpt > 0.0) and (send_rate < 1000.0 * thpt):
         return send_rate / thpt
+    # elif thpt == 0:
+    #     return 2 #send_rate / 0.1
     return 1.0
 
 def _mi_metric_latency_ratio(mi):
