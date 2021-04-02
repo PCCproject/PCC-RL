@@ -12,39 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
 import argparse
 import csv
-=======
-import loaded_agent
-from common.simple_arg_parse import arg_or_default
-from common import sender_obs
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
-import inspect
 import os
 import random
 import sys
 import time
-import numpy as np
-
-currentdir = os.path.dirname(os.path.abspath(
-    inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-grandparentdir = os.path.dirname(parentdir)
-sys.path.insert(0, parentdir)
-sys.path.insert(0, grandparentdir)
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+print(sys.path)
+
+import numpy as np
+
 from common import sender_obs
-import loaded_agent
+from udt_plugins.testing import loaded_agent
 
-=======
-
-
-if not hasattr(sys, 'argv'):
-    sys.argv = ['']
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
 
 MIN_RATE = 0.12
 MAX_RATE = 300.0
@@ -55,8 +37,6 @@ RESET_RATE_MAX = 100.0
 
 RESET_RATE_MIN = 0.12
 RESET_RATE_MAX = 0.12
-
-
 
 
 def parse_args():
@@ -76,7 +56,6 @@ def parse_args():
     return args
 
 
-
 class PccGymDriver():
 
     flow_lookup = {}
@@ -89,16 +68,8 @@ class PccGymDriver():
         self.id = flow_id
 
         self.rate = random.uniform(RESET_RATE_MIN, RESET_RATE_MAX)
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
         self.history_len = args.history_len
         self.features = args.input_features
-=======
-        self.history_len = arg_or_default("--history-len", 10)
-        self.features = arg_or_default("--input-features",
-                                       default="sent latency inflation,"
-                                       + "latency ratio,"
-                                       + "send ratio").split(",")
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features,
                                                 self.id)
@@ -118,12 +89,13 @@ class PccGymDriver():
 
         PccGymDriver.flow_lookup[flow_id] = self
 
-        self.obsf =  open('./obs.csv', 'w', 1)
+        self.obsf = open('./obs.csv', 'w', 1)
         self.obsf.write("ts\t\trate delta\t\tsending rate\t\t[bytes_sent, "
-            "bytes_acked, bytes_lost, send_start, send_end, recv_start, "
-            "recv_end, rtt_samples, packet_size]\n")
+                        "bytes_acked, bytes_lost, send_start, send_end, recv_start, "
+                        "recv_end, rtt_samples, packet_size]\n")
         self.t_start = time.time()
-        _ = self.agent.act(self.history.as_array())  # dummpy inference here to load model
+        # dummpy inference here to load model
+        _ = self.agent.act(self.history.as_array())
 
         self.mi_pushed = False
 
@@ -133,9 +105,10 @@ class PccGymDriver():
             reader = csv.DictReader(f)
             for row in reader:
                 self.actions.append(float(row['action']))
-                sim_feat =[]
+                sim_feat = []
                 for k in range(10):
-                    sim_feat.append(float(row['send_latency_ratio {}'.format(k)]))
+                    sim_feat.append(
+                        float(row['send_latency_ratio {}'.format(k)]))
                     sim_feat.append(float(row['latency_ratio {}'.format(k)]))
                     sim_feat.append(float(row['send_ratio {}'.format(k)]))
 
@@ -143,13 +116,11 @@ class PccGymDriver():
         # print(self.actions, file=sys.stderr, flush=True)
         self.idx = 1
 
-
     def get_rate(self):
         if self.has_data() and self.mi_pushed:
             # rate_delta = self.agent.act(self.history.as_array())
             rate_delta = self.agent.act(self.sim_features[self.idx])
             self.rate = apply_rate_delta(self.rate, rate_delta)
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
             # print(self.rate, rate_delta, self.history.as_array(), file=sys.stderr)
             try:
                 mi = self.history.values[-1]
@@ -162,7 +133,8 @@ class PccGymDriver():
                 latency = mi.get("avg latency")
                 loss_rate = mi.get("loss ratio")
                 latency_increase = mi.get("latency increase")
-                reward = 10.0 * recv_rate / (8 * mi.packet_size) - 1e3 * latency - 2e3 * loss_rate
+                reward = 10.0 * recv_rate / \
+                    (8 * mi.packet_size) - 1e3 * latency - 2e3 * loss_rate
                 self.log_writer.writerow([
                     time.time() - self.t_start, send_rate, recv_rate, latency,
                     loss_rate, reward, rate_delta, mi.bytes_sent,
@@ -185,36 +157,41 @@ class PccGymDriver():
                 else:
                     input_array_line += "{:.4f}".format(val) + ", "
             input_array_line = input_array_line[:-1] + "]"
-            sample =self.history.values[-1]
+            sample = self.history.values[-1]
             sample_vector = "[{}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, " \
-                    "[rtt samples={}, rtt min={:.4}, mean_rtt={:.4}, " \
-                    "latency inc={:.4f}, send dur={:.4f}, recv dur={:.4f}, "\
-                    "send rate={:.4f}, recv rate={:.4f}], {}]".format(sample.mi_id, sample.bytes_sent, sample.bytes_acked,
-                     sample.bytes_lost,
-                     sample.send_start,
-                     sample.send_end,
-                     sample.recv_start,
-                     sample.recv_end,
-                     sample.rtt_samples,
-                     float(min(sample.rtt_samples)) if sample.rtt_samples else 0,
-                     float(np.mean(sample.rtt_samples)) if sample.rtt_samples else 0,
-                     sample.get('latency increase'),
-                     # np.mean(sample.rtt_samples[int(len(sample.rtt_samples)):]),
-                     sample.get('send dur'),
-                     sample.get('recv dur'),
-                     float(sender_obs._mi_metric_send_rate(sample)) / 1e6,
-                     float(sender_obs._mi_metric_recv_rate(sample)) / 1e6,
-                     float(sample.packet_size))
+                "[rtt samples={}, rtt min={:.4}, mean_rtt={:.4}, " \
+                "latency inc={:.4f}, send dur={:.4f}, recv dur={:.4f}, "\
+                "send rate={:.4f}, recv rate={:.4f}], {}]".format(sample.mi_id, sample.bytes_sent, sample.bytes_acked,
+                                                                  sample.bytes_lost,
+                                                                  sample.send_start,
+                                                                  sample.send_end,
+                                                                  sample.recv_start,
+                                                                  sample.recv_end,
+                                                                  sample.rtt_samples,
+                                                                  float(
+                                                                      min(sample.rtt_samples)) if sample.rtt_samples else 0,
+                                                                  float(
+                                                                      np.mean(sample.rtt_samples)) if sample.rtt_samples else 0,
+                                                                  sample.get(
+                                                                      'latency increase'),
+                                                                  # np.mean(sample.rtt_samples[int(len(sample.rtt_samples)):]),
+                                                                  sample.get(
+                                                                      'send dur'),
+                                                                  sample.get(
+                                                                      'recv dur'),
+                                                                  float(sender_obs._mi_metric_send_rate(
+                                                                      sample)) / 1e6,
+                                                                  float(sender_obs._mi_metric_recv_rate(
+                                                                      sample)) / 1e6,
+                                                                  float(sample.packet_size))
             # print(sample_vector, file=sys.stderr, flush=True)
             #
             # self.obsf.write("action={}, rate={}".format(rate_delta, self.rate))
-            self.obsf.write("{:.4f}\t\t\t{:.4f}\t\t\t{:.4f}\t\t\t{}\t\t\t{}\n".format(time.time() - self.t_start, rate_delta, self.rate, sample_vector, input_array_line))
+            self.obsf.write("{:.4f}\t\t\t{:.4f}\t\t\t{:.4f}\t\t\t{}\t\t\t{}\n".format(
+                time.time() - self.t_start, rate_delta, self.rate, sample_vector, input_array_line))
         except Exception as e:
             print(e, file=sys.stderr, flush=True)
         self.mi_pushed = True
-=======
-            print("New rate:", self.rate, "delta:", rate_delta)
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
         return self.rate * 1e6
 
     def has_data(self):
@@ -262,7 +239,7 @@ class PccGymDriver():
                 rtt_samples=rtt_samples,
                 packet_size=packet_size,
             )
-                )
+        )
         self.mi_pushed = True
 
     def get_by_flow_id(flow_id):
@@ -272,19 +249,6 @@ class PccGymDriver():
 def give_sample(flow_id, bytes_sent, bytes_acked, bytes_lost,
                 send_start_time, send_end_time, recv_start_time,
                 recv_end_time, rtt_samples, packet_size, utility):
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
-    # print('flow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {}, send_start_time: {}, send_end_time: {}, recv_start_time: {}, recv_end_time: {}, rtt_samples: {}, packet: {}, utility: {}'.format(flow_id, bytes_sent, bytes_acked, bytes_lost,
-    #             send_start_time, send_end_time, recv_start_time,
-    #             recv_end_time, rtt_samples, packet_size, utility), file=sys.stderr)
-=======
-    # print('flow id: {}, bytes_sent: {}, bytes_acked: {}, bytes_lost: {}, \n'
-    #       'send_start_time: {}, send_end_time: {}, \n'
-    #       'recv_start_time: {}, recv_end_time: {}, \n'
-    #       'rtt_samples: {}, packet: {}, utility: {}'.format(
-    #           flow_id, bytes_sent, bytes_acked, bytes_lost,
-    #           send_start_time, send_end_time, recv_start_time,
-    #           recv_end_time, rtt_samples, packet_size, utility), file=sys.stderr)
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
     driver = PccGymDriver.get_by_flow_id(flow_id)
     driver.give_sample(bytes_sent, bytes_acked, bytes_lost,
                        send_start_time, send_end_time, recv_start_time,
@@ -314,21 +278,13 @@ def apply_rate_delta(rate, rate_delta):
 
     return rate
 
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
-=======
 
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
 def reset(flow_id):
     driver = PccGymDriver.get_by_flow_id(flow_id)
     driver.reset()
 
 
 def get_rate(flow_id):
-<<<<<<< HEAD:src/udt-plugins/testing/loaded_client.py
-    print("Getting rate", file=sys.stderr, flush=True)
-=======
-    # print("Getting rate")
->>>>>>> 2fd85d0ee5abab4fb2d87bea6abba3477c68898a:src/udt_plugins/testing/loaded_client.py
     driver = PccGymDriver.get_by_flow_id(flow_id)
     return driver.get_rate()
 
