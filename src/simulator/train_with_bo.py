@@ -1,34 +1,71 @@
 # This is the main training setup for training a Pensieve model, but
 # stopping at intervals to add new training data based on performance
 # (increases generalizability, we hope!)
+import argparse
+import glob
 import os
 import subprocess
 import sys
+import time
+from typing import Dict, List
 
 import gym
+import ipdb
 import numpy as np
 from bayes_opt import BayesianOptimization
+from common.utils import natural_sort, read_json_file, write_json_file
 
-# from simulator.network_simulator import network
-from simulator import good_network_sim as network_sim
+# from simulator.good_network_sim import RandomizationRanges
 
-# Inputs:
-#
-# - experiment results directory
-# - training data directory (with traces in subdirectories)
-# - total epochs
-# - bayesian optimizer interval (e.g., every 5000 epochs) - this is how many epoch each training run will go
 
-# Defaults
-# Improvement: Probably better if replaced with argparse and passed in (later)
-# TOTAL_EPOCHS = 10000
-# BAYESIAN_OPTIMIZER_INTERVAL = 1000
-TRAINING_DATA_DIR = "../BO-data/randomize-BW-TS/train-bo-added/"
-VAL_TRACE_DIR = '../BO-data/randomize-BW-TS/fixed-test-bo'
-RESULTS_DIR = "../BO-results/randomize-BW-TS-2-new/"
-# NN_MODEL='../new-DR-results/sanity-check-2/model_saved/nn_model_ep_33200.ckpt'
+MODEL_PATH = ""
 
-# num_training_runs = int(TOTAL_EPOCHS / BAYESIAN_OPTIMIZER_INTERVAL)
+
+def parse_args():
+    """Parse arguments from the command line."""
+    parser = argparse.ArgumentParser("BO training in simulator.")
+    parser.add_argument('--save-dir', type=str, required=True,
+                        help="direcotry to testing results.")
+    parser.add_argument('--model-path', type=str, default="",
+                        help="path to Aurora model to start from.")
+    parser.add_argument("--config-file", type=str, required=True,
+                        help="Path to configuration file.")
+    parser.add_argument('--seed', type=int, default=42, help='seed')
+    parser.add_argument('--duration', type=int, default=10,
+                        help='Flow duration in seconds.')
+    parser.add_argument('--total-timesteps', type=int, default=5e6,
+                        help='Total timesteps can be used to train.')
+    parser.add_argument('--bo-interval', type=int, default=5e4,
+                        help='Number of epoch/step used for training between '
+                        'two BOs.')
+    parser.add_argument('--new-range-weight', type=float, default=0.7,
+                        help='New range weight.')
+
+    return parser.parse_args()
+
+
+class RandomizationRanges():
+    def __init__(self, filename):
+        self.rand_ranges = read_json_file(filename)
+
+    def add_range(self, bw_range, delay_range, loss_range, queue_range, prob=0.7):
+        for rand_range in self.rand_ranges:
+            rand_range['weight'] *= 1-prob
+        new_range = {'bandwidth': bw_range,
+                     'delay': delay_range,
+                     'loss': loss_range,
+                     'queue': queue_range,
+                     'weight': prob}
+        self.rand_ranges.append(new_range)
+
+    def get_original_range(self):
+        return self.rand_ranges[0]
+
+    def get_ranges(self):
+        return self.rand_ranges
+
+    def dump(self, filename):
+        write_json_file(filename, self.rand_ranges)
 
 
 def map_log_to_lin(x):
@@ -36,76 +73,23 @@ def map_log_to_lin(x):
     return x_lin
 
 
-def latest_actor_from(path):
-    """
-    Returns latest tensorflow checkpoint file from a directory.
-    Assumes files are named:
-    nn_model_ep_<EPOCH#>.ckpt.meta
-    """
-    def mtime(f): return os.stat(os.path.join(path, f)).st_mtime
-    files = list(sorted(os.listdir(path), key=mtime))
-    actors = [a for a in files if "nn_model_ep_" in a]
-    actor_path = str(path + '/' + actors[-1])
-    return os.path.splitext(actor_path)[0]
+def latest_model_from(path):
+    ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
+    models_to_serve = list(
+        glob.glob(os.path.join(path, "model_to_serve_step_*")))
+    if not ckpts:
+        ckpt = ""
+    else:
+        ckpt = os.path.splitext(natural_sort(ckpts)[-1])[0]
+    if not models_to_serve:
+        model_to_serve = ""
+    else:
+        model_to_serve = natural_sort(models_to_serve)[-1]
+
+    return ckpt, model_to_serve
 
 
-def black_box_function(x, y):
-    '''
-    :param x: input is the current params for max-BW
-    :param y: input is the current params for TS
-    :return: reward is the mpc-rl reward
-    '''
-    # TODO: this need to be args.summary_dir
-    # TODO: do i need to load the actor_path here?
-    path = os.path.join(RESULTS_DIR, 'model_saved')
-    latest_model_path = latest_actor_from(path)
-
-    x_map = map_log_to_lin(x)
-
-    command = "python rl_test.py  \
-                --CURRENT_PARAM_BW={current_max_BW_param} \
-                --CURRENT_PARAM_TS={current_max_TS_param} \
-                --test_trace_dir='../data/example_traces/' \
-                --summary_dir='../MPC_RL_test_results/' \
-                --model_path='{model_path}' \
-                ".format(current_max_BW_param=x_map, current_max_TS_param=y, model_path=latest_model_path)
-
-    r = float(subprocess.check_output(command, shell=True, text=True).strip())
-    return r
-
-
-def eval_cubic(delay):
-    env = gym.make('PccNs-v0', congestion_control_type='cubic',
-                   log_dir="/tmp/cubic_log")
-    env.seed(42)
-    env.set_ranges(1000, 1000, delay, delay, 0, 0, 100, 100)
-    _ = env.reset()
-    rewards = []
-    while True:
-        action = [0, 0]
-        _, reward, dones, _ = env.step(action)
-        rewards.append(reward)
-        if dones:
-            break
-    return np.mean(np.array(rewards))
-
-
-def eval_aurora(delay):
-    env = gym.make('PccNs-v0', log_dir="/tmp/rl_log")
-    env.seed(42)
-    env.set_ranges(1000, 1000, delay, delay, 0, 0, 100, 100)
-    _ = env.reset()
-    rewards = []
-    while True:
-        action = [0, 0]
-        _, reward, dones, _ = env.step(action)
-        rewards.append(reward)
-        if dones:
-            break
-    return np.mean(np.array(rewards))
-
-
-def reward_gap_btwn_baseline_aurora(delay):
+def black_box_function(bandwidth, delay, loss, queue):
     '''Compute reward gap between baseline and RL solution.
 
     Args
@@ -114,70 +98,205 @@ def reward_gap_btwn_baseline_aurora(delay):
     Return
          (cubic - aurora) reward
     '''
-    return eval_cubic(delay) - eval_aurora(delay)
+    assert MODEL_PATH != ""
+    cmd = "python evaluate_cubic.py --bandwidth {} --delay {} --queue {} " \
+        "--loss {} --duration {}".format(bandwidth, delay, int(queue),
+                                         loss, 10)
+    print(cmd)
+    cubic_reward = float(subprocess.check_output(cmd, shell=True).strip())
+    cmd = "CUDA_VISIBLE_DEVICES='' python evaluate_aurora.py --bandwidth {} --delay {} --queue {} "  \
+        "--loss {} --model-path {} --duration {}".format(
+            bandwidth, delay, int(queue), loss, MODEL_PATH, 10)
+    print(cmd)
+    aurora_reward = float(subprocess.check_output(cmd, shell=True).strip())
+    # print("cubic", cubic_reward, "aurora", aurora_reward)
+    return cubic_reward - aurora_reward
+
+
+def select_range_from_opt_res(res):
+    """Select parameter range from BO optimizer res."""
+    params = list(res[0]['params'].keys())
+    targets = [val['target'] for val in res]
+    selected_ranges = {}
+    pos_target_indices = [idx for idx,
+                          target in enumerate(targets) if target > 0]
+    selected_indices = pos_target_indices[:3] if pos_target_indices else np.argsort(
+        np.array(targets))[:5]
+
+    for param in params:
+        values = []
+        for idx in selected_indices:
+            values.append(res[idx]['params'][param])
+        selected_ranges[param] = [min(values), max(values)]
+    return selected_ranges
+
+
+def do_bo(pbounds, black_box_function, seed):
+    optimizer = BayesianOptimization(
+        f=black_box_function,
+        pbounds=pbounds,
+        random_state=seed
+    )
+
+    optimizer.maximize(init_points=13, n_iter=2, kappa=20, xi=0.1)
+    best_param = optimizer.max
+    # delay = next.get('params').get('delay')
+    # queue = next.get('params').get('queue')
+    # param_TS = next.get('params').get('y')
+    params_range = select_range_from_opt_res(optimizer.res)
+    return best_param, params_range
+
+
+def initalize_pretrained_model(pbounds: Dict[str, List], n_models: int, save_dir: str,
+                               duration: int, steps: int):
+    """Initialize a pretrained model for BO training."""
+    # processes = []
+    # for idx, (bw, delay, loss, queue) in enumerate(zip(
+    #         np.linspace(pbounds['bandwidth'][0],
+    #                     pbounds['bandwidth'][1], n_models),
+    #         np.linspace(pbounds['delay'][0], pbounds['delay'][1], n_models),
+    #         np.linspace(pbounds['loss'][0], pbounds['loss'][1], n_models),
+    #         np.linspace(pbounds['queue'][0], pbounds['queue'][1], n_models))):
+    #     cmd = "python train_rl.py \
+    #         --save-dir {save_dir} \
+    #         --exp-name {exp_name} \
+    #         --duration {duration} \
+    #         --tensorboard-log aurora_tensorboard \
+    #         --total-timesteps {steps} \
+    #         --bandwidth {min_bw} {max_bw} \
+    #         --delay {min_delay} {max_delay}  \
+    #         --loss {min_loss} {max_loss} \
+    #         --queue {min_queue} {max_queue} \
+    #         --delta-scale 1".format(
+    #         save_dir=os.path.join(save_dir, 'pretrained_model_{}'.format(idx)),
+    #         exp_name='{}_pretrained_model_{}'.format(
+    #             os.path.basename(save_dir), idx), duration=duration,
+    #         steps=steps, min_bw=bw, max_bw=bw,
+    #         min_delay=delay, max_delay=delay, min_loss=loss, max_loss=loss,
+    #         min_queue=round(queue), max_queue=round(queue))
+    #     processes.append(subprocess.Popen(
+    #         cmd.split(),
+    #         stdout=open(os.path.join(save_dir,
+    #                                  'pretrained_model_{}'.format(idx),
+    #                                  'stdout.log'), 'w', 1),
+    #         stderr=open(os.path.join(save_dir,
+    #                                  'pretrained_model_{}'.format(idx),
+    #                                  'stderr.log'), 'w', 1)))
+    #
+    # while True:
+    #     for p in processes:
+    #         if p.poll() is not None:
+    #             if p.returncode == 0:
+    #                 processes.remove(p)
+    #             else:
+    #                 raise RuntimeError(p.args + 'failed!')
+    #     if not processes:
+    #         break
+    #     else:
+    #         time.sleep(10)
+
+    # TODO: do a grid sweeping here.
+
+    for idx, (bw, delay, loss, queue) in enumerate(zip(
+            np.linspace(pbounds['bandwidth'][0],
+                        pbounds['bandwidth'][1], n_models),
+            np.linspace(pbounds['delay'][0], pbounds['delay'][1], n_models),
+            np.linspace(pbounds['loss'][0], pbounds['loss'][1], n_models),
+            np.linspace(pbounds['queue'][0], pbounds['queue'][1], n_models))):
+        ckpt_path, model2serve_path = latest_model_from(
+            os.path.join(save_dir, 'pretrained_model_{}'.format(idx)))
+        return ckpt_path
+        # print(model2serve_path)
+        # cmd = "CUDA_VISIBLE_DEVICES='' python evaluate_aurora.py --bandwidth {} --delay {} --queue {} "  \
+        #     "--loss {} --model-path {} --duration {}".format(
+        #         bandwidth, delay, int(queue), loss, MODEL_PATH, 10)
 
 
 def main():
+    global MODEL_PATH
+    args = parse_args()
+    print(args)
+    if args.model_path:
+        # model path is specified, so use it as the pretrained model
+        MODEL_PATH = args.model_path
+    else:
+        # model path is not specified, strategies to create a model to start
+        # strategy 1: start from a randomly initialized model
+
+        # strategy 2: randomly sample input ranges of all dimensions and
+        # construct an environments with the samplings. Train 1 model on the
+        # environment and use it as the model to start.
+
+        # strategy 3: sample input ranges of all dimensions and construct the
+        # environments with the samplings. Train n models on the environments.
+        # Then test then by grid-sweeping the parameter space.
+        # pick the one which has the highest reward to be the model to start.
+        MODEL_PATH = ""
+    config_file = args.config_file
+    config = read_json_file(args.config_file)[0]
+    pbounds = {k: config[k] for k in config if k != 'weight'}
+    ckpt_path = initalize_pretrained_model(pbounds, 5, "test_bo", 10, 10000)
+    save_dir = args.save_dir
     # Example Flow:
     for i in range(12):
-        # if i > 0:
-        pbounds = {'delay': (0, 500)}
-        optimizer = BayesianOptimization(
-            f=black_box_function,
-            pbounds=pbounds
-            # random_state=2
-        )
+        best_param, params_range = do_bo(
+            pbounds, black_box_function, seed=args.seed)
+        min_bw, max_bw = params_range['bandwidth']
+        min_delay, max_delay = params_range['delay']
+        min_loss, max_loss = params_range['loss']
+        min_queue, max_queue = params_range['queue']
 
-        optimizer.maximize(
-            init_points=13,
-            n_iter=2,
-            kappa=20,
-            xi=0.1
-        )
-        next = optimizer.max
-        delay = next.get('params').get('delay')
-        # param_TS = next.get('params').get('y')
-
-        print("BO chose this best param........", delay)
+        print("BO choose paramter range ", params_range)
+        rand_ranges = RandomizationRanges(config_file)
+        rand_ranges.add_range((min_bw), (min_delay, max_delay),
+                              (min_loss, max_loss), (min_queue, max_queue))
+        new_config_file = os.path.join("test_bo", "bo_"+str(i) + ".json")
+        rand_ranges.dump(new_config_file)
+        config_file = new_config_file
 
         # Use the new param, add more traces into Pensieve, train more based on
         # before
-        path = os.path.join(RESULTS_DIR, 'model_saved')
-        latest_model_path = latest_actor_from(path)
+        # latest_ckpt_path, latest_model_path = latest_model_from(save_dir)
 
         # train Aurora with new parameter
+        # command = "python train_rl.py " \
+        #     "--total-timesteps {} " \
+        #     "--save-dir={save_dir} " \
+        #     "--pretrained-model-path {model_path} " \
+        #     "--delay {min_delay} {max_delay} " \
+        #     "--queue {min_queue} {max_queue} " \
+        #     "--bandwidth {min_bandwidth} {max_bandwidth} " \
+        #     "--loss {min_loss} {max_loss} " \
+        #     "--randomization-range-file {config_file}".format(
+        #         720000, save_dir=save_dir,
+        #         model_path=latest_ckpt_path,
+        #         min_delay=min_delay/1000,
+        #         max_delay=max_delay/1000,
+        #         min_queue=min_queue,
+        #         max_queue=max_queue,
+        #         min_bandwidth=min_bandwidth,
+        #         max_bandwidth=max_bandwidth,
+        #         min_loss=min_loss,
+        #         max_loss=max_loss,
+        #         config_file=config_file)
+        command = "python train_rl.py " \
+            "--total-timesteps {} " \
+            "--save-dir={save_dir} " \
+            "--pretrained-model-path {model_path} " \
+            "--randomization-range-file {config_file}".format(
+                10000000000, save_dir=save_dir,
+                model_path=latest_ckpt_path,
+                config_file=config_file)
+        # print(command)
+        # subprocess.check_call(command.split())
+        # latest_ckpt_path, latest_model_path = latest_model_from(save_dir)
+        # os.system("rm -r /tmp/best_model_to_serve")
+        # print("cp -r {} /tmp/best_model_to_serve".format(latest_model_path))
+        # os.system("cp -r {} /tmp/best_model_to_serve".format(latest_model_path))
+        #
+        # print("Get the file and pass it to the training script, if it exists.\n")
+        # print("Running training:", i)
 
-        command = "python multi_agent.py \
-                        --TOTAL_EPOCH=5000\
-                        --train_trace_dir={training_dir} \
-                        --val_trace_dir='{val_dir}'\
-                        --summary_dir={results_dir}\
-                        --description='first-run' \
-                        --nn_model={model_path} \
-                        --CURRENT_PARAM_BW={bo_output_param_BW} \
-                        --CURRENT_PARAM_TS={bo_output_param_TS} \
-                        ".format(training_dir=TRAINING_DATA_DIR, val_dir=VAL_TRACE_DIR,
-                                 results_dir=RESULTS_DIR, model_path=latest_model_path,
-                                 bo_output_param_BW=bo_best_param_BW, bo_output_param_TS=bo_best_param_TS)
 
-        command = "python multi_agent.py \
-                        --TOTAL_EPOCH=5000\
-                        --train_trace_dir={training_dir} \
-                        --val_trace_dir='{val_dir}'\
-                        --summary_dir={results_dir}\
-                        --description='first-run' \
-                        --nn_model={model_path} \
-                        --CURRENT_PARAM_BW={bo_output_param_BW} \
-                        --CURRENT_PARAM_TS={bo_output_param_TS} \
-                        ".format(training_dir=TRAINING_DATA_DIR, val_dir=VAL_TRACE_DIR,
-                                 results_dir=RESULTS_DIR, model_path=latest_model_path,
-                                 bo_output_param_BW=bo_best_param_BW, bo_output_param_TS=bo_best_param_TS)
-        os.system(command)
-
-        print("Get the file and pass it to the training script, if it exists.\n")
-        print("Running training:", i)
-        i += 1
-
-
-if "__name__" == "__main__":
+if __name__ == "__main__":
     main()

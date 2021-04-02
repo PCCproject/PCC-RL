@@ -8,7 +8,7 @@ import numpy as np
 from common.utils import set_seed
 
 from simulator import good_network_sim as network_sim
-from simulator.trace import generate_trace, generate_traces
+from simulator.trace import generate_trace, generate_traces, Trace
 
 warnings.filterwarnings("ignore")
 
@@ -35,8 +35,31 @@ def parse_args():
                         help='config file.')
     parser.add_argument('--time-variant-bw', action='store_true',
                         help='Generate time variant bandwidth if specified.')
+    parser.add_argument('--trace-file', type=str, default=None,
+                        help='path to a trace file.')
 
     return parser.parse_args()
+
+
+def test_on_trace(trace, save_dir, seed):
+    env = gym.make('PccNs-v0', traces=[trace], congestion_control_type='cubic',
+                   log_dir=save_dir)
+    env.seed(seed)
+
+    _ = env.reset()
+    rewards = []
+    while True:
+        action = [0, 0]
+        _, reward, dones, _ = env.step(action)
+        rewards.append(reward)
+        if dones:
+            # if args.save_dir:
+            #     env.dump_events_to_file(
+            #         os.path.join(args.save_dir, "cubic_test_log.json"))
+            # print("{}/{}, {}s".format(env_cnt,
+            #                           param_set_len, time.time() - t_start))
+            break
+    return rewards
 
 
 def main():
@@ -45,7 +68,9 @@ def main():
     if args.save_dir:
         os.makedirs(args.save_dir, exist_ok=True)
 
-    if args.config_file is not None:
+    if args.trace_file:
+        test_traces = [Trace.load_from_file(args.trace_file)]
+    elif args.config_file is not None:
         test_traces = generate_traces(args.config_file, 1, args.duration,
                                       constant_bw=not args.time_variant_bw)
     else:
@@ -56,28 +81,7 @@ def main():
                                       (args.queue, args.queue),
                                       constant_bw=not args.time_variant_bw)]
     for _, trace in enumerate(test_traces):
-        # log_path = os.path.join(args.save_dir,
-        #                         "env_{:.3f}_{:.3f}_{:.3f}_{:.3f}.csv".format(
-        #                             trace.bandwidths[0], trace.delay,
-        #                             trace.loss_rate, trace.queue_size))
-        env = gym.make('PccNs-v0', traces=[trace], congestion_control_type='cubic',
-                       log_dir=args.save_dir)
-        env.seed(args.seed)
-
-        obs = env.reset()
-        rewards = []
-        while True:
-            action = [0, 0]
-            obs, reward, dones, info = env.step(action)
-            rewards.append(reward)
-            if dones:
-                if args.save_dir:
-                    env.dump_events_to_file(
-                        os.path.join(args.save_dir, "cubic_test_log.json"))
-                # print("{}/{}, {}s".format(env_cnt,
-                #                           param_set_len, time.time() - t_start))
-                break
-        # print(rewards)
+        rewards = test_on_trace(trace, args.save_dir, args.seed)
         print(np.mean(np.array(rewards)))
 
 

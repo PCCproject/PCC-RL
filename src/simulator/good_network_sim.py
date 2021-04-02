@@ -560,7 +560,6 @@ class TCPCubicSender(Sender):
             self.pkt_loss_wait_time -= 1
         # else:
         self.rtt_samples.append(rtt)
-        self.queue_delay_samples.append(queue_delay)
         # TODO: update RTO
         if self.srtt is None:
             self.srtt = rtt

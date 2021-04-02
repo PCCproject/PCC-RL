@@ -332,6 +332,8 @@ class Sender():
         self.rto = -1
         self.ssthresh = 0
         self.pkt_loss_wait_time = -1
+        self.estRTT = 1000000 / 1e6  # SynInterval in emulation
+        self.RTTVar = self.estRTT / 2  # RTT variance
 
     _next_id = 1
 
@@ -370,8 +372,12 @@ class Sender():
         self.bytes_in_flight += BYTES_PER_PACKET
 
     def on_packet_acked(self, rtt):
+        self.estRTT = (7.0 * self.estRTT + rtt) / 8.0  # RTT of emulation way
+        self.RTTVar = (self.RTTVar * 7.0 + abs(rtt - self.estRTT) * 1.0) / 8.0
+
         self.acked += 1
         self.rtt_samples.append(rtt)
+        # self.rtt_samples.append(self.estRTT)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
@@ -456,6 +462,8 @@ class Sender():
         self.reset_obs()
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.id)
+        self.estRTT = 1000000 / 1e6  # SynInterval in emulation
+        self.RTTVar = self.estRTT / 2  # RTT variance
 
     def timeout(self):
         # placeholder

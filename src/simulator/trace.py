@@ -1,8 +1,10 @@
+import argparse
 import csv
+import os
 from typing import List, Tuple, Union
 
 import numpy as np
-from common.utils import read_json_file
+from common.utils import read_json_file, set_seed, write_json_file
 
 
 class Trace():
@@ -61,8 +63,20 @@ class Trace():
         self.idx = 0
 
     def dump(self, filename):
-        # TODO: save trace details into a json file.
-        raise NotImplementedError
+        # save trace details into a json file.
+        data = {'timestamps': self.timestamps,
+                'bandwidths': self.bandwidths,
+                'delay': self.delay,
+                'loss': self.loss_rate,
+                'queue': self.queue_size}
+        write_json_file(filename, data)
+
+    @staticmethod
+    def load_from_file(filename):
+        trace_data = read_json_file(filename)
+        return Trace(trace_data['timestamps'], trace_data['bandwidths'],
+                     trace_data['delay'], trace_data['loss'],
+                     trace_data['queue'])
 
 
 def generate_trace(duration_range: Tuple[float, float],
@@ -121,7 +135,7 @@ def generate_trace(duration_range: Tuple[float, float],
     # use bandwidth generator.
     assert prob_stay_range is not None and len(prob_stay_range) == 2 and \
         prob_stay_range[0] <= prob_stay_range[1] and \
-        0 <= prob_stay_range[0] <= 1  and 0 <= prob_stay_range[1] <= 1
+        0 <= prob_stay_range[0] <= 1 and 0 <= prob_stay_range[1] <= 1
     assert T_s_range is not None and len(
         T_s_range) == 2 and T_s_range[0] <= T_s_range[1]
     assert cov_range is not None and len(
@@ -161,11 +175,15 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
             duration_min, duration_max = duration, duration
 
         # used by bandwidth generation
-        prob_stay_min, prob_stay_max = env_config['prob_stay'] if 'prob_stay' in env_config else (0.5, 0.5)
+        prob_stay_min, prob_stay_max = env_config['prob_stay'] if 'prob_stay' in env_config else (
+            0.5, 0.5)
         T_s_min, T_s_max = env_config['T_s'] if 'T_s' in env_config else (2, 2)
-        cov_min, cov_max = env_config['cov'] if 'cov' in env_config else (0.2, 0.2)
-        steps_min, steps_max = env_config['steps'] if 'steps' in env_config else (10, 10)
-        timestep_min, timestep_max = env_config['timestep'] if 'timestep' in env_config else (1, 1)
+        cov_min, cov_max = env_config['cov'] if 'cov' in env_config else (
+            0.2, 0.2)
+        steps_min, steps_max = env_config['steps'] if 'steps' in env_config else (
+            10, 10)
+        timestep_min, timestep_max = env_config['timestep'] if 'timestep' in env_config else (
+            1, 1)
         trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
         for _ in range(trace_cnt):
             trace = generate_trace((duration_min, duration_max),
@@ -304,3 +322,61 @@ def transition(state, prob_stay, bw_states, transition_probs):
             return switch_down
         else:  # switch up
             return switch_up
+
+
+def parse_args():
+    """Parse arguments from the command line."""
+    parser = argparse.ArgumentParser("Generate trace files.")
+    parser.add_argument('--save-dir', type=str, required=True,
+                        help="direcotry to save the model.")
+    parser.add_argument('--config-file', type=str, required=True,
+                        help="config file")
+    parser.add_argument('--seed', type=int, default=42, help='seed')
+    # parser.add_argument('--ntrace', type=int, required=True,
+    #                     help='Number of trace files to be synthesized.')
+    parser.add_argument('--time-variant-bw', action='store_true',
+                        help='Generate time variant bandwidth if specified.')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    set_seed(args.seed)
+    os.makedirs(args.save_dir, exist_ok=True)
+    # traces = generate_traces(args.config_file, args.ntrace, args.duration,
+    #                          constant_bw=not args.time_variant_bw)
+    conf = read_json_file(args.config_file)
+    dim_vary = None
+    for dim in conf:
+        if len(conf[dim]) > 2:
+            dim_vary = conf[dim]
+        elif len(conf[dim]) == 2:
+            pass
+        else:
+            raise RuntimeError
+
+    for i, value in enumerate(dim_vary):
+        tr = generate_trace(
+            duration_range=conf['duration'] if len(
+                conf['duration']) == 2 else (value, value),
+            bandwidth_range=conf['bandwidth'] if len(
+                conf['bandwidth']) == 2 else (value, value),
+            delay_range=conf['delay'] if len(
+                conf['delay']) == 2 else (value, value),
+            loss_rate_range=conf['loss'] if len(
+                conf['loss']) == 2 else (value, value),
+            queue_size_range=conf['queue'] if len(
+                conf['queue']) == 2 else (value, value),
+            prob_stay_range=conf['prob_stay'] if len(
+                conf['prob_stay']) == 2 else (value, value),
+            T_s_range=(2, 2),
+            cov_range=(0.2, 0.2),
+            steps_range=(10, 10),
+            timestep_range=conf['timestep'] if len(
+                conf['timestep']) == 2 else (value, value),
+            constant_bw=False)
+        tr.dump(os.path.join(args.save_dir, 'trace{:04d}.json'.format(i)))
+
+
+if __name__ == "__main__":
+    main()
