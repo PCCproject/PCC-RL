@@ -100,7 +100,7 @@ class Link():
         # if extra_delay + self.queue_delay > self.max_queue_delay:
         #     # print("{}\tDrop!".format(event_time), file=sys.stderr)
         #     return False
-        if 1 + self.pkt_in_queue > self.queue_size:
+        if 1 + int(self.pkt_in_queue) > self.queue_size:
             # print("{}\tDrop!".format(event_time))
             return False
         self.queue_delay += extra_delay
