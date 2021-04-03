@@ -38,7 +38,7 @@ def main():
         axes[0].set_xlabel("Time(s)")
         axes[0].set_ylabel("mbps")
         axes[0].legend()
-        axes[0].set_ylim(0, 6)
+        axes[0].set_ylim(0, )
         axes[0].set_xlim(0, )
 
         axes[1].plot(df['timestamp'], df['latency']*1000,
@@ -49,7 +49,7 @@ def main():
         axes[1].set_ylabel("Latency(ms)")
         axes[1].legend()
         axes[1].set_xlim(0, )
-        axes[1].set_ylim(0, 80)
+        # axes[1].set_ylim(100, 115)
 
 
         axes[2].plot(df['timestamp'], df['loss'], label='loss avg {:.3f}'.format(df['loss'].mean()))
@@ -66,7 +66,7 @@ def main():
         axes[3].legend()
         axes[3].set_xlim(0, )
 
-        axes[4].plot(df['timestamp'], df['action'] * 1.0, label='delta')
+        axes[4].plot(df['timestamp'], df['action'] * 1.0, label='delta avg {:.3f}'.format(df['action'].mean()))
         axes[4].set_xlabel("Time(s)")
         axes[4].set_ylabel("delta")
         axes[4].legend()
