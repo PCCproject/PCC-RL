@@ -26,7 +26,6 @@ class Trace():
     def __init__(self, timestamps: List[float], bandwidths: List[float],
                  delays: List[float], loss_rate: float, queue_size: int):
         assert len(timestamps) == len(bandwidths)
-        assert len(timestamps) == len(delays)
         self.timestamps = timestamps
         self.bandwidths = bandwidths
         self.delays = delays
