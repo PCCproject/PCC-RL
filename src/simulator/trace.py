@@ -12,21 +12,24 @@ class Trace():
 
     timestamps and bandwidth should be at least list of one item if bandwidth
     is a constant. timestamps needs to contain the last timestamp of the trace
-    to mark the duration of the trace.
+    to mark the duration of the trace. bandwidhts and delays should share the
+    same granularity.
 
     Args
         timestamps: trace timestamps in second.
         bandwidths: trace bandwidths in Mbps.
-        delay: link delay in ms.
+        delays: trace one-way delays in ms.
+        loss_rate: uplink random packet loss rate.
         queue: queue in packets.
     """
 
     def __init__(self, timestamps: List[float], bandwidths: List[float],
-                 delay: float, loss_rate: float, queue_size: int):
+                 delays: List[float], loss_rate: float, queue_size: int):
         assert len(timestamps) == len(bandwidths)
+        assert len(timestamps) == len(delays)
         self.timestamps = timestamps
         self.bandwidths = bandwidths
-        self.delay = delay
+        self.delays = delays
         self.loss_rate = loss_rate
         self.queue_size = queue_size
         self.idx = 0  # track the position in the trace
@@ -38,9 +41,11 @@ class Trace():
             self.idx += 1
         return self.bandwidths[self.idx]
 
-    def get_delay(self):
-        """Return link one-way delay(millisecond)."""
-        return self.delay
+    def get_delay(self, ts):
+        """Return link one-way delay(millisecond) at ts(second)."""
+        while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
+            self.idx += 1
+        return self.delays[self.idx]
 
     def get_loss_rate(self):
         """Return link loss rate."""
@@ -56,8 +61,8 @@ class Trace():
     def __str__(self):
         return ("Bandwidth: {:.3f}Mbps, Link delay: {:.3f}ms, "
                 "Link loss: {:.3f}, Queue: {}packets".format(
-                    self.bandwidths[self.idx], self.delay, self.loss_rate,
-                    self.queue_size))
+                    self.bandwidths[self.idx], self.delays[self.idx],
+                    self.loss_rate, self.queue_size))
 
     def reset(self):
         self.idx = 0
@@ -66,7 +71,7 @@ class Trace():
         # save trace details into a json file.
         data = {'timestamps': self.timestamps,
                 'bandwidths': self.bandwidths,
-                'delay': self.delay,
+                'delays': self.delays,
                 'loss': self.loss_rate,
                 'queue': self.queue_size}
         write_json_file(filename, data)
@@ -75,7 +80,7 @@ class Trace():
     def load_from_file(filename):
         trace_data = read_json_file(filename)
         return Trace(trace_data['timestamps'], trace_data['bandwidths'],
-                     trace_data['delay'], trace_data['loss'],
+                     trace_data['delays'], trace_data['loss'],
                      trace_data['queue'])
 
 
@@ -120,16 +125,16 @@ def generate_trace(duration_range: Tuple[float, float],
         np.log(queue_size_range[0]),
         np.log(queue_size_range[1]+1), 1)))
 
-    if bandwidth_file:
-        timestamps, bandwidths = load_bandwidth_from_file(bandwidth_file)
-        return Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
+    # if bandwidth_file:
+    #     timestamps, bandwidths = load_bandwidth_from_file(bandwidth_file)
+    #     return Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
 
     duration = float(np.random.uniform(
         duration_range[0], duration_range[1], 1))
     if constant_bw:
         bw = float(np.random.uniform(
             bandwidth_range[0], bandwidth_range[1], 1))
-        ret_trace = Trace([duration], [bw], delay, loss_rate, queue_size)
+        ret_trace = Trace([duration], [bw], [delay], loss_rate, queue_size)
         return ret_trace
 
     # use bandwidth generator.
@@ -155,7 +160,7 @@ def generate_trace(duration_range: Tuple[float, float],
     timestamps, bandwidths = generate_bw_series(
         prob_stay, T_s, cov, duration, steps, bandwidth_range[0],
         bandwidth_range[1], timestep)
-    ret_trace = Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
+    ret_trace = Trace(timestamps, bandwidths, [delay], loss_rate, queue_size)
     return ret_trace
 
 

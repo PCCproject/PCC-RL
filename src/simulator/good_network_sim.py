@@ -85,7 +85,7 @@ class Link():
     def get_cur_latency(self, event_time):
         q_delay = self.get_cur_queue_delay(event_time)
         # print('queue delay: ', q_delay)
-        return self.trace.get_delay() / 1000.0 + q_delay
+        return self.trace.get_delay(event_time) / 1000.0 + q_delay
 
     def packet_enters_link(self, event_time):
         if (random.random() < self.trace.get_loss_rate()):
@@ -111,7 +111,7 @@ class Link():
     def print_debug(self):
         print("Link:")
         print("Bandwidth: %f" % self.get_bandwidth(0))
-        print("Delay: %f" % self.trace.get_delay())
+        print("Delay: %f" % self.trace.get_delay(0))
         print("Queue Delay: %f" % self.queue_delay)
         # print("Max Queue Delay: %f" % self.max_queue_delay)
         print("One Packet Queue Delay: %f" % (1.0 / self.get_bandwidth(0)))
