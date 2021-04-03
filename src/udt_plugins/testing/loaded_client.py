@@ -20,12 +20,12 @@ import sys
 import time
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-print(sys.path)
 
 import numpy as np
 
 from common import sender_obs
 from udt_plugins.testing import loaded_agent
+from simulator.aurora import Aurora
 
 
 MIN_RATE = 0.12
@@ -85,7 +85,10 @@ class PccGymDriver():
                                   'latency_increase', 'packet_size'])
         self.got_data = False
 
-        self.agent = loaded_agent.LoadedModelAgent(args.model_path)
+        # self.agent = loaded_agent.LoadedModelAgent(args.model_path)
+        self.aurora = Aurora(seed=20, log_dir="", timesteps_per_actorbatch=10,
+                             pretrained_model_path=args.model_path,
+                             delta_scale=DELTA_SCALE)
 
         PccGymDriver.flow_lookup[flow_id] = self
 
@@ -95,7 +98,8 @@ class PccGymDriver():
                         "recv_end, rtt_samples, packet_size]\n")
         self.t_start = time.time()
         # dummpy inference here to load model
-        _ = self.agent.act(self.history.as_array())
+        # _ = self.agent.act(self.history.as_array())
+        _ = self.aurora.model.predict(self.history.as_array())
 
         self.mi_pushed = False
 
@@ -119,14 +123,18 @@ class PccGymDriver():
     def get_rate(self):
         if self.has_data() and self.mi_pushed:
             # rate_delta = self.agent.act(self.history.as_array())
-            rate_delta = self.agent.act(self.sim_features[self.idx])
+            # rate_delta = self.agent.act(self.sim_features[self.idx])
+            t_start = time.time()
+            rate_delta, _ = self.aurora.model.predict(self.history.as_array())
+            rate_delta = rate_delta.item()
+            old_rate = self.rate
             self.rate = apply_rate_delta(self.rate, rate_delta)
-            # print(self.rate, rate_delta, self.history.as_array(), file=sys.stderr)
+            print('get rate costs {:.4f}'.format(time.time() - t_start), old_rate, self.rate, rate_delta, self.history.as_array(), file=sys.stderr, flush=True)
             try:
                 mi = self.history.values[-1]
-                sim_rate_delta = self.actions[self.idx]
+                # sim_rate_delta = self.actions[self.idx]
                 # self.rate = apply_rate_delta(self.rate, rate_delta)
-                print(rate_delta, sim_rate_delta, file=sys.stderr, flush=True)
+                # print(rate_delta, sim_rate_delta, file=sys.stderr, flush=True)
                 self.idx += 1
                 send_rate = mi.get("send rate")
                 recv_rate = mi.get("recv rate")
@@ -191,7 +199,8 @@ class PccGymDriver():
                 time.time() - self.t_start, rate_delta, self.rate, sample_vector, input_array_line))
         except Exception as e:
             print(e, file=sys.stderr, flush=True)
-        self.mi_pushed = True
+        self.mi_pushed = False
+        self.rate = 1.2
         return self.rate * 1e6
 
     def has_data(self):
@@ -214,30 +223,30 @@ class PccGymDriver():
         self.got_data = False
 
     def reset(self):
-        self.agent.reset()
+        # self.agent.reset()
         self.reset_rate()
         self.reset_history()
 
     def give_sample(self, bytes_sent, bytes_acked, bytes_lost,
                     send_start_time, send_end_time, recv_start_time,
                     recv_end_time, rtt_samples, packet_size, utility):
-        # self.obsf.write("bytes_sent={}, bytes_acked={}, bytes_lost={}, "
-        #         "send_start_time={}, send_end_time={}, recv_start_time={},"
-        #         "recv_end_time={}, rtt_samples={}, packet_size={}\n".format(bytes_sent, bytes_acked, bytes_lost,
-        #             send_start_time, send_end_time, recv_start_time,
-        #             recv_end_time, rtt_samples, packet_size))
+        self.obsf.write("bytes_sent={}, bytes_acked={}, bytes_lost={}, "
+                "send_start_time={}, send_end_time={}, recv_start_time={},"
+                "recv_end_time={}, rtt_samples={}, packet_size={}\n".format(bytes_sent, bytes_acked, bytes_lost,
+                    send_start_time, send_end_time, recv_start_time,
+                    recv_end_time, rtt_samples, packet_size))
         self.record_observation(
             sender_obs.SenderMonitorInterval(
                 self.id,
-                bytes_sent=bytes_sent,
-                bytes_acked=bytes_acked,
-                bytes_lost=bytes_lost,
+                bytes_sent=bytes_sent / packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
+                bytes_acked=bytes_acked / packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
+                bytes_lost=bytes_lost/packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
                 send_start=send_start_time,
                 send_end=send_end_time,
                 recv_start=recv_start_time,
                 recv_end=recv_end_time,
                 rtt_samples=rtt_samples,
-                packet_size=packet_size,
+                packet_size=sender_obs.MAXIMUM_SEGMENT_SIZE,
             )
         )
         self.mi_pushed = True

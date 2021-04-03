@@ -15,6 +15,8 @@
 import numpy as np
 import sys
 
+MAXIMUM_SEGMENT_SIZE = 1500
+
 # The monitor interval class used to pass data from the PCC subsystem to
 # the machine learning module.
 #
@@ -31,7 +33,7 @@ class SenderMonitorInterval():
                  recv_end=0.0,
                  rtt_samples=[],
                  queue_delay_samples=[],
-                 packet_size=1420):
+                 packet_size=MAXIMUM_SEGMENT_SIZE):
         self.features = {}
         self.sender_id = sender_id
         self.bytes_acked = bytes_acked

@@ -6,6 +6,7 @@ import types
 from typing import List
 import warnings
 import logging
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -201,7 +202,7 @@ class Aurora():
                                   optim_batchsize=int(
                                       timesteps_per_actorbatch/4),
                                   optim_epochs=12,
-                                  gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=4)
+                                  gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.restore(self.model.sess, pretrained_model_path)
@@ -219,7 +220,7 @@ class Aurora():
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
                               optim_batchsize=int(timesteps_per_actorbatch/4),
                               optim_epochs=12,
-                              gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=4)
+                              gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
     def train(self, training_traces, validation_traces, total_timesteps,
