@@ -24,7 +24,6 @@ import gym
 from gym import spaces
 from gym.envs.registration import register
 from gym.utils import seeding
-import ipdb
 import numpy as np
 
 from common import sender_obs

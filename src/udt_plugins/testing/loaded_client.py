@@ -20,6 +20,7 @@ import sys
 import time
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+print(sys.path, file=sys.stderr, flush=True)
 
 import numpy as np
 
@@ -41,7 +42,7 @@ RESET_RATE_MAX = 0.12
 
 def parse_args():
     """Parse arguments from the command line."""
-    parser = argparse.ArgumentParser("Plot time series figures.")
+    parser = argparse.ArgumentParser("Loaded_client")
     parser.add_argument('--model-path', type=str, required=True,
                         help="path to a NN model.")
     parser.add_argument('--save-dir', type=str, default="",
@@ -103,20 +104,20 @@ class PccGymDriver():
 
         self.mi_pushed = False
 
-        self.actions = []
-        self.sim_features = []
-        with open('/home/zxxia/pantheon/env_2.000_5.000_0.000_10.000.csv', 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                self.actions.append(float(row['action']))
-                sim_feat = []
-                for k in range(10):
-                    sim_feat.append(
-                        float(row['send_latency_ratio {}'.format(k)]))
-                    sim_feat.append(float(row['latency_ratio {}'.format(k)]))
-                    sim_feat.append(float(row['send_ratio {}'.format(k)]))
-
-                self.sim_features.append(np.array(sim_feat))
+        # self.actions = []
+        # self.sim_features = []
+        # with open('/home/zxxia/pantheon/env_2.000_5.000_0.000_10.000.csv', 'r') as f:
+        #     reader = csv.DictReader(f)
+        #     for row in reader:
+        #         self.actions.append(float(row['action']))
+        #         sim_feat = []
+        #         for k in range(10):
+        #             sim_feat.append(
+        #                 float(row['send_latency_ratio {}'.format(k)]))
+        #             sim_feat.append(float(row['latency_ratio {}'.format(k)]))
+        #             sim_feat.append(float(row['send_ratio {}'.format(k)]))
+        #
+        #         self.sim_features.append(np.array(sim_feat))
         # print(self.actions, file=sys.stderr, flush=True)
         self.idx = 1
 
@@ -200,7 +201,6 @@ class PccGymDriver():
         except Exception as e:
             print(e, file=sys.stderr, flush=True)
         self.mi_pushed = False
-        self.rate = 1.2
         return self.rate * 1e6
 
     def has_data(self):
