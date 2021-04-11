@@ -38,12 +38,16 @@ class Trace():
         # support time-variant bandwidth and constant bandwidth
         while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
             self.idx += 1
+        if self.idx >= len(self.delays):
+            return self.delays[-1]
         return self.bandwidths[self.idx]
 
     def get_delay(self, ts):
         """Return link one-way delay(millisecond) at ts(second)."""
         while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
             self.idx += 1
+        if self.idx >= len(self.delays):
+            return self.delays[-1]
         return self.delays[self.idx]
 
     def get_loss_rate(self):
