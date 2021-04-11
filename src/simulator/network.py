@@ -99,7 +99,7 @@ class Link():
         # if extra_delay + self.queue_delay > self.max_queue_delay:
         #     print("{}\tDrop!".format(event_time))
         #     return False
-        if 1 + int(self.pkt_in_queue) > self.queue_size:
+        if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
             # print("{}\tDrop!".format(event_time))
             return False
         self.queue_delay += extra_delay
@@ -168,14 +168,14 @@ class Network():
             self.cur_time, end_time, dur))
         for sender in self.senders:
             sender.reset_obs()
-        while self.cur_time < end_time:
+        while True:
+            event_time, sender, event_type, next_hop, cur_latency, dropped, \
+                event_id, rto, event_queue_delay = self.q[0]
+            if event_time >= end_time:
+                self.cur_time = end_time
+                break
             event_time, sender, event_type, next_hop, cur_latency, dropped, \
                 event_id, rto, event_queue_delay = heapq.heappop(self.q)
-            # if event_time >= end_time:
-            #     heapq.heappush(self.q, (event_time, sender, event_type,
-            #                             next_hop, cur_latency, dropped,
-            #                             event_id, rto, event_queue_delay))
-            #     break
             self.cur_time = event_time
             new_event_time = event_time
             new_event_type = event_type
@@ -769,7 +769,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
-                self.senders = [Sender(150, [self.links[0], self.links[1]], 0,
+                self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
                                        delta_scale=self.delta_scale)]
