@@ -1,30 +1,32 @@
 import csv
+import logging
 import os
 import shutil
 import time
 import types
 from typing import List
 import warnings
-import logging
-import sys
 
+import gym
 import numpy as np
 import tensorflow as tf
+from stable_baselines import PPO1
+from stable_baselines.bench import Monitor
+from stable_baselines.common.callbacks import BaseCallback
+from stable_baselines.common.policies import FeedForwardPolicy
+from stable_baselines.results_plotter import load_results, ts2xy
+
+from simulator import network
+from simulator.network import BYTES_PER_PACKET
+from simulator.trace import generate_trace
+from common.utils import set_tf_loglevel, pcc_aurora_reward
 from udt_plugins.testing.loaded_agent import LoadedModel
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
     tf.contrib._warning = None
 
-import gym
-from stable_baselines import PPO1
-from stable_baselines.common.callbacks import BaseCallback
-from stable_baselines.common.policies import FeedForwardPolicy
-from stable_baselines.results_plotter import load_results, ts2xy
-from stable_baselines.bench import Monitor
-
-from common.utils import read_json_file, set_tf_loglevel
-from simulator import network
-from simulator.trace import generate_trace
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 set_tf_loglevel(logging.FATAL)
@@ -270,18 +272,27 @@ class Aurora():
         raise NotImplementedError
 
 
-def test(model, env, env_id=0):
-    reward_list = [0]
-    loss_list = [0]
-    tput_list = [0]
-    delay_list = [0]
-    send_rate_list = [0]
-    ts_list = [0]
-    action_list = [0]
+def test(model, env):
+    reward_list = []
+    loss_list = []
+    tput_list = []
+    delay_list = []
+    send_rate_list = []
+    ts_list = []
+    action_list = []
     mi_list = []
     obs_list = []
+    writer = csv.writer(open(os.path.join(
+        env.log_dir, 'aurora_simulation_log.csv'), 'w', 1), lineterminator='\n')
+    writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
+                     'loss', 'reward', "action", "bytes_sent",
+                     "bytes_acked", "bytes_lost", "send_start_time",
+                     "send_end_time", 'recv_start_time',
+                     'recv_end_time', 'latency_increase',
+                     "packet_size", 'bandwidth', "queue_delay",
+                     'packet_in_queue', 'queue_size', 'cwnd',
+                     'ssthresh', "rto"])
     obs = env.reset()
-    obs_list.append(obs.tolist())
     while True:
         if isinstance(model, LoadedModel):
             obs = obs.reshape(1, -1)
@@ -289,19 +300,38 @@ def test(model, env, env_id=0):
             action = action['act'][0]
         else:
             action, _states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
-        reward_list.append(rewards)
-        last_event = env.event_record['Events'][-1]
-        loss_list.append(last_event['Loss Rate'])
-        delay_list.append(last_event['Latency'] * 1000)
-        tput_list.append(last_event['Throughput'] / 1e6)
-        send_rate_list.append(last_event['Send Rate'] / 1e6)
-        ts_list.append(last_event['Timestamp'])
-        action_list.append(last_event['Action'])
-        mi_list.append(last_event['MI'])
+
+        # get the new MI and stats collected in the MI
+        sender_mi = env.senders[0].get_run_data()
+        throughput = sender_mi.get("recv rate")  # bits/sec
+        send_rate = sender_mi.get("send rate")  # bits/sec
+        latency = sender_mi.get("avg latency")
+        loss = sender_mi.get("loss ratio")
+        avg_queue_delay = sender_mi.get('avg queue delay')
+        reward = pcc_aurora_reward(
+            throughput / 8 / BYTES_PER_PACKET, latency, loss)
+
+        writer.writerow([
+            env.net.get_cur_time(), send_rate, throughput, latency, loss,
+            reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
+            sender_mi.bytes_lost, sender_mi.send_start, sender_mi.send_end,
+            sender_mi.recv_start, sender_mi.recv_end,
+            sender_mi.get('latency increase'), sender_mi.packet_size,
+            env.links[0].get_bandwidth(
+                env.net.get_cur_time()) * BYTES_PER_PACKET * 8 / 1e6,
+            avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
+            env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto])
+        reward_list.append(reward)
+        loss_list.append(loss)
+        delay_list.append(latency * 1000)
+        tput_list.append(throughput / 1e6)
+        send_rate_list.append(send_rate / 1e6)
+        ts_list.append(env.net.get_cur_time())
+        action_list.append(action.item())
+        mi_list.append(sender_mi.send_end - sender_mi.send_start)
         obs_list.append(obs.tolist())
+        obs, rewards, dones, info = env.step(action)
+
         if dones:
             break
-    # env.dump_events_to_file(os.path.join(
-    #     env.log_dir, "pcc_env_log_run_{}.json".format(env_id)))
     return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list

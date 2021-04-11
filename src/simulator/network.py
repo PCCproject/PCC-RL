@@ -14,11 +14,11 @@
 
 import csv
 import heapq
-import json
 import os
 import random
 import sys
 import time
+import math
 
 import gym
 from gym import spaces
@@ -27,7 +27,7 @@ from gym.utils import seeding
 import numpy as np
 
 from common import sender_obs
-from common.utils import write_json_file, read_json_file
+from common.utils import pcc_aurora_reward
 from simulator.trace import Trace
 
 MAX_CWND = 5000
@@ -74,7 +74,12 @@ class Link():
     def get_cur_queue_delay(self, event_time):
         # cur_queue_delay = max(0.0, self.queue_delay -
         #                       (event_time - self.queue_delay_update_time))
-        cur_queue_delay = self.pkt_in_queue / self.get_bandwidth(event_time)
+        self.pkt_in_queue = max(0, self.pkt_in_queue -
+                                (event_time - self.queue_delay_update_time) *
+                                self.get_bandwidth(event_time))
+        self.queue_delay_update_time = event_time
+        cur_queue_delay = math.ceil(
+            self.pkt_in_queue) / self.get_bandwidth(event_time)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -86,10 +91,6 @@ class Link():
         if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
-        self.pkt_in_queue = max(0, self.pkt_in_queue -
-                                (event_time - self.queue_delay_update_time) *
-                                self.get_bandwidth(event_time))
-        self.queue_delay_update_time = event_time
         extra_delay = 1.0 / self.get_bandwidth(event_time)
         # print("Time: {},  Extra delay:{}, Current queue delay: {}, "
         #       "Max delay: {}, packets in queue: {}".format(
@@ -107,8 +108,10 @@ class Link():
 
     def print_debug(self):
         print("Link:")
-        print("Bandwidth: %.3fMbps" % (self.trace.get_bandwidth(0)))  # TODO: Do not use timestamp 0.
-        print("Delay: %.3fms" % (self.trace.get_delay(0))) # TODO: Do not use timestamp 0.
+        # TODO: Do not use timestamp 0.
+        print("Bandwidth: %.3fMbps" % (self.trace.get_bandwidth(0)))
+        # TODO: Do not use timestamp 0.
+        print("Delay: %.3fms" % (self.trace.get_delay(0)))
         print("Queue Delay: %.3fms" % (self.queue_delay * 1000))
         # print("Max Queue Delay: %.3fms" % (self.max_queue_delay * 1000))
         print("One Packet Queue Delay: %.3fms" % (
@@ -135,6 +138,11 @@ class Network():
         self.links = links
         self.queue_initial_packets()
         self.env = env
+
+        if not self.env.train_flag:
+            self.packet_logger = csv.writer(open(
+                os.path.join(env.log_dir, "aurora_packet_log.csv"), 'w', 1),
+                lineterminator='\n')
 
     def queue_initial_packets(self):
         for sender in self.senders:
@@ -198,9 +206,19 @@ class Network():
                         new_dropped = True
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
+                        if not self.env.train_flag:
+                            self.packet_logger.writerow(
+                                [self.cur_time, event_id, 'lost',
+                                 BYTES_PER_PACKET])
                     else:
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
+                        # log packet acked
+                        if not self.env.train_flag:
+                            self.packet_logger.writerow(
+                                [self.cur_time, event_id, 'acked',
+                                 BYTES_PER_PACKET, cur_latency,
+                                 event_queue_delay])
                 else:
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -217,6 +235,10 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         # print('Send packet at {}'.format(self.cur_time))
+                        if not self.env.train_flag:
+                            self.packet_logger.writerow(
+                                [self.cur_time, event_id, 'sent',
+                                 BYTES_PER_PACKET])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
@@ -248,57 +270,20 @@ class Network():
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
                                         new_next_hop, new_latency, new_dropped,
                                         event_id, rto, new_event_queue_delay))
+        for sender in self.senders:
+            sender.record_run()
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
-        send_throughput = sender_mi.get("send rate")  # bits/sec
-        latency = sender_mi.get("avg latency")
+        latency = sender_mi.get("avg latency") # second
         loss = sender_mi.get("loss ratio")
-        avg_queue_delay = sender_mi.get('avg queue delay')
-        recv_dur = sender_mi.get('recv dur')
-        send_dur = sender_mi.get('send dur')
-        # bw_cutoff = self.links[0].bw * 0.8
-        # lat_cutoff = 2.0 * self.links[0].dl * 1.5
-        # loss_cutoff = 2.0 * self.links[0].lr * 1.5
         debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
             throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
-        #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
+        reward = pcc_aurora_reward(
+            throughput / 8 / BYTES_PER_PACKET, latency, loss)
 
-        # Super high throughput
-        #reward = REWARD_SCALE * (20.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-
-        # Very high thpt
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss)
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 3e3 * loss)
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 3e4 * loss)
-        reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) -
-                  1e3 * latency - 2e3 * loss)
-        # reward = - 3e4 * loss
-        try:
-            ssthresh = self.senders[0].ssthresh
-        except:
-            ssthresh = 0
-
-        self.env.writer.writerow([
-            self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
-            self.links[0].get_bandwidth(self.cur_time),
-            self.links[1].get_bandwidth(self.cur_time),
-            send_throughput / (8 * BYTES_PER_PACKET),
-            throughput/(8 * BYTES_PER_PACKET), reward, loss, latency,
-            self.senders[0].sent, self.senders[0].acked,
-            action, avg_queue_delay, dur, send_dur, recv_dur,
-            self.links[0].pkt_in_queue, self.links[0].queue_size])
-        # print(self.cur_time)
-
-        # High thpt
-        #reward = REWARD_SCALE * (5.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-
-        # Low latency
-        #reward = REWARD_SCALE * (2.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-        # if reward > 857:
-        #print("Reward = %f, thpt = %f, lat = %f, loss = %f" % (reward, throughput, latency, loss))
-
-        #reward = (throughput / RATE_OBS_SCALE) * np.exp(-1 * (LATENCY_PENALTY * latency / LAT_OBS_SCALE + LOSS_PENALTY * loss))
+        if latency > 0.0:
+            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency")
         return reward * REWARD_SCALE
 
 
@@ -741,17 +726,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.reward_sum = 0.0
         self.reward_ewma = 0.0
 
-        self.event_record = {"Events": []}
         self.episodes_run = -1
-
-        self.writer = csv.writer(open(os.path.join(self.log_dir, '{}_test_log.csv'.format(
-            self.congestion_control_type)), 'w', 1), lineterminator='\n')
-        self.writer.writerow(['timestamp', 'cwnd', 'ssthresh', "rto",
-                              'link0_bw', 'link1_bw', "send_throughput",
-                              'throughput', 'reward', 'loss', 'latency',
-                              "packet_sent", "packet_acked", "action",
-                              "queue_delay", "MI", 'send_dur', 'recv dur',
-                              'packet_in_queue', 'queue_size'])
 
     def seed(self, seed=None):
         self.rand, seed = seeding.np_random(seed)
@@ -773,32 +748,8 @@ class SimulatedNetworkEnv(gym.Env):
                 self.senders[i].apply_cwnd_delta(action[1])
         # print("Running for %fs" % self.run_dur)
         reward = self.net.run_for_dur(self.run_dur, action=actions[0])
-        for sender in self.senders:
-            sender.record_run()
         self.steps_taken += 1
         sender_obs = self._get_all_sender_obs()
-        sender_mi = self.senders[0].get_run_data()
-        event = {}
-        event["Name"] = "Step"
-        event["Time"] = self.steps_taken
-        event["Reward"] = reward
-        #event["Target Rate"] = sender_mi.target_rate
-        event["Send Rate"] = sender_mi.get("send rate")
-        event["Throughput"] = sender_mi.get("recv rate")
-        event["Latency"] = sender_mi.get("avg latency")
-        event["Loss Rate"] = sender_mi.get("loss ratio")
-        event["Latency Inflation"] = sender_mi.get("sent latency inflation")
-        event["Latency Ratio"] = sender_mi.get("latency ratio")
-        event["Send Ratio"] = sender_mi.get("send ratio")
-        #event["Cwnd"] = sender_mi.cwnd
-        #event["Cwnd Used"] = sender_mi.cwnd_used
-        event["Timestamp"] = self.net.get_cur_time()
-        event["Action"] = actions[0]
-        event["MI"] = self.run_dur
-        self.event_record["Events"].append(event)
-        if event["Latency"] > 0.0:
-            self.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency")
-        #print("Sender obs: %s" % sender_obs)
 
         should_stop = self.current_trace.is_finished(self.net.get_cur_time())
 
@@ -815,14 +766,10 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
-        # bw = self.current_trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET
-        # lat = self.current_trace.get_delay() / 1000
-        # queue = self.current_trace.get_queue_size()
-        # loss = self.current_trace.get_loss_rate()
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
-                self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
+                self.senders = [Sender(150, [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
                                        delta_scale=self.delta_scale)]
@@ -864,21 +811,12 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
-        # if self.episodes_run > 0 and self.episodes_run % 100 == 0:
-        #     self.dump_events_to_file(
-        #         os.path.join(self.log_dir, "pcc_env_log_run_%d.json" % self.episodes_run))
-        self.event_record = {"Events": []}
-        # self.net.run_for_dur(self.run_dur)
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
         # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
-
-    def dump_events_to_file(self, filename):
-        with open(filename, 'w') as f:
-            json.dump(self.event_record, f, indent=4)
 
 
 register(id='PccNs-v0', entry_point='simulator.network:SimulatedNetworkEnv')
