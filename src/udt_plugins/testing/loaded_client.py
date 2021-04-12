@@ -25,7 +25,7 @@ print(sys.path, file=sys.stderr, flush=True)
 import numpy as np
 
 from common import sender_obs
-from udt_plugins.testing import loaded_agent
+# from udt_plugins.testing import loaded_agent
 from simulator.aurora import Aurora
 
 
@@ -130,7 +130,7 @@ class PccGymDriver():
             rate_delta = rate_delta.item()
             old_rate = self.rate
             self.rate = apply_rate_delta(self.rate, rate_delta)
-            print('get rate costs {:.4f}'.format(time.time() - t_start), old_rate, self.rate, rate_delta, self.history.as_array(), file=sys.stderr, flush=True)
+            # print('get rate costs {:.4f}'.format(time.time() - t_start), old_rate, self.rate, rate_delta, self.history.as_array(), file=sys.stderr, flush=True)
             try:
                 mi = self.history.values[-1]
                 # sim_rate_delta = self.actions[self.idx]
@@ -145,7 +145,7 @@ class PccGymDriver():
                 reward = 10.0 * recv_rate / \
                     (8 * mi.packet_size) - 1e3 * latency - 2e3 * loss_rate
                 self.log_writer.writerow([
-                    time.time() - self.t_start, send_rate, recv_rate, latency,
+                    mi.send_end, send_rate, recv_rate, latency,
                     loss_rate, reward, rate_delta, mi.bytes_sent,
                     mi.bytes_acked, mi.bytes_lost, mi.send_start, mi.send_end,
                     mi.recv_start, mi.recv_end, latency_increase,
@@ -238,15 +238,15 @@ class PccGymDriver():
         self.record_observation(
             sender_obs.SenderMonitorInterval(
                 self.id,
-                bytes_sent=bytes_sent / packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
-                bytes_acked=bytes_acked / packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
-                bytes_lost=bytes_lost/packet_size * sender_obs.MAXIMUM_SEGMENT_SIZE,
+                bytes_sent=bytes_sent,
+                bytes_acked=bytes_acked,
+                bytes_lost=bytes_lost,
                 send_start=send_start_time,
                 send_end=send_end_time,
                 recv_start=recv_start_time,
                 recv_end=recv_end_time,
                 rtt_samples=rtt_samples,
-                packet_size=sender_obs.MAXIMUM_SEGMENT_SIZE,
+                packet_size=packet_size, #sender_obs.MAXIMUM_SEGMENT_SIZE,
             )
         )
         self.mi_pushed = True
