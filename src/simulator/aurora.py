@@ -106,10 +106,10 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         self.model.sess, os.path.join(
                             self.save_path, "model_step_{}.ckpt".format(
                                 self.n_calls + self.steps_trained)))
-                export_dir = os.path.join(os.path.join(
-                    self.save_path, "model_to_serve_step_{}/".format(
-                        self.n_calls + self.steps_trained)))
-                save_model_to_serve(self.model, export_dir)
+                # export_dir = os.path.join(os.path.join(
+                #     self.save_path, "model_to_serve_step_{}/".format(
+                #         self.n_calls + self.steps_trained)))
+                # save_model_to_serve(self.model, export_dir)
                 # val_rewards = [test(self.model, val_env)
                 #                for val_env in self.val_envs]
             avg_rewards = []
@@ -299,7 +299,7 @@ def test(model, env):
             action = model.act(obs)
             action = action['act'][0]
         else:
-            action, _states = model.predict(obs)
+            action, _states = model.predict(obs, deterministic=True)
 
         # get the new MI and stats collected in the MI
         sender_mi = env.senders[0].get_run_data()
