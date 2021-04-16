@@ -20,6 +20,8 @@ import random
 import sys
 import time
 import math
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
 from gym import spaces
@@ -141,7 +143,7 @@ class Network():
         self.env = env
 
         self.packet_logger = csv.writer(open(
-            os.path.join(env.log_dir, "cubic_packet_log.csv"), 'w', 1),
+            os.path.join(self.env.log_dir, "cubic_packet_log.csv"), 'w', 1),
             lineterminator='\n')
         # self.n_repeat = 0
 
@@ -149,11 +151,15 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (0, sender,
-                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
-            self.event_count += 1
+            for _ in range(sender.cwnd):
+                heapq.heappush(self.q, (0, sender,
+                                        EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                self.event_count += 1
 
     def reset(self):
+        self.packet_logger = csv.writer(open(
+            os.path.join(self.env.log_dir, "cubic_packet_log.csv"), 'w', 1),
+            lineterminator='\n')
         self.cur_time = 0.0
         self.q = []
         [link.reset() for link in self.links]
@@ -186,7 +192,7 @@ class Network():
             push_new_event = False
             if DEBUG:
                 print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f, rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, pkt in flight %d, wait time %d" % (
-                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay, rto, sender.cwnd, sender.ssthresh, sender.rto, int(sender.bytes_in_flight/1500), sender.pkt_loss_wait_time))
+                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay, rto, sender.cwnd, sender.ssthresh, sender.rto, int(sender.bytes_in_flight/BYTES_PER_PACKET), sender.pkt_loss_wait_time))
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
@@ -203,12 +209,16 @@ class Network():
                     # TODO: call TCP timeout logic
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        self.packet_logger.writerow([self.cur_time, event_id, 'lost', 1500])
+                        self.packet_logger.writerow([self.cur_time, event_id, 'lost', BYTES_PER_PACKET])
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
                         sender.on_packet_acked(cur_latency)
-                        self.packet_logger.writerow([self.cur_time, event_id, 'acked', 1500, cur_latency, pkt_queue_delay])
+                        self.packet_logger.writerow([self.cur_time, event_id, 'acked', BYTES_PER_PACKET, cur_latency, pkt_queue_delay])
                         # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
+                        for _ in range(int(self.senders[0].cwnd - self.senders[0].bytes_in_flight / BYTES_PER_PACKET)):
+                            heapq.heappush(self.q, (self.cur_time, self.senders[0],
+                                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                            self.event_count += 1
                 else:
                     new_next_hop = next_hop + 1
                     new_pkt_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -225,11 +235,11 @@ class Network():
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
                         sender.on_packet_sent()
-                        self.packet_logger.writerow([self.cur_time, event_id, 'sent', 1500])
+                        self.packet_logger.writerow([self.cur_time, event_id, 'sent', BYTES_PER_PACKET])
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
-                                            EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
-                    self.event_count += 1
+                    # heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
+                    #                         EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                    # self.event_count += 1
 
                 else:
                     push_new_event = True
@@ -491,7 +501,7 @@ class TCPCubicSender(Sender):
     # used byb Cubic
     tcp_friendliness = 1
     fast_convergence = 1
-    beta = 0.2
+    beta = 0.3
     C = 0.4
 
     # used by srtt
@@ -504,7 +514,7 @@ class TCPCubicSender(Sender):
         # https://developers.google.com/speed/pagespeed/service/tcp_initcwnd_paper.pdf
 
         # slow start threshold, arbitrarily high at start
-        self.ssthresh = 7 #43 #MAX_CWND
+        self.ssthresh = 43 #MAX_CWND
         self.pkt_loss_wait_time = 0
         self.use_cwnd = True
         self.rto = 3  # retransmission timeout (seconds)
@@ -612,7 +622,7 @@ class TCPCubicSender(Sender):
                 self.W_last_max = self.cwnd
             old_cwnd = self.cwnd
             self.cwnd = self.cwnd * (1 - self.beta)
-            self.ssthresh = self.cwnd
+            self.ssthresh = max(self.cwnd, 2)
             # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
             if not self.rtt_samples and not self.prev_rtt_samples:
                 # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")

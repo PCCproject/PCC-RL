@@ -26,10 +26,8 @@ def parse_args():
                         help="Constant random loss of uplink.")
     parser.add_argument('--queue', type=int, default=100,
                         help="Uplink queue size. Unit: packets.")
-    parser.add_argument('--mtu', type=int, default=1500, help="MTU.")
-    # parser.add_argument('--arch', type=str, default="32,16", help='arch.')
     parser.add_argument('--seed', type=int, default=42, help='seed')
-    parser.add_argument('--duration', type=int, default=None,
+    parser.add_argument('--duration', type=int, default=30,
                         help='Flow duration in seconds.')
     parser.add_argument("--config-file", type=str, default=None,
                         help='config file.')
