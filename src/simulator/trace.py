@@ -414,8 +414,8 @@ def generate_bw_delay_series(T_s_bw: float, T_s_delay: float, duration: float, m
     delays = []
     round_digit = 2
     ts = 0
-    cnt_bw = 0
-    cnt_delay = 0
+    cnt_bw = T_s_bw
+    cnt_delay = T_s_delay
     bw_val = round(np.random.uniform(min_tp, max_tp), round_digit)
     last_bw_val = bw_val
     delay_val = round(np.random.uniform(
@@ -427,7 +427,7 @@ def generate_bw_delay_series(T_s_bw: float, T_s_delay: float, duration: float, m
             pass
         elif cnt_bw <= 0:
             bw_val = round(np.random.uniform(min_tp, max_tp), round_digit)
-            cnt = T_s_bw
+            cnt_bw = T_s_bw
         elif cnt_bw >= 1:
             bw_val = last_bw_val
         else:
@@ -438,7 +438,7 @@ def generate_bw_delay_series(T_s_bw: float, T_s_delay: float, duration: float, m
         elif cnt_delay <= 0:
             delay_val = round(np.random.uniform(
                 min_delay, max_delay), round_digit)
-            cnt = T_s_delay
+            cnt_delay = T_s_delay
         elif cnt_delay >= 1:
             delay_val = last_delay_val
         else:
@@ -454,8 +454,8 @@ def generate_bw_delay_series(T_s_bw: float, T_s_delay: float, duration: float, m
         timestamps.append(ts)
         bandwidths.append(bw_val)
         delays.append(delay_val)
-        ts_noise = np.random.uniform(0.1, 3.5)
-        ts += ts_noise
+        # ts_noise = np.random.uniform(0.1, 3.5)
+        ts += 0.1 # ts_noise
     timestamps.append(duration)
     bandwidths.append(bw_val)
     delays.append(delay_val)
