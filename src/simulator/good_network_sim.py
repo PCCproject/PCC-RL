@@ -19,6 +19,7 @@ import os
 import random
 import sys
 import time
+import math
 
 import gym
 from gym import spaces
@@ -76,7 +77,11 @@ class Link():
     def get_cur_queue_delay(self, event_time):
         # cur_queue_delay = max(0.0, self.queue_delay -
         #                       (event_time - self.queue_delay_update_time))
-        cur_queue_delay = self.pkt_in_queue / self.get_bandwidth(event_time)
+        self.pkt_in_queue = max(0, self.pkt_in_queue -
+                                (event_time - self.queue_delay_update_time) *
+                                self.get_bandwidth(event_time))
+        self.queue_delay_update_time = event_time
+        cur_queue_delay = math.ceil(self.pkt_in_queue) / self.get_bandwidth(event_time)
         # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
         #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
         # print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
@@ -91,16 +96,12 @@ class Link():
         if (random.random() < self.trace.get_loss_rate()):
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
-        self.pkt_in_queue = max(0, self.pkt_in_queue -
-                                (event_time - self.queue_delay_update_time) *
-                                self.get_bandwidth(event_time))
-        self.queue_delay_update_time = event_time
         extra_delay = 1.0 / self.get_bandwidth(event_time)
         # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
         # if extra_delay + self.queue_delay > self.max_queue_delay:
         #     # print("{}\tDrop!".format(event_time), file=sys.stderr)
         #     return False
-        if 1 + int(self.pkt_in_queue) > self.queue_size:
+        if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
             # print("{}\tDrop!".format(event_time))
             return False
         self.queue_delay += extra_delay
@@ -139,6 +140,11 @@ class Network():
         # self.result_log = []
         self.env = env
 
+        self.packet_logger = csv.writer(open(
+            os.path.join(env.log_dir, "cubic_packet_log.csv"), 'w', 1),
+            lineterminator='\n')
+        # self.n_repeat = 0
+
     def queue_initial_packets(self):
         for sender in self.senders:
             sender.register_network(self)
@@ -161,8 +167,14 @@ class Network():
         end_time = self.cur_time + dur
         for sender in self.senders:
             sender.reset_obs()
-        while self.cur_time < end_time:
-            event_time, sender, event_type, next_hop, cur_latency, dropped, event_id, rto, pkt_queue_delay = heapq.heappop(
+        while True:
+            event_time, sender, event_type, next_hop, cur_latency, dropped, \
+                event_id, rto, pkt_queue_delay = self.q[0]
+            if event_time >= end_time:
+                self.cur_time = end_time
+                break
+            event_time, sender, event_type, next_hop, cur_latency, dropped, \
+                event_id, rto, pkt_queue_delay = heapq.heappop(
                 self.q)
             self.cur_time = event_time
             new_event_time = event_time
@@ -191,9 +203,11 @@ class Network():
                     # TODO: call TCP timeout logic
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
+                        self.packet_logger.writerow([self.cur_time, event_id, 'lost', 1500])
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
                         sender.on_packet_acked(cur_latency)
+                        self.packet_logger.writerow([self.cur_time, event_id, 'acked', 1500, cur_latency, pkt_queue_delay])
                         # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                 else:
                     new_next_hop = next_hop + 1
@@ -211,6 +225,7 @@ class Network():
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
                         sender.on_packet_sent()
+                        self.packet_logger.writerow([self.cur_time, event_id, 'sent', 1500])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
                                             EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
@@ -227,6 +242,11 @@ class Network():
                     self.cur_time)
                 link_latency = sender.path[next_hop].get_cur_latency(
                     self.cur_time)
+                # if random.uniform(0, 1) > 0.8:
+                #     self.n_repeat = 10
+                # if self.n_repeat > 0:
+                #     self.n_repeat -= 1
+                #     link_latency += (end_time - self.cur_time)
                 if USE_LATENCY_NOISE:
                     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                 new_latency += link_latency
@@ -478,13 +498,13 @@ class TCPCubicSender(Sender):
     ALPHA = 0.8
     BETA = 1.5
 
-    def __init__(self, rate, path, dest, features, cwnd=1, history_len=10):
+    def __init__(self, rate, path, dest, features, cwnd=10, history_len=10):
         super().__init__(rate, path, dest, features, cwnd, history_len)
         # TCP inital cwnd value is configured to 10 MSS. Refer to
         # https://developers.google.com/speed/pagespeed/service/tcp_initcwnd_paper.pdf
 
         # slow start threshold, arbitrarily high at start
-        self.ssthresh = MAX_CWND
+        self.ssthresh = 7 #43 #MAX_CWND
         self.pkt_loss_wait_time = 0
         self.use_cwnd = True
         self.rto = 3  # retransmission timeout (seconds)
