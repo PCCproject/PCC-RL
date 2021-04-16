@@ -95,6 +95,13 @@ class PacketLog():
     def get_loss_rate(self):
         return 1 - len(self.pkt_acked_ts) / len(self.pkt_sent_ts)
 
+    def get_reward(self):
+        _, throughput = self.get_throughput()
+        _, rtt = self.get_rtt()
+        loss = self.get_loss_rate()
+        return pcc_aurora_reward(
+            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
+
 
 def main():
     args = parse_args()
@@ -134,7 +141,7 @@ def main():
         plt.tight_layout()
         if args.save_dir:
             plt.savefig(os.path.join(args.save_dir,
-                        'binwise_{}_plot.png'.format(cc)))
+                                     'binwise_{}_plot.png'.format(cc)))
 
 
 if __name__ == '__main__':
