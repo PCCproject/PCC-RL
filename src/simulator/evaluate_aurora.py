@@ -1,4 +1,5 @@
 import argparse
+import csv
 import logging
 import os
 import types
@@ -39,7 +40,7 @@ def parse_args():
                         help="Constant bandwidth. Unit: mbps.")
     parser.add_argument('--loss', type=float, default=0,
                         help="Constant random loss of uplink.")
-    parser.add_argument('--queue', type=int, default=100,
+    parser.add_argument('--queue', type=int, default=10,
                         help="Uplink queue size. Unit: packets.")
     parser.add_argument('--delta-scale', type=float, default=0.05,
                         help="Environment delta scale.")
@@ -70,31 +71,12 @@ def main():
                     log_dir=args.save_dir,
                     pretrained_model_path=args.model_path,
                     delta_scale=args.delta_scale)
-    results = aurora.test(test_traces)
+    results, pkt_logs = aurora.test(test_traces)
 
-    for _, (trace, result) in enumerate(zip(test_traces, results)):
-        log_path = os.path.join(args.save_dir,
-                                "env_{:.3f}_{:.3f}_{:.3f}_{:.3f}.csv".format(
-                                    trace.bandwidths[0], trace.delay,
-                                    trace.loss_rate, trace.queue_size))
-        with open(log_path, 'w', 1) as f:
-            obs_header = []
-            for i in range(10):
-                obs_header.append("send_latency_ratio {}".format(i))
-                obs_header.append("latency_ratio {}".format(i))
-                obs_header.append("send_ratio {}".format(i))
-
-            f.write("\t\t".join(['ts', 'mi', 'reward',
-                               'send_rate', 'throughput', 'latency', 'loss',
-                               'action'] + obs_header)+ "\n")
-            for line in result:
-                log_line = "{timestamp:.3f}\t\t{mi:.3f}\t\t{reward:.3f}\t\t{sending_rate:.3f}\t\t" \
-                    "{throughput:.3f}\t\t{latency:.3f}\t\t{loss:.3f}\t\t" \
-                    "{action:.3f}\t\t".format(
-                        timestamp=line[0], mi=line[8], reward=line[1],
-                        sending_rate=line[2], throughput=line[3],
-                        latency=line[4], loss=line[5], action=line[6]) + '\t\t'.join(["{:.3f}".format(ob) for ob in line[7]]) + "\n"
-                f.write(log_line)
+    for pkt_log in pkt_logs:
+        with open(os.path.join(args.save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
+            pkt_logger = csv.writer(f, lineterminator='\n')
+            pkt_logger.writerows(pkt_log)
 
 
 if __name__ == "__main__":

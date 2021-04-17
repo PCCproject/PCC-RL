@@ -23,8 +23,10 @@ class Trace():
         queue: queue in packets.
     """
 
-    def __init__(self, timestamps: List[float], bandwidths: List[float],
-                 delays: List[float], loss_rate: float, queue_size: int):
+    def __init__(self, timestamps: Union[List[float], List[int]],
+                 bandwidths: Union[List[int], List[float]],
+                 delays: Union[List[int], List[float]], loss_rate: float,
+                 queue_size: int):
         assert len(timestamps) == len(bandwidths)
         self.timestamps = timestamps
         self.bandwidths = bandwidths
@@ -71,7 +73,7 @@ class Trace():
     def reset(self):
         self.idx = 0
 
-    def dump(self, filename):
+    def dump(self, filename: str):
         # save trace details into a json file.
         data = {'timestamps': self.timestamps,
                 'bandwidths': self.bandwidths,

@@ -24,7 +24,7 @@ def parse_args():
                         help="Constant bandwidth. Unit: mbps.")
     parser.add_argument('--loss', type=float, default=0,
                         help="Constant random loss of uplink.")
-    parser.add_argument('--queue', type=int, default=100,
+    parser.add_argument('--queue', type=int, default=10,
                         help="Uplink queue size. Unit: packets.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
     parser.add_argument('--duration', type=int, default=30,
@@ -40,7 +40,7 @@ def parse_args():
 
 
 def test_on_trace(trace, save_dir, seed):
-    env = gym.make('PccNs-v0', traces=[trace], congestion_control_type='cubic',
+    env = gym.make('cubic-v0', traces=[trace], congestion_control_type='cubic',
                    log_dir=save_dir)
     env.seed(seed)
 
