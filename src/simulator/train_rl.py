@@ -5,6 +5,7 @@ import time
 import warnings
 
 import ipdb
+from mpi4py.MPI import COMM_WORLD
 import numpy as np
 
 from simulator import network
@@ -56,7 +57,7 @@ def parse_args():
                         help='trace duration. Unit: second.')
     parser.add_argument("--tensorboard-log", type=str, default=None,
                         help="tensorboard log direcotry.")
-    parser.add_argument("--delta-scale", type=float, default=0.05,
+    parser.add_argument("--delta-scale", type=float, default=1,
                         help="delta scale.")
     parser.add_argument('--time-variant-bw', action='store_true',
                         help='Generate time variant bandwidth if specified.')
@@ -79,7 +80,7 @@ def main():
     check_args(args)
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
-    set_seed(args.seed)
+    set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
 
     if args.randomization_range_file is not None:
         # generate training traces
@@ -89,7 +90,7 @@ def main():
                                           constant_bw=not args.time_variant_bw)
         # generate validation traces
         validation_traces = generate_traces(
-            args.randomization_range_file, 36, args.duration,
+            args.randomization_range_file, 50, args.duration,
             constant_bw=not args.time_variant_bw)
     else:
         # generate training traces
@@ -107,7 +108,7 @@ def main():
             args.val_loss, args.val_queue)]
 
     # Initialize model and agent policy
-    aurora = Aurora(args.seed, args.save_dir, 7200,
+    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir, 7200,
                     args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log,
                     delta_scale=args.delta_scale)

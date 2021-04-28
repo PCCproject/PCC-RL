@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import csv
 import heapq
 import os
@@ -29,14 +28,16 @@ from gym.utils import seeding
 import numpy as np
 
 from common import sender_obs
-from common.utils import pcc_aurora_reward
+from common.utils import pcc_aurora_reward, read_json_file
 from simulator.trace import Trace
+
+import pandas as pd
 
 MAX_CWND = 5000
 MIN_CWND = 4
 
-MAX_RATE = 4000
-MIN_RATE = 10
+MAX_RATE = 20000
+MIN_RATE = 5
 
 REWARD_SCALE = 0.001
 
@@ -48,7 +49,7 @@ BYTES_PER_PACKET = 1500
 LATENCY_PENALTY = 1.0
 LOSS_PENALTY = 1.0
 
-USE_LATENCY_NOISE = False
+USE_LATENCY_NOISE = True
 MAX_LATENCY_NOISE = 1.1
 
 # DEBUG = True
@@ -56,10 +57,34 @@ DEBUG = False
 
 MI_RTT_PROPORTION = 1.0
 
+PACKET_LOG_FLAG = False
+# PACKET_LOG_FLAG = True
+
 
 def debug_print(msg):
     if DEBUG:
         print(msg, file=sys.stderr, flush=True)
+
+
+class EmuReplay:
+    def __init__(self, ):
+        df = pd.read_csv('aurora_emulation_log.csv')
+        self.ts = df['timestamp'].tolist()
+        self.send_rate = df['send_rate'].tolist()
+        self.idx = 0
+
+    def get_ts(self):
+        if self.idx > len(self.ts):
+            self.idx = len(self.ts) -1
+        ts = self.ts[self.idx]
+        self.idx += 1
+        return ts
+
+    def get_rate(self):
+        return self.send_rate[self.idx] / 8 / BYTES_PER_PACKET
+
+    def reset(self):
+        self.idx = 0
 
 
 class Link():
@@ -68,14 +93,11 @@ class Link():
         self.trace = trace
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
-        # self.max_queue_delay = self.trace.get_queue_size() / self.get_bandwidth(0)
 
         self.queue_size = self.trace.get_queue_size()
         self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
-        # cur_queue_delay = max(0.0, self.queue_delay -
-        #                       (event_time - self.queue_delay_update_time))
         self.pkt_in_queue = max(0, self.pkt_in_queue -
                                 (event_time - self.queue_delay_update_time) *
                                 self.get_bandwidth(event_time))
@@ -94,13 +116,6 @@ class Link():
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
         extra_delay = 1.0 / self.get_bandwidth(event_time)
-        # print("Time: {},  Extra delay:{}, Current queue delay: {}, "
-        #       "Max delay: {}, packets in queue: {}".format(
-        #           event_time, extra_delay, self.queue_delay, self.queue_size,
-        #           self.pkt_in_queue))
-        # if extra_delay + self.queue_delay > self.max_queue_delay:
-        #     print("{}\tDrop!".format(event_time))
-        #     return False
         if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
             # print("{}\tDrop!".format(event_time))
             return False
@@ -115,7 +130,6 @@ class Link():
         # TODO: Do not use timestamp 0.
         print("Delay: %.3fms" % (self.trace.get_delay(0)))
         print("Queue Delay: %.3fms" % (self.queue_delay * 1000))
-        # print("Max Queue Delay: %.3fms" % (self.max_queue_delay * 1000))
         print("One Packet Queue Delay: %.3fms" % (
             1000.0 * 1 / (self.trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET)))
         print("Queue size: %dpackets" % self.queue_size)
@@ -163,7 +177,12 @@ class Network():
         return self.cur_time
 
     def run_for_dur(self, dur, action=None):
-        end_time = self.cur_time + dur
+        # if self.cur_time > 1.75:
+        #     pass
+        # else:
+        #     self.senders[0].rate = self.env.replay.get_rate()
+        #     dur = self.env.replay.get_ts() - self.cur_time
+        end_time = min(self.cur_time + dur, self.env.current_trace.timestamps[-1])
         debug_print('MI from {} to {}, dur {}'.format(
             self.cur_time, end_time, dur))
         for sender in self.senders:
@@ -206,23 +225,26 @@ class Network():
                         new_dropped = True
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        self.pkt_log.append([self.cur_time, event_id, 'lost',
-                                             BYTES_PER_PACKET])
+                        if PACKET_LOG_FLAG:
+                            self.pkt_log.append([self.cur_time, event_id, 'lost',
+                                                 BYTES_PER_PACKET])
                     else:
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
-                        self.pkt_log.append([self.cur_time, event_id, 'acked',
-                                             BYTES_PER_PACKET, cur_latency,
-                                             event_queue_delay])
+                        if PACKET_LOG_FLAG:
+                            self.pkt_log.append([self.cur_time, event_id, 'acked',
+                                                 BYTES_PER_PACKET, cur_latency,
+                                                 event_queue_delay])
                 else:
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                         self.cur_time)
                     link_latency = sender.path[next_hop].get_cur_latency(
                         self.cur_time)
-                    if USE_LATENCY_NOISE:
-                        link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+                    # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
+                    # if USE_LATENCY_NOISE:
+                    #     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                     new_latency += link_latency
                     new_event_time += link_latency
                     push_new_event = True
@@ -231,8 +253,9 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         # print('Send packet at {}'.format(self.cur_time))
-                        self.pkt_log.append([self.cur_time, event_id, 'sent',
-                                             BYTES_PER_PACKET])
+                        if PACKET_LOG_FLAG:
+                            self.pkt_log.append([self.cur_time, event_id, 'sent',
+                                                 BYTES_PER_PACKET])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
@@ -247,16 +270,19 @@ class Network():
                     new_event_type = EVENT_TYPE_ACK
                 new_next_hop = next_hop + 1
 
+                new_dropped = not sender.path[next_hop].packet_enters_link(
+                    self.cur_time)
                 new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                     self.cur_time)
                 link_latency = sender.path[next_hop].get_cur_latency(
                     self.cur_time)
-                if USE_LATENCY_NOISE:
-                    link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+                # if USE_LATENCY_NOISE:
+                #     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+
+                # link_latency += self.env.current_trace.get_delay_noise(self.cur_time) / 1000
+                # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                 new_latency += link_latency
                 new_event_time += link_latency
-                new_dropped = not sender.path[next_hop].packet_enters_link(
-                    self.cur_time)
                 if not new_dropped:
                     sender.queue_delay_samples.append(new_event_queue_delay)
 
@@ -274,17 +300,20 @@ class Network():
         debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
             throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
         reward = pcc_aurora_reward(
-            throughput / 8 / BYTES_PER_PACKET, latency, loss)
+            throughput / 8 / BYTES_PER_PACKET, latency, loss,
+            np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
 
         if latency > 0.0:
-            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency")
+            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency") # + (1 / self.senders[0].rate)
+            # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
+        # print(self.env.run_dur)
         return reward * REWARD_SCALE
 
 
 class Sender():
 
     def __init__(self, rate, path, dest, features, cwnd=25, history_len=10,
-                 delta_scale=0.05):
+                 delta_scale=1):
         self.id = Sender._get_next_id()
         self.delta_scale = delta_scale
         self.starting_rate = rate
@@ -366,7 +395,7 @@ class Sender():
 
     def set_rate(self, new_rate):
         self.rate = new_rate
-        #print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
+        # print("Attempt to set new rate to %f (min %f, max %f)" % (new_rate, MIN_RATE, MAX_RATE))
         if self.rate > MAX_RATE:
             self.rate = MAX_RATE
         if self.rate < MIN_RATE:
@@ -396,6 +425,8 @@ class Sender():
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
         rtt_samples = self.rtt_samples if self.rtt_samples else self.prev_rtt_samples
+        # if not self.rtt_samples:
+        #     print(self.obs_start_time, obs_end_time, self.rate)
         # rtt_samples is empty when there is no packet acked in MI
         # Solution: inherit from previous rtt_samples.
 
@@ -448,237 +479,23 @@ class Sender():
         pass
 
 
-class TCPCubicSender(Sender):
-    """Mimic TCPCubic sender behavior.
-
-    Args:
-        rate
-        path
-        dest
-        features
-        cwnd: congestion window size. Unit: number of packets.
-        history_len:
-    """
-    # used byb Cubic
-    tcp_friendliness = 1
-    fast_convergence = 1
-    beta = 0.2
-    C = 0.4
-
-    # used by srtt
-    ALPHA = 0.8
-    BETA = 1.5
-
-    def __init__(self, rate, path, dest, features, cwnd=10, history_len=10):
-        super().__init__(rate, path, dest, features, cwnd, history_len)
-        # TCP inital cwnd value is configured to 10 MSS. Refer to
-        # https://developers.google.com/speed/pagespeed/service/tcp_initcwnd_paper.pdf
-
-        # slow start threshold, arbitrarily high at start
-        self.ssthresh = MAX_CWND
-        self.pkt_loss_wait_time = 0
-        self.use_cwnd = True
-        self.rto = 3  # retransmission timeout (seconds)
-        # initialize rto to 3s for waiting SYC packets of TCP handshake
-        self.srtt = None  # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
-        self.timeout_cnt = 0
-        self.timeout_mode = False
-
-        self.cubic_reset()
-
-    def cubic_reset(self):
-        self.W_last_max = 0
-        self.epoch_start = 0
-        self.origin_point = 0
-        self.dMin = 0
-        self.W_tcp = 0  # used in tcp friendliness
-        self.K = 0
-        # self.acked = 0 # TODO is this one used in Cubic?
-        self.ack_cnt = 0
-
-        # In standard, TCP cwnd_cnt is an additional state variable that tracks
-        # the number of segments acked since the last cwnd increment; cwnd is
-        # incremented only when cwnd_cnt > cwnd; then, cwnd_cnt is set to 0.
-        # initialie to 0
-        self.cwnd_cnt = 0
-        self.pkt_loss_wait_time = 0
-        self.timeout_mode = False
-
-    def apply_rate_delta(self, delta):
-        # place holder
-        #  do nothing
-        pass
-
-    def apply_cwnd_delta(self, delta):
-        # place holder
-        #  do nothing
-        pass
-        # raise NotImplementedError
-        # delta *= config.DELTA_SCALE
-        # #print("Applying delta %f" % delta)
-        # if delta >= 0.0:
-        #     self.set_cwnd(self.cwnd * (1.0 + delta))
-        # else:
-        #     self.set_cwnd(self.cwnd / (1.0 - delta))
-
-    def on_packet_sent(self):
-        self.sent += 1
-        self.bytes_in_flight += BYTES_PER_PACKET
-
-    def on_packet_acked(self, rtt):
-        self.acked += 1
-        self.bytes_in_flight -= BYTES_PER_PACKET
-
-        # Added by Zhengxu Xia
-        if self.dMin:
-            self.dMin = min(self.dMin, rtt)
-        else:
-            self.dMin = rtt
-        if self.cwnd <= self.ssthresh:  # in slow start region
-            # print("slow start, inc cwnd by 1")
-            self.cwnd += 1
-        else:  # in congestion avoidance or max bw probing region
-            cnt = self.cubic_update()
-            if self.cwnd_cnt > cnt:
-                # print("in congestion avoidance, inc cwnd by 1")
-                self.cwnd += 1
-                self.cwnd_cnt = 0
-            else:
-                # print("in congestion avoidance, inc cwnd_cnt by 1")
-                self.cwnd_cnt += 1
-        # print("{:.5f}\tack\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr)
-        if self.pkt_loss_wait_time > 0:
-            self.pkt_loss_wait_time -= 1
-        # else:
-        self.rtt_samples.append(rtt)
-        # TODO: update RTO
-        if self.srtt is None:
-            self.srtt = rtt
-        elif self.timeout_mode:
-            self.srtt = rtt
-            self.timeout_mode = False
-        else:
-            self.srtt = (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt
-        self.rto = max(1, min(self.BETA * self.srtt, 60))
-        if (self.min_latency is None) or (rtt < self.min_latency):
-            self.min_latency = rtt
-        if not self.rtt_samples and not self.prev_rtt_samples:
-            raise RuntimeError(
-                "prev_rtt_samples is empty. TCP session is not constructed successfully!")
-        elif not self.rtt_samples:
-            avg_sampled_rtt = float(np.mean(np.array(self.prev_rtt_samples)))
-        else:
-            avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
-        self.rate = self.cwnd / avg_sampled_rtt
-
-    def on_packet_lost(self, rtt):
-        self.lost += 1
-        self.bytes_in_flight -= BYTES_PER_PACKET
-
-        if self.pkt_loss_wait_time <= 0:
-            self.epoch_start = 0
-            if self.cwnd < self.W_last_max and self.fast_convergence:
-                self.W_last_max = self.cwnd * (2 - self.beta) / 2
-            else:
-                self.W_last_max = self.cwnd
-            old_cwnd = self.cwnd
-            self.cwnd = self.cwnd * (1 - self.beta)
-            self.ssthresh = self.cwnd
-            # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
-            if not self.rtt_samples and not self.prev_rtt_samples:
-                # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
-                avg_sampled_rtt = rtt
-            elif not self.rtt_samples:
-                avg_sampled_rtt = float(
-                    np.mean(np.array(self.prev_rtt_samples)))
-            else:
-                avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
-            self.rate = self.cwnd / avg_sampled_rtt
-            self.pkt_loss_wait_time = int(self.cwnd)
-            # print("{:.5f}\tloss\t{:.5f}\t{}".format(self.net.get_cur_time(), self.rate, self.timeout_cnt), file=sys.stderr,)
-
-    def cubic_update(self):
-        self.ack_cnt += 1
-        # assume network current time is tcp_time_stamp
-        assert self.net is not None
-        tcp_time_stamp = self.net.get_cur_time()
-        if self.epoch_start <= 0:
-            self.epoch_start = tcp_time_stamp  # TODO: check the unit of time
-            if self.cwnd < self.W_last_max:
-                self.K = np.cbrt((self.W_last_max - self.cwnd)/self.C)
-                self.origin_point = self.W_last_max
-            else:
-                self.K = 0
-                self.origin_point = self.cwnd
-            self.ack_cnt = 1
-            self.W_tcp = self.cwnd
-        t = tcp_time_stamp + self.dMin - self.epoch_start
-        target = self.origin_point + self.C * (t - self.K)**3
-        if target > self.cwnd:
-            cnt = self.cwnd / (target - self.cwnd)
-        else:
-            cnt = 100 * self.cwnd
-        # TODO: call friendliness
-        return cnt
-
-    def reset(self):
-        super().reset()
-        self.cubic_reset()
-        self.rto = 3  # retransmission timeout (seconds)
-        # initialize rto to 3s for waiting SYC packets of TCP handshake
-        self.srtt = None  # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
-        self.timeout_cnt = 0
-
-    def timeout(self):
-        self.bytes_in_flight -= BYTES_PER_PACKET
-        if self.pkt_loss_wait_time <= 0:
-            self.timeout_cnt += 1
-            # Refer to https://tools.ietf.org/html/rfc8312#section-4.7
-            # self.ssthresh = max(int(self.bytes_in_flight / BYTES_PER_PACKET / 2), 2)
-            self.ssthresh = self.cwnd * (1 - self.beta)
-            old_cwnd = self.cwnd
-            self.cwnd = 1
-            if not self.rtt_samples and not self.prev_rtt_samples:
-                # print(self.srtt)
-                # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
-                avg_sampled_rtt = self.srtt
-            elif not self.rtt_samples:
-                avg_sampled_rtt = float(
-                    np.mean(np.array(self.prev_rtt_samples)))
-            else:
-                avg_sampled_rtt = float(np.mean(np.array(self.rtt_samples)))
-            self.rate = self.cwnd / avg_sampled_rtt
-            # self.rate = 10
-            self.cubic_reset()
-            self.pkt_loss_wait_time = int(
-                self.bytes_in_flight / BYTES_PER_PACKET)
-            self.timeout_mode = True
-            # self.pkt_loss_wait_time = old_cwnd
-        # print('timeout rate', self.rate, self.cwnd)
-        # return True
-
-    def cubic_tcp_friendliness(self):
-        raise NotImplementedError
-
-
 class SimulatedNetworkEnv(gym.Env):
 
     def __init__(self, traces, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
-                 congestion_control_type="aurora", log_dir="", train_flag=False,
+                 congestion_control_type="aurora", train_flag=False,
                  delta_scale=1.0):
-        # delta_scale=0.05):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
         assert congestion_control_type in {"aurora", "cubic"}, \
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
+        # self.replay = EmuReplay()
         self.delta_scale = delta_scale
         self.traces = traces
         self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
-        self.log_dir = log_dir
         self.congestion_control_type = congestion_control_type
         if self.congestion_control_type == 'aurora':
             self.use_cwnd = False
@@ -760,10 +577,16 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
+        # self.replay.reset()
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
-                self.senders = [Sender(10, [self.links[0], self.links[1]], 0,
+
+                self.senders = [Sender( #self.replay.get_rate(),
+                    # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
+                    (self.current_trace.get_delay(0) * 2 / 1000),
+                    # 10,
+                    [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
                                        delta_scale=self.delta_scale)]
@@ -777,16 +600,13 @@ class SimulatedNetworkEnv(gym.Env):
                 #                        self.features,
                 #                        history_len=self.history_len,
                 #                        delta_scale=self.delta_scale)]
-                self.senders = [Sender(10,
+                self.senders = [Sender(10 / (self.current_trace.get_delay(0) * 2 / 1000),
                                        [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
                                        delta_scale=self.delta_scale)]
         elif self.congestion_control_type == "cubic":
-            self.senders = [TCPCubicSender(10,
-                                           [self.links[0], self.links[1]], 0,
-                                           self.features,
-                                           history_len=self.history_len)]
+            raise NotImplementedError
         else:
             raise RuntimeError("Unrecognized congestion_control_type {}".format(
                 self.congestion_control_type))
@@ -794,8 +614,9 @@ class SimulatedNetworkEnv(gym.Env):
         # self.run_dur = 1 * lat
         if not self.senders[0].rtt_samples:
             # self.run_dur = 0.473
-            self.run_dur = 5 / self.senders[0].rate
-        # print("lat is", lat, "run_dur" ,self.run_dur)
+            # self.run_dur = 5 / self.senders[0].rate
+            self.run_dur = self.current_trace.get_delay(0) * 2 / 1000
+            # self.run_dur = self.replay.get_ts() -  0
 
     def reset(self):
         self.steps_taken = 0
@@ -805,6 +626,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
+        # self.replay.reset()
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
