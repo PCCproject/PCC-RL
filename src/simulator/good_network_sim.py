@@ -20,6 +20,8 @@ import random
 import sys
 import time
 import math
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
 from gym import spaces
@@ -64,27 +66,18 @@ MI_RTT_PROPORTION = 1.0
 class Link():
 
     def __init__(self, trace: Trace):
-        # self.bw = float(bandwidth)
-        # self.dl = delay
-        # self.lr = loss_rate
         self.trace = trace
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
         self.queue_size = self.trace.get_queue_size()
-        self.max_queue_delay = self.queue_size / self.get_bandwidth(0)
         self.pkt_in_queue = 0
 
     def get_cur_queue_delay(self, event_time):
-        # cur_queue_delay = max(0.0, self.queue_delay -
-        #                       (event_time - self.queue_delay_update_time))
         self.pkt_in_queue = max(0, self.pkt_in_queue -
                                 (event_time - self.queue_delay_update_time) *
                                 self.get_bandwidth(event_time))
         self.queue_delay_update_time = event_time
         cur_queue_delay = math.ceil(self.pkt_in_queue) / self.get_bandwidth(event_time)
-        # print('Event Time: {}s, queue_delay: {}s Queue_delay_update_time: {}s, cur_queue_delay: {}s, max_queue_delay: {}s, bw: {}, queue size: {}'.format(
-        #     event_time, self.queue_delay, self.queue_delay_update_time, cur_queue_delay, self.max_queue_delay, self.bw, self.queue_size))
-        # print("{}\t{}".format(event_time, cur_queue_delay), file=sys.stderr)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time):
@@ -97,16 +90,10 @@ class Link():
             return False
         self.queue_delay = self.get_cur_queue_delay(event_time)
         extra_delay = 1.0 / self.get_bandwidth(event_time)
-        # print("Extra delay:{}, Current delay: {}, Max delay: {}".format(extra_delay, self.queue_delay, self.max_queue_delay))
-        # if extra_delay + self.queue_delay > self.max_queue_delay:
-        #     # print("{}\tDrop!".format(event_time), file=sys.stderr)
-        #     return False
         if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
-            # print("{}\tDrop!".format(event_time))
             return False
         self.queue_delay += extra_delay
         self.pkt_in_queue += 1
-        # print("\tNew delay = {}".format(self.queue_delay))
         return True
 
     def print_debug(self):
@@ -141,7 +128,7 @@ class Network():
         self.env = env
 
         self.packet_logger = csv.writer(open(
-            os.path.join(env.log_dir, "cubic_packet_log.csv"), 'w', 1),
+            os.path.join(self.env.log_dir, "cubic_packet_log.csv"), 'w', 1),
             lineterminator='\n')
         # self.n_repeat = 0
 
@@ -149,11 +136,15 @@ class Network():
         for sender in self.senders:
             sender.register_network(self)
             sender.reset_obs()
-            heapq.heappush(self.q, (0, sender,
-                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
-            self.event_count += 1
+            for _ in range(sender.cwnd):
+                heapq.heappush(self.q, (0, sender,
+                                        EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                self.event_count += 1
 
     def reset(self):
+        self.packet_logger = csv.writer(open(
+            os.path.join(self.env.log_dir, "cubic_packet_log.csv"), 'w', 1),
+            lineterminator='\n')
         self.cur_time = 0.0
         self.q = []
         [link.reset() for link in self.links]
@@ -185,8 +176,17 @@ class Network():
             new_dropped = dropped
             push_new_event = False
             if DEBUG:
-                print("Got %d event %s, to link %d, latency %f at time %f, next_hop %d, dropped %s, event_q length %f, sender rate %f, duration: %f, max_queue_delay: %f, rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, pkt in flight %d, wait time %d" % (
-                      event_id, event_type, next_hop, cur_latency, event_time, next_hop, dropped, len(self.q), sender.rate, dur, self.links[0].max_queue_delay, rto, sender.cwnd, sender.ssthresh, sender.rto, int(sender.bytes_in_flight/1500), sender.pkt_loss_wait_time))
+                print("Got %d event %s, to link %d, latency %f at time %f, "
+                      "next_hop %d, dropped %s, event_q length %f, "
+                      "sender rate %f, duration: %f, rto: %f, cwnd: %f, "
+                      "ssthresh: %f, sender rto %f, pkt in flight %d, "
+                      "wait time %d" % (
+                      event_id, event_type, next_hop, cur_latency, event_time,
+                      next_hop, dropped, len(self.q), sender.rate, dur,
+                      self.links[0].max_queue_delay, rto, sender.cwnd,
+                      sender.ssthresh, sender.rto,
+                      int(sender.bytes_in_flight/BYTES_PER_PACKET),
+                      sender.pkt_loss_wait_time))
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
@@ -203,12 +203,22 @@ class Network():
                     # TODO: call TCP timeout logic
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        self.packet_logger.writerow([self.cur_time, event_id, 'lost', 1500])
+                        self.packet_logger.writerow([self.cur_time, event_id, 'lost', BYTES_PER_PACKET])
+                        for _ in range(int(self.senders[0].cwnd - self.senders[0].bytes_in_flight / BYTES_PER_PACKET)):
+                            heapq.heappush(self.q, (self.cur_time, self.senders[0],
+                                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                            self.event_count += 1
                         # print("Packet lost at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
                     else:
                         sender.on_packet_acked(cur_latency)
-                        self.packet_logger.writerow([self.cur_time, event_id, 'acked', 1500, cur_latency, pkt_queue_delay])
+                        self.packet_logger.writerow(
+                            [self.cur_time, event_id, 'acked', BYTES_PER_PACKET,
+                             cur_latency, pkt_queue_delay])
                         # print("Packet acked at time {}, cwnd={}".format(self.cur_time, self.senders[0].cwnd))
+                        for _ in range(int(self.senders[0].cwnd - self.senders[0].bytes_in_flight / BYTES_PER_PACKET)):
+                            heapq.heappush(self.q, (self.cur_time, self.senders[0],
+                                                    EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                            self.event_count += 1
                 else:
                     new_next_hop = next_hop + 1
                     new_pkt_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -225,11 +235,11 @@ class Network():
                     # print("Packet sent at time %f" % self.cur_time)
                     if sender.can_send_packet():
                         sender.on_packet_sent()
-                        self.packet_logger.writerow([self.cur_time, event_id, 'sent', 1500])
+                        self.packet_logger.writerow([self.cur_time, event_id, 'sent', BYTES_PER_PACKET])
                         push_new_event = True
-                    heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
-                                            EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
-                    self.event_count += 1
+                    # heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate), sender,
+                    #                         EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
+                    # self.event_count += 1
 
                 else:
                     push_new_event = True
@@ -267,37 +277,14 @@ class Network():
         latency = sender_mi.get("avg latency")
         avg_queue_delay = sender_mi.get("avg queue delay")
         loss = sender_mi.get("loss ratio")
-        # bw_cutoff = self.links[0].bw * 0.8
-        # lat_cutoff = 2.0 * self.links[0].dl * 1.5
-        # loss_cutoff = 2.0 * self.links[0].lr * 1.5
-        # print("thpt %f, delay %f, loss %f" % (throughput, latency, loss))
-        #reward = 0 if (loss > 0.1 or throughput < bw_cutoff or latency > lat_cutoff or loss > loss_cutoff) else 1 #
 
-        # Super high throughput
-        #reward = REWARD_SCALE * (20.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-
-        # Very high thpt
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 2e3 * loss)
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 3e3 * loss)
-        # reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) - 1e3 * latency - 3e4 * loss)
         reward = (10.0 * throughput / (8 * BYTES_PER_PACKET) -
                   1e3 * latency - 2e3 * loss)
-        # reward = - 3e4 * loss
         try:
             ssthresh = self.senders[0].ssthresh
         except:
             ssthresh = 0
 
-        # print("{}, {}, {}, {}, {}, {}, {}, {}".format(
-        #     self.cur_time, self.senders[0].cwnd, ssthresh,
-        #     self.links[0].bw, self.links[1].bw,
-        #     send_throughput/(8 * BYTES_PER_PACKET),
-        #     throughput/(8 * BYTES_PER_PACKET), reward, loss))
-        # self.result_log.append([
-        #     self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
-        #     self.links[0].bw, self.links[1].bw,
-        #     send_throughput / (8 * BYTES_PER_PACKET),
-        #     throughput/(8 * BYTES_PER_PACKET), reward, loss, latency])
         self.env.writer.writerow([
             self.cur_time, self.senders[0].cwnd, ssthresh, self.senders[0].rto,
             self.links[0].get_bandwidth(self.cur_time),
@@ -307,17 +294,7 @@ class Network():
             self.senders[0].sent, self.senders[0].acked,
             action, avg_queue_delay,
             self.links[0].pkt_in_queue, self.links[0].queue_size])
-        # print(self.cur_time)
 
-        # High thpt
-        #reward = REWARD_SCALE * (5.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-
-        # Low latency
-        #reward = REWARD_SCALE * (2.0 * throughput / RATE_OBS_SCALE - 1e3 * latency / LAT_OBS_SCALE - 2e3 * loss)
-        # if reward > 857:
-        #print("Reward = %f, thpt = %f, lat = %f, loss = %f" % (reward, throughput, latency, loss))
-
-        #reward = (throughput / RATE_OBS_SCALE) * np.exp(-1 * (LATENCY_PENALTY * latency / LAT_OBS_SCALE + LOSS_PENALTY * loss))
         return reward * REWARD_SCALE
 
 
@@ -491,7 +468,7 @@ class TCPCubicSender(Sender):
     # used byb Cubic
     tcp_friendliness = 1
     fast_convergence = 1
-    beta = 0.2
+    beta = 0.3
     C = 0.4
 
     # used by srtt
@@ -504,7 +481,7 @@ class TCPCubicSender(Sender):
         # https://developers.google.com/speed/pagespeed/service/tcp_initcwnd_paper.pdf
 
         # slow start threshold, arbitrarily high at start
-        self.ssthresh = 7 #43 #MAX_CWND
+        self.ssthresh = 43 #MAX_CWND
         self.pkt_loss_wait_time = 0
         self.use_cwnd = True
         self.rto = 3  # retransmission timeout (seconds)
@@ -612,7 +589,7 @@ class TCPCubicSender(Sender):
                 self.W_last_max = self.cwnd
             old_cwnd = self.cwnd
             self.cwnd = self.cwnd * (1 - self.beta)
-            self.ssthresh = self.cwnd
+            self.ssthresh = max(self.cwnd, 2)
             # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
             if not self.rtt_samples and not self.prev_rtt_samples:
                 # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
@@ -918,4 +895,4 @@ class SimulatedNetworkEnv(gym.Env):
             json.dump(self.event_record, f, indent=4)
 
 
-register(id='PccNs-v0', entry_point='simulator.good_network_sim:SimulatedNetworkEnv')
+register(id='cubic-v0', entry_point='simulator.good_network_sim:SimulatedNetworkEnv')

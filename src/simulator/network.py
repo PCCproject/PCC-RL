@@ -19,6 +19,8 @@ import random
 import sys
 import time
 import math
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
 from gym import spaces
@@ -139,10 +141,7 @@ class Network():
         self.queue_initial_packets()
         self.env = env
 
-        if not self.env.train_flag:
-            self.packet_logger = csv.writer(open(
-                os.path.join(env.log_dir, "aurora_packet_log.csv"), 'w', 1),
-                lineterminator='\n')
+        self.pkt_log = []
 
     def queue_initial_packets(self):
         for sender in self.senders:
@@ -153,6 +152,7 @@ class Network():
             self.event_count += 1
 
     def reset(self):
+        self.pkt_log = []
         self.cur_time = 0.0
         self.q = []
         [link.reset() for link in self.links]
@@ -206,19 +206,15 @@ class Network():
                         new_dropped = True
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        if not self.env.train_flag:
-                            self.packet_logger.writerow(
-                                [self.cur_time, event_id, 'lost',
-                                 BYTES_PER_PACKET])
+                        self.pkt_log.append([self.cur_time, event_id, 'lost',
+                                             BYTES_PER_PACKET])
                     else:
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
-                        if not self.env.train_flag:
-                            self.packet_logger.writerow(
-                                [self.cur_time, event_id, 'acked',
-                                 BYTES_PER_PACKET, cur_latency,
-                                 event_queue_delay])
+                        self.pkt_log.append([self.cur_time, event_id, 'acked',
+                                             BYTES_PER_PACKET, cur_latency,
+                                             event_queue_delay])
                 else:
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -235,10 +231,8 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         # print('Send packet at {}'.format(self.cur_time))
-                        if not self.env.train_flag:
-                            self.packet_logger.writerow(
-                                [self.cur_time, event_id, 'sent',
-                                 BYTES_PER_PACKET])
+                        self.pkt_log.append([self.cur_time, event_id, 'sent',
+                                             BYTES_PER_PACKET])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,

@@ -20,6 +20,7 @@ from simulator import network
 from simulator.network import BYTES_PER_PACKET
 from simulator.trace import generate_trace
 from common.utils import set_tf_loglevel, pcc_aurora_reward
+from plot_scripts.plot_packet_log import PacketLog
 from udt_plugins.testing.loaded_agent import LoadedModel
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -119,14 +120,20 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             avg_send_rates = []
             for idx, val_env in enumerate(self.val_envs):
                 ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                    send_rate_list, action_list, obs_list, mi_list = test(
+                    send_rate_list, action_list, obs_list, mi_list, pkt_log = test(
                         self.model, val_env)
-                avg_rewards.append(np.mean(np.array(val_rewards)))
-                avg_losses.append(np.mean(np.array(loss_list)))
-                avg_tputs.append(float(np.mean(np.array(tput_list))))
-                avg_delays.append(np.mean(np.array(delay_list)))
-                avg_send_rates.append(
-                    float(np.mean(np.array(send_rate_list))))
+                pktlog = PacketLog.from_log(pkt_log)
+                # avg_rewards.append(np.mean(np.array(val_rewards)))
+                # avg_losses.append(np.mean(np.array(loss_list)))
+                # avg_tputs.append(float(np.mean(np.array(tput_list))))
+                # avg_delays.append(np.mean(np.array(delay_list)))
+                # avg_send_rates.append(
+                #     float(np.mean(np.array(send_rate_list))))
+                avg_rewards.append(pktlog.get_reward())
+                avg_losses.append(pktlog.get_loss_rate())
+                avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
+                avg_delays.append(np.mean(pktlog.get_rtt()[1]))
+                avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
             self.val_log_writer.writerow(
                 map(lambda t: "%.3f" % t,
                     [float(self.n_calls), float(self.num_timesteps),
@@ -252,18 +259,20 @@ class Aurora():
 
     def test(self, traces):
         results = []
+        pkt_logs = []
         for _, trace in enumerate(traces):
             env = gym.make('PccNs-v0', traces=[trace], log_dir=self.log_dir,
                            delta_scale=self.delta_scale)
             env.seed(self.seed)
 
             ts_list, reward_list, loss_list, tput_list, delay_list, \
-                send_rate_list, action_list, obs_list, mi_list = test(
+                send_rate_list, action_list, obs_list, mi_list, pkt_log = test(
                     self.model, env)
             result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
                               delay_list, loss_list, action_list, obs_list, mi_list))
+            pkt_logs.append(pkt_log)
             results.append(result)
-        return results
+        return results, pkt_logs
 
     def save_model(self):
         raise NotImplementedError
@@ -282,56 +291,56 @@ def test(model, env):
     action_list = []
     mi_list = []
     obs_list = []
-    writer = csv.writer(open(os.path.join(
-        env.log_dir, 'aurora_simulation_log.csv'), 'w', 1), lineterminator='\n')
-    writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
-                     'loss', 'reward', "action", "bytes_sent",
-                     "bytes_acked", "bytes_lost", "send_start_time",
-                     "send_end_time", 'recv_start_time',
-                     'recv_end_time', 'latency_increase',
-                     "packet_size", 'bandwidth', "queue_delay",
-                     'packet_in_queue', 'queue_size', 'cwnd',
-                     'ssthresh', "rto"])
-    obs = env.reset()
-    while True:
-        if isinstance(model, LoadedModel):
-            obs = obs.reshape(1, -1)
-            action = model.act(obs)
-            action = action['act'][0]
-        else:
-            action, _states = model.predict(obs, deterministic=True)
+    with open(os.path.join(env.log_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
+        writer = csv.writer(f, lineterminator='\n')
+        writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
+                         'loss', 'reward', "action", "bytes_sent",
+                         "bytes_acked", "bytes_lost", "send_start_time",
+                         "send_end_time", 'recv_start_time',
+                         'recv_end_time', 'latency_increase',
+                         "packet_size", 'bandwidth', "queue_delay",
+                         'packet_in_queue', 'queue_size', 'cwnd',
+                         'ssthresh', "rto"])
+        obs = env.reset()
+        while True:
+            if isinstance(model, LoadedModel):
+                obs = obs.reshape(1, -1)
+                action = model.act(obs)
+                action = action['act'][0]
+            else:
+                action, _states = model.predict(obs, deterministic=True)
 
-        # get the new MI and stats collected in the MI
-        sender_mi = env.senders[0].get_run_data()
-        throughput = sender_mi.get("recv rate")  # bits/sec
-        send_rate = sender_mi.get("send rate")  # bits/sec
-        latency = sender_mi.get("avg latency")
-        loss = sender_mi.get("loss ratio")
-        avg_queue_delay = sender_mi.get('avg queue delay')
-        reward = pcc_aurora_reward(
-            throughput / 8 / BYTES_PER_PACKET, latency, loss)
+            # get the new MI and stats collected in the MI
+            sender_mi = env.senders[0].get_run_data()
+            throughput = sender_mi.get("recv rate")  # bits/sec
+            send_rate = sender_mi.get("send rate")  # bits/sec
+            latency = sender_mi.get("avg latency")
+            loss = sender_mi.get("loss ratio")
+            avg_queue_delay = sender_mi.get('avg queue delay')
+            reward = pcc_aurora_reward(
+                throughput / 8 / BYTES_PER_PACKET, latency, loss)
 
-        writer.writerow([
-            env.net.get_cur_time(), send_rate, throughput, latency, loss,
-            reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
-            sender_mi.bytes_lost, sender_mi.send_start, sender_mi.send_end,
-            sender_mi.recv_start, sender_mi.recv_end,
-            sender_mi.get('latency increase'), sender_mi.packet_size,
-            env.links[0].get_bandwidth(
-                env.net.get_cur_time()) * BYTES_PER_PACKET * 8 / 1e6,
-            avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-            env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto])
-        reward_list.append(reward)
-        loss_list.append(loss)
-        delay_list.append(latency * 1000)
-        tput_list.append(throughput / 1e6)
-        send_rate_list.append(send_rate / 1e6)
-        ts_list.append(env.net.get_cur_time())
-        action_list.append(action.item())
-        mi_list.append(sender_mi.send_end - sender_mi.send_start)
-        obs_list.append(obs.tolist())
-        obs, rewards, dones, info = env.step(action)
+            writer.writerow([
+                env.net.get_cur_time(), send_rate, throughput, latency, loss,
+                reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
+                sender_mi.bytes_lost, sender_mi.send_start, sender_mi.send_end,
+                sender_mi.recv_start, sender_mi.recv_end,
+                sender_mi.get('latency increase'), sender_mi.packet_size,
+                env.links[0].get_bandwidth(
+                    env.net.get_cur_time()) * BYTES_PER_PACKET * 8 / 1e6,
+                avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
+                env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto])
+            reward_list.append(reward)
+            loss_list.append(loss)
+            delay_list.append(latency * 1000)
+            tput_list.append(throughput / 1e6)
+            send_rate_list.append(send_rate / 1e6)
+            ts_list.append(env.net.get_cur_time())
+            action_list.append(action.item())
+            mi_list.append(sender_mi.send_end - sender_mi.send_start)
+            obs_list.append(obs.tolist())
+            obs, rewards, dones, info = env.step(action)
 
-        if dones:
-            break
-    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list
+            if dones:
+                break
+    return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
