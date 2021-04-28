@@ -38,8 +38,6 @@ RESET_RATE_MAX = 100.0
 
 RESET_RATE_MIN = 0.12
 RESET_RATE_MAX = 0.12
-
-
 def parse_args():
     """Parse arguments from the command line."""
     parser = argparse.ArgumentParser("Loaded_client")
@@ -100,7 +98,7 @@ class PccGymDriver():
         self.t_start = time.time()
         # dummpy inference here to load model
         # _ = self.agent.act(self.history.as_array())
-        _ = self.aurora.model.predict(self.history.as_array())
+        _ = self.aurora.model.predict(self.history.as_array(), deterministic=True)
 
         self.mi_pushed = False
 
@@ -126,7 +124,7 @@ class PccGymDriver():
             # rate_delta = self.agent.act(self.history.as_array())
             # rate_delta = self.agent.act(self.sim_features[self.idx])
             t_start = time.time()
-            rate_delta, _ = self.aurora.model.predict(self.history.as_array())
+            rate_delta, _ = self.aurora.model.predict(self.history.as_array(), deterministic=True)
             rate_delta = rate_delta.item()
             old_rate = self.rate
             self.rate = apply_rate_delta(self.rate, rate_delta)
@@ -142,6 +140,7 @@ class PccGymDriver():
                 latency = mi.get("avg latency")
                 loss_rate = mi.get("loss ratio")
                 latency_increase = mi.get("latency increase")
+                min_lat = mi.get("conn min latency")
                 reward = 10.0 * recv_rate / \
                     (8 * mi.packet_size) - 1e3 * latency - 2e3 * loss_rate
                 self.log_writer.writerow([
@@ -149,7 +148,7 @@ class PccGymDriver():
                     loss_rate, reward, rate_delta, mi.bytes_sent,
                     mi.bytes_acked, mi.bytes_lost, mi.send_start, mi.send_end,
                     mi.recv_start, mi.recv_end, latency_increase,
-                    mi.packet_size])
+                    mi.packet_size, min_lat])
             except Exception as e:
                 print(e, file=sys.stderr, flush=True)
         else:
