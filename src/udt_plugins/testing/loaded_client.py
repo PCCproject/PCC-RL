@@ -29,15 +29,15 @@ from common import sender_obs
 from simulator.aurora import Aurora
 
 
-MIN_RATE = 0.12
+MIN_RATE = 0.06
 MAX_RATE = 300.0
 DELTA_SCALE = 1  # 0.05
 
 RESET_RATE_MIN = 5.0
 RESET_RATE_MAX = 100.0
 
-RESET_RATE_MIN = 0.12
-RESET_RATE_MAX = 0.12
+RESET_RATE_MIN = 1.2
+RESET_RATE_MAX = 1.2
 def parse_args():
     """Parse arguments from the command line."""
     parser = argparse.ArgumentParser("Loaded_client")
