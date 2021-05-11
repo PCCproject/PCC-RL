@@ -2,8 +2,10 @@
 # stopping at intervals to add new training data based on performance
 # (increases generalizability, we hope!)
 import argparse
+import copy
 import glob
 import os
+import itertools
 import subprocess
 import sys
 import time
@@ -13,12 +15,18 @@ import gym
 import ipdb
 import numpy as np
 from bayes_opt import BayesianOptimization
-from common.utils import natural_sort, read_json_file, write_json_file
 
+from common.utils import natural_sort, read_json_file, write_json_file, set_seed
+from plot_scripts.plot_packet_log import PacketLog
+
+from simulator.evaluate_cubic import test_on_trace as test_cubic_on_trace
+from simulator.aurora import Aurora
+from simulator.trace import generate_trace
 # from simulator.good_network_sim import RandomizationRanges
 
 
 MODEL_PATH = ""
+DEFAULT_CONFIGS = []
 
 
 def parse_args():
@@ -28,35 +36,44 @@ def parse_args():
                         help="direcotry to testing results.")
     parser.add_argument('--model-path', type=str, default="",
                         help="path to Aurora model to start from.")
-    parser.add_argument("--config-file", type=str, required=True,
+    parser.add_argument("--config-file", type=str,
                         help="Path to configuration file.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
-    parser.add_argument('--duration', type=int, default=10,
-                        help='Flow duration in seconds.')
+    # parser.add_argument('--duration', type=int, default=10,
+    #                     help='Flow duration in seconds.')
     parser.add_argument('--total-timesteps', type=int, default=5e6,
                         help='Total timesteps can be used to train.')
     parser.add_argument('--bo-interval', type=int, default=5e4,
                         help='Number of epoch/step used for training between '
                         'two BOs.')
-    parser.add_argument('--new-range-weight', type=float, default=0.7,
-                        help='New range weight.')
+    # parser.add_argument('--new-range-weight', type=float, default=0.7,
+    #                     help='New range weight.')
 
     return parser.parse_args()
 
 
 class RandomizationRanges():
     def __init__(self, filename):
-        self.rand_ranges = read_json_file(filename)
+        if filename and os.path.exists(filename):
+            self.rand_ranges = read_json_file(filename)
+        else:
+            self.rand_ranges = []
 
-    def add_range(self, bw_range, delay_range, loss_range, queue_range, prob=0.7):
+    def add_range(self, range_maps, prob=0.4):
         for rand_range in self.rand_ranges:
-            rand_range['weight'] *= 1-prob
-        new_range = {'bandwidth': bw_range,
-                     'delay': delay_range,
-                     'loss': loss_range,
-                     'queue': queue_range,
-                     'weight': prob}
-        self.rand_ranges.append(new_range)
+            rand_range['weight'] *= (1 - prob)
+        # new_range = copy.deepcopy(self.rand_ranges[0])
+        if self.rand_ranges:
+            weight = prob / len(range_maps)
+        else:
+            weight = 1 / len(range_maps)
+        for range_map in range_maps:
+            # for dim in range_map:
+            #     if dim not in new_range:
+            #         raise RuntimeError
+            #     new_range[dim] = range_map[dim]
+            range_map['weight'] = weight
+            self.rand_ranges.append(range_map)
 
     def get_original_range(self):
         return self.rand_ranges[0]
@@ -75,8 +92,8 @@ def map_log_to_lin(x):
 
 def latest_model_from(path):
     ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
-    models_to_serve = list(
-        glob.glob(os.path.join(path, "model_to_serve_step_*")))
+    # models_to_serve = list(
+    #     glob.glob(os.path.join(path, "model_to_serve_step_*")))
     if not ckpts:
         ckpt = ""
     else:
@@ -89,7 +106,47 @@ def latest_model_from(path):
     return ckpt, model_to_serve
 
 
-def black_box_function(bandwidth, delay, loss, queue):
+# def black_box_function(bandwidth):
+#     '''Compute reward gap between baseline and RL solution.
+#
+#     Args
+#         delay: One-way link delay (ms).
+#
+#     Return
+#          (cubic - aurora) reward
+#     '''
+#     assert MODEL_PATH != ""
+#     # cmd = "python evaluate_cubic.py --bandwidth {} --delay {} --queue {} " \
+#     #     "--loss {} --duration {} --save-dir {}".format(
+#     #         bandwidth, delay, int(queue), loss, 10, "tmp")
+#     # print(cmd)
+#     # subprocess.check_output(cmd, shell=True).strip()
+#     # print(DEFAULT_CONFIGS)
+#
+#     reward_diffs = []
+#     for config in DEFAULT_CONFIGS:
+#         trace = generate_trace(duration_range=(10, 10), bandwidth_range=(1, bandwidth),
+#                                delay_range=(config['delay'], config['delay']),
+#                                loss_rate_range=(
+#                                    config['loss'], config['loss']),
+#                                queue_size_range=(
+#                                    config['queue'], config['queue']),
+#                                T_s_range=(config['T_s'], config['T_s']),
+#                                delay_noise_range=(
+#                                    config['delay_noise'], config['delay_noise']),
+#                                constant_bw=False)
+#         cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
+#
+#         aurora = Aurora(seed=20, log_dir="tmp", timesteps_per_actorbatch=10,
+#                         pretrained_model_path=MODEL_PATH, delta_scale=1)
+#         ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, \
+#             action_list, obs_list, mi_list, pkt_log = aurora.test(trace, 'tmp')
+#         reward_diffs.append(np.mean(np.array(cubic_rewards)
+#                                     ) - np.mean(np.array(reward_list)))
+#
+#     return np.mean(np.array(reward_diffs))
+
+def black_box_function(delay):
     '''Compute reward gap between baseline and RL solution.
 
     Args
@@ -99,19 +156,102 @@ def black_box_function(bandwidth, delay, loss, queue):
          (cubic - aurora) reward
     '''
     assert MODEL_PATH != ""
-    cmd = "python evaluate_cubic.py --bandwidth {} --delay {} --queue {} " \
-        "--loss {} --duration {}".format(bandwidth, delay, int(queue),
-                                         loss, 10)
-    print(cmd)
-    cubic_reward = float(subprocess.check_output(cmd, shell=True).strip())
-    cmd = "CUDA_VISIBLE_DEVICES='' python evaluate_aurora.py --bandwidth {} --delay {} --queue {} "  \
-        "--loss {} --model-path {} --duration {}".format(
-            bandwidth, delay, int(queue), loss, MODEL_PATH, 10)
-    print(cmd)
-    aurora_reward = float(subprocess.check_output(cmd, shell=True).strip())
-    # print("cubic", cubic_reward, "aurora", aurora_reward)
-    return cubic_reward - aurora_reward
+    # cmd = "python evaluate_cubic.py --bandwidth {} --delay {} --queue {} " \
+    #     "--loss {} --duration {} --save-dir {}".format(
+    #         bandwidth, delay, int(queue), loss, 10, "tmp")
+    # print(cmd)
+    # subprocess.check_output(cmd, shell=True).strip()
+    # print(DEFAULT_CONFIGS)
 
+    reward_diffs = []
+    for config in DEFAULT_CONFIGS:
+        trace = generate_trace(duration_range=(10, 10), bandwidth_range=(1, config['bandwidth']),
+                               delay_range=(delay, delay),
+                               loss_rate_range=(
+                                   config['loss'], config['loss']),
+                               queue_size_range=(
+                                   config['queue'], config['queue']),
+                               T_s_range=(config['T_s'], config['T_s']),
+                               delay_noise_range=(
+                                   config['delay_noise'], config['delay_noise']),
+                               constant_bw=False)
+        cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
+
+        aurora = Aurora(seed=20, log_dir="tmp", timesteps_per_actorbatch=10,
+                        pretrained_model_path=MODEL_PATH, delta_scale=1)
+        ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, \
+            action_list, obs_list, mi_list, pkt_log = aurora.test(trace, 'tmp')
+        reward_diffs.append(PacketLog.from_log(cubic_pkt_log).get_reward(None, trace=trace)
+                - PacketLog.from_log(pkt_log).get_reward(None, trace=trace))
+        # reward_diffs.append(np.mean(np.array(cubic_rewards)
+        #                             ) - np.mean(np.array(reward_list)))
+
+    return np.mean(np.array(reward_diffs))
+
+# def black_box_function(T_s):
+#     '''Compute reward gap between baseline and RL solution.
+#
+#     Args
+#         delay: One-way link delay (ms).
+#
+#     Return
+#          (cubic - aurora) reward
+#     '''
+#     assert MODEL_PATH != ""
+#     # cmd = "python evaluate_cubic.py --bandwidth {} --delay {} --queue {} " \
+#     #     "--loss {} --duration {} --save-dir {}".format(
+#     #         bandwidth, delay, int(queue), loss, 10, "tmp")
+#     # print(cmd)
+#     # subprocess.check_output(cmd, shell=True).strip()
+#     # print(DEFAULT_CONFIGS)
+#
+#     reward_diffs = []
+#     for config in DEFAULT_CONFIGS:
+#         trace = generate_trace(duration_range=(10, 10), bandwidth_range=(1, config['bandwidth']),
+#                                delay_range=(config['delay'], config['delay']),
+#                                loss_rate_range=(
+#                                    config['loss'], config['loss']),
+#                                queue_size_range=(
+#                                    config['queue'], config['queue']),
+#                                T_s_range=(T_s, T_s),
+#                                delay_noise_range=(
+#                                    config['delay_noise'], config['delay_noise']),
+#                                constant_bw=False)
+#         cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
+#
+#         aurora = Aurora(seed=20, log_dir="tmp", timesteps_per_actorbatch=10,
+#                         pretrained_model_path=MODEL_PATH, delta_scale=1)
+#         ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, \
+#             action_list, obs_list, mi_list, pkt_log = aurora.test(trace, 'tmp')
+#         reward_diffs.append(np.mean(np.array(cubic_rewards)
+#                                     ) - np.mean(np.array(reward_list)))
+#
+#     return np.mean(np.array(reward_diffs))
+
+# def black_box_function(queue):
+#     assert MODEL_PATH != ""
+#
+#     reward_diffs = []
+#     for config in DEFAULT_CONFIGS:
+#         trace = generate_trace(duration_range=(10, 10), bandwidth_range=(1, config['bandwidth']),
+#                                delay_range=(config['delay'], config['delay']),
+#                                loss_rate_range=(
+#                                    config['loss'], config['loss']),
+#                                queue_size_range=(queue, queue),
+#                                T_s_range=(config['T_s'], config['T_s']),
+#                                delay_noise_range=(
+#                                    config['delay_noise'], config['delay_noise']),
+#                                constant_bw=False)
+#         cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
+#
+#         aurora = Aurora(seed=20, log_dir="tmp", timesteps_per_actorbatch=10,
+#                         pretrained_model_path=MODEL_PATH, delta_scale=1)
+#         ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, \
+#             action_list, obs_list, mi_list, pkt_log = aurora.test(trace, 'tmp')
+#         reward_diffs.append(np.mean(np.array(cubic_rewards)
+#                                     ) - np.mean(np.array(reward_list)))
+#
+#     return np.mean(np.array(reward_diffs))
 
 def select_range_from_opt_res(res):
     """Select parameter range from BO optimizer res."""
@@ -143,8 +283,8 @@ def do_bo(pbounds, black_box_function, seed):
     # delay = next.get('params').get('delay')
     # queue = next.get('params').get('queue')
     # param_TS = next.get('params').get('y')
-    params_range = select_range_from_opt_res(optimizer.res)
-    return best_param, params_range
+    # params_range = select_range_from_opt_res(optimizer.res)
+    return best_param  # , params_range
 
 
 def initalize_pretrained_model(pbounds: Dict[str, List], n_models: int, save_dir: str,
@@ -213,9 +353,21 @@ def initalize_pretrained_model(pbounds: Dict[str, List], n_models: int, save_dir
 
 
 def main():
+    set_seed(20)
     global MODEL_PATH
+    global DEFAULT_CONFIGS
     args = parse_args()
+
     print(args)
+    for _ in range(10):
+        DEFAULT_CONFIGS.append(
+            {
+             "bandwidth": 10 ** np.random.uniform(np.log10(1), np.log10(6), 1).item(),
+             # "delay": np.random.uniform(5, 200, 1).item(),
+             "loss": np.random.uniform(0, 0.0, 1).item(),
+             "queue": 10 ** np.random.uniform(np.log10(2), np.log10(30), 1).item(),
+             "T_s": np.random.randint(0, 6, 1).item(),
+             "delay_noise": np.random.uniform(0, 0, 1).item()})
     if args.model_path:
         # model path is specified, so use it as the pretrained model
         MODEL_PATH = args.model_path
@@ -233,24 +385,67 @@ def main():
         # pick the one which has the highest reward to be the model to start.
         MODEL_PATH = ""
     config_file = args.config_file
-    config = read_json_file(args.config_file)[0]
-    pbounds = {k: config[k] for k in config if k != 'weight'}
-    ckpt_path = initalize_pretrained_model(pbounds, 5, "test_bo", 10, 10000)
+    # config = read_json_file(args.config_file)[0]
+    # pbounds = {k: config[k] for k in config if k != 'weight'}
+    pbounds = {'delay': (5, 200)}
+    # pbounds = {'T_s': (0, 6)}
+    # pbounds = {'queue': (2, 200)}
+    # pbounds = {'bandwidth': (1, 6)}
+    # ckpt_path = initalize_pretrained_model(pbounds, 5, "test_bo", 10, 10000)
+    # ckpt_path = "../../results_0415/udr_7_dims/range0/model_step_14400.ckpt"
     save_dir = args.save_dir
+    os.makedirs(save_dir, exist_ok=True)
     # Example Flow:
     for i in range(12):
-        best_param, params_range = do_bo(
-            pbounds, black_box_function, seed=args.seed)
-        min_bw, max_bw = params_range['bandwidth']
-        min_delay, max_delay = params_range['delay']
-        min_loss, max_loss = params_range['loss']
-        min_queue, max_queue = params_range['queue']
+        best_param = do_bo(pbounds, black_box_function, seed=args.seed)
+        # min_bw, max_bw = params_range['bandwidth']
+        # min_delay, max_delay = params_range['delay']
+        # min_loss, max_loss = params_range['loss']
+        # min_queue, max_queue = params_range['queue']
 
-        print("BO choose paramter range ", params_range)
+        print("BO choose best paramter", best_param)
+        range_maps = []
+        for config in DEFAULT_CONFIGS:
+            # range_maps.append(
+            #     {'bandwidth': [1, best_param['params']['bandwidth']],
+            #      'delay': [config['delay'], config['delay']],
+            #      'loss': [config['loss'], config['loss']],
+            #      'queue': [config['queue'], config['queue']],
+            #      'T_s': [config['T_s'], config['T_s']],
+            #      'delay_noise': [config['delay_noise'],
+            #                      config['delay_noise']],
+            #      })
+            range_maps.append(
+                {'bandwidth': [1, config['bandwidth']],
+                 'delay': [best_param['params']['delay'], best_param['params']['delay']],
+                 'loss': [config['loss'], config['loss']],
+                 'queue': [config['queue'], config['queue']],
+                 'T_s': [config['T_s'], config['T_s']],
+                 'delay_noise': [config['delay_noise'],
+                                 config['delay_noise']],
+                 })
+            # range_maps.append(
+            #     {'bandwidth': [1, config['bandwidth']],
+            #      'delay': [config['delay'], config['delay']],
+            #      'loss': [config['loss'], config['loss']],
+            #      'queue': [best_param['params']['queue'], best_param['params']['queue']],
+            #      'T_s': [config['T_s'], config['T_s']],
+            #      'delay_noise': [config['delay_noise'],
+            #                      config['delay_noise']],
+            #      })
+            # range_maps.append(
+            #     {'bandwidth': [1, config['bandwidth']],
+            #      'delay': [config['delay'], config['delay']],
+            #      'loss': [config['loss'], config['loss']],
+            #      'queue': [config['queue'], config['queue']],
+            #      'T_s': [best_param['params']['T_s'], best_param['params']['T_s']],
+            #      'delay_noise': [config['delay_noise'],
+            #                      config['delay_noise']],
+            #      })
+
         rand_ranges = RandomizationRanges(config_file)
-        rand_ranges.add_range((min_bw), (min_delay, max_delay),
-                              (min_loss, max_loss), (min_queue, max_queue))
-        new_config_file = os.path.join("test_bo", "bo_"+str(i) + ".json")
+        rand_ranges.add_range(range_maps)
+        new_config_file = os.path.join(args.save_dir, "bo_"+str(i) + ".json")
         rand_ranges.dump(new_config_file)
         config_file = new_config_file
 
@@ -259,37 +454,27 @@ def main():
         # latest_ckpt_path, latest_model_path = latest_model_from(save_dir)
 
         # train Aurora with new parameter
-        # command = "python train_rl.py " \
-        #     "--total-timesteps {} " \
-        #     "--save-dir={save_dir} " \
-        #     "--pretrained-model-path {model_path} " \
-        #     "--delay {min_delay} {max_delay} " \
-        #     "--queue {min_queue} {max_queue} " \
-        #     "--bandwidth {min_bandwidth} {max_bandwidth} " \
-        #     "--loss {min_loss} {max_loss} " \
-        #     "--randomization-range-file {config_file}".format(
-        #         720000, save_dir=save_dir,
-        #         model_path=latest_ckpt_path,
-        #         min_delay=min_delay/1000,
-        #         max_delay=max_delay/1000,
-        #         min_queue=min_queue,
-        #         max_queue=max_queue,
-        #         min_bandwidth=min_bandwidth,
-        #         max_bandwidth=max_bandwidth,
-        #         min_loss=min_loss,
-        #         max_loss=max_loss,
-        #         config_file=config_file)
-        command = "python train_rl.py " \
-            "--total-timesteps {} " \
-            "--save-dir={save_dir} " \
+        command = "mpirun -np 2 python train_rl.py " \
+            "--seed {seed} --delta-scale 1 --time-variant-bw --total-timesteps {tot_step} " \
+            "--save-dir {save_dir}/bo_{i} " \
             "--pretrained-model-path {model_path} " \
             "--randomization-range-file {config_file}".format(
-                10000000000, save_dir=save_dir,
-                model_path=latest_ckpt_path,
+                seed=args.seed, i=i,
+                tot_step=36000, save_dir=save_dir,
+                model_path=MODEL_PATH,
                 config_file=config_file)
-        # print(command)
-        # subprocess.check_call(command.split())
-        # latest_ckpt_path, latest_model_path = latest_model_from(save_dir)
+        print(command)
+        subprocess.check_call(command.split())
+
+        command = "python ../plot_scripts/plot_validation.py --log-file " \
+                  "{save_dir}/validation_log.csv --save-dir {save_dir}".format(
+                      save_dir="{}/bo_{}".format(save_dir, i))
+        print(command)
+        MODEL_PATH = subprocess.check_output(command.split()).strip().decode("utf-8")
+        print(MODEL_PATH)
+
+        # MODEL_PATH, latest_model_path = latest_model_from("{}/bo_{}".format())
+        # print('MODEL_PATH changes to', MODEL_PATH)
         # os.system("rm -r /tmp/best_model_to_serve")
         # print("cp -r {} /tmp/best_model_to_serve".format(latest_model_path))
         # os.system("cp -r {} /tmp/best_model_to_serve".format(latest_model_path))

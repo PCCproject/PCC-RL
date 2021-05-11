@@ -20,7 +20,7 @@ from stable_baselines.results_plotter import load_results, ts2xy
 
 from simulator import network
 from simulator.network import BYTES_PER_PACKET
-from simulator.trace import generate_trace, Trace
+from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog
 from udt_plugins.testing.loaded_agent import LoadedModel
@@ -58,7 +58,8 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List = [],
-                 verbose=0, patience=10, steps_trained=0):
+                 verbose=0, patience=10, steps_trained=0, config_file=None,
+                 tot_trace_cnt=100, update_training_traces_freq=5):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
@@ -67,6 +68,9 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.save_path = log_dir
         self.best_mean_reward = -np.inf
         self.val_traces = val_traces
+        self.config_file = config_file
+        self.tot_trace_cnt=tot_trace_cnt
+        self.update_training_traces_freq = update_training_traces_freq
         if self.aurora.comm.Get_rank() == 0:
             self.val_log_writer = csv.writer(
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
@@ -78,6 +82,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             self.val_log_writer = None
         self.best_val_reward = -np.inf
         self.patience = patience
+        self.val_times = 0
 
         self.t_start = time.time()
         self.steps_trained = steps_trained
@@ -89,6 +94,12 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         if self.n_calls % self.check_freq == 0:
+            # self.val_times += 1
+            # if self.val_times % self.update_training_traces_freq == 0:
+            #     training_traces = generate_traces(
+            #         self.config_file, self.tot_trace_cnt, duration=30,
+            #         constant_bw=False)
+            #     self.model.env.traces = training_traces
 
             # Retrieve training reward
             # x, y = ts2xy(load_results(self.log_dir), 'timesteps')
@@ -197,7 +208,7 @@ class Aurora():
         env = gym.make('PccNs-v0', traces=[dummy_trace],
                        train_flag=True, delta_scale=self.delta_scale)
         # Load pretrained model
-        print('create_dummy_env,{}'.format(time.time() - init_start))
+        # print('create_dummy_env,{}'.format(time.time() - init_start))
         if pretrained_model_path is not None:
             if pretrained_model_path.endswith('.ckpt'):
                 model_create_start = time.time()
@@ -206,9 +217,9 @@ class Aurora():
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
                                       timesteps_per_actorbatch/4),
-                                  optim_epochs=18,
+                                  optim_epochs=12,
                                   gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
-                print('create_ppo1,{}'.format(time.time() - model_create_start))
+                # print('create_ppo1,{}'.format(time.time() - model_create_start))
                 tf_restore_start = time.time()
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
@@ -218,6 +229,7 @@ class Aurora():
                         pretrained_model_path)[0].split('_')[-1])
                 except:
                     self.steps_trained = 0
+                # print('tf_restore,{}'.format(time.time()-tf_restore_start))
             else:
                 # model is a tensorflow model to serve
                 self.model = LoadedModel(pretrained_model_path)
@@ -226,15 +238,23 @@ class Aurora():
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
                               optim_batchsize=int(timesteps_per_actorbatch/4),
-                              optim_epochs=18,
+                              optim_epochs=12,
                               gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
-    def train(self, training_traces, validation_traces, total_timesteps,
+    def train(self, config_file,
+            # training_traces, validation_traces,
+            total_timesteps, tot_trace_cnt,
               tb_log_name=""):
         assert isinstance(self.model, PPO1)
+
+        training_traces = generate_traces(config_file, tot_trace_cnt,
+                                          duration=30, constant_bw=False)
+        # generate validation traces
+        validation_traces = generate_traces(
+            config_file, 100, duration=30, constant_bw=False)
         env = gym.make('PccNs-v0', traces=training_traces,
-                       train_flag=True, delta_scale=self.delta_scale)
+                       train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)
         # env = Monitor(env, self.log_dir)
         self.model.set_env(env)
@@ -242,7 +262,9 @@ class Aurora():
         # Create the callback: check every n steps and save best model
         callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
-            steps_trained=self.steps_trained, val_traces=validation_traces)
+            steps_trained=self.steps_trained, val_traces=validation_traces,
+            config_file=config_file, tot_trace_cnt=tot_trace_cnt,
+            update_training_traces_freq=10)
         self.model.learn(total_timesteps=total_timesteps,
                          tb_log_name=tb_log_name, callback=callback)
 
@@ -285,12 +307,16 @@ class Aurora():
         obs_list = []
         with open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
             writer = csv.writer(f, lineterminator='\n')
-            writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
+            writer.writerow(['timestamp', "target_send_rate", "send_rate",
+                             'recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
-                             "bytes_acked", "bytes_lost", "send_start_time",
+                             "bytes_acked", "bytes_lost", "MI",
+                             "send_start_time",
                              "send_end_time", 'recv_start_time',
                              'recv_end_time', 'latency_increase',
-                             "packet_size", 'min_lat', 'bandwidth', "queue_delay",
+                             "packet_size", 'min_lat', 'sent_latency_inflation',
+                             'latency_ratio', 'send_ratio',
+                             'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
                              'ssthresh', "rto"])
             env = gym.make(
@@ -316,17 +342,23 @@ class Aurora():
                 latency = sender_mi.get("avg latency")
                 loss = sender_mi.get("loss ratio")
                 avg_queue_delay = sender_mi.get('avg queue delay')
+                sent_latency_inflation = sender_mi.get('sent latency inflation')
+                latency_ratio = sender_mi.get('latency ratio')
+                send_ratio = sender_mi.get('send ratio')
                 reward = pcc_aurora_reward(
                     throughput / 8 / BYTES_PER_PACKET, latency, loss,
                     np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
 
                 writer.writerow([
-                    env.net.get_cur_time(), send_rate, throughput, latency, loss,
+                    env.net.get_cur_time(), round(env.senders[0].rate * 1500 * 8, 0),
+                    round(send_rate, 0), round(throughput, 0), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
-                    sender_mi.bytes_lost, sender_mi.send_start, sender_mi.send_end,
+                    sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
+                    sender_mi.send_start, sender_mi.send_end,
                     sender_mi.recv_start, sender_mi.recv_end,
                     sender_mi.get('latency increase'), sender_mi.packet_size,
-                    sender_mi.get('conn min latency'),
+                    sender_mi.get('conn min latency'), sent_latency_inflation,
+                    latency_ratio, send_ratio,
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
@@ -346,12 +378,15 @@ class Aurora():
 
                 if dones:
                     break
+        with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
+            pkt_logger = csv.writer(f, lineterminator='\n')
+            pkt_logger.writerows(env.net.pkt_log)
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
 
 def test_model(model_path: str, trace: Trace, save_dir: str, seed: int):
     model = Aurora(seed, "", 10, model_path)
     pid = os.getpid()
-    print(pid, 'create model')
+    # print(pid, 'create model')
 
     # ret = model.test(trace, save_dir)
     print(pid, 'return')
