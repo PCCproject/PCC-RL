@@ -1,4 +1,6 @@
 import argparse
+import csv
+import multiprocessing as mp
 import os
 import time
 import warnings
@@ -49,15 +51,29 @@ def test_on_trace(trace, save_dir, seed):
     while True:
         action = [0, 0]
         _, reward, dones, _ = env.step(action)
-        rewards.append(reward)
+        rewards.append(reward * 1000)
         if dones:
-            # if args.save_dir:
-            #     env.dump_events_to_file(
-            #         os.path.join(args.save_dir, "cubic_test_log.json"))
-            # print("{}/{}, {}s".format(env_cnt,
-            #                           param_set_len, time.time() - t_start))
             break
-    return rewards
+    with open(os.path.join(save_dir, "cubic_packet_log.csv"), 'w', 1) as f:
+        pkt_logger = csv.writer(f, lineterminator='\n')
+        pkt_logger.writerows(env.net.pkt_log)
+    return rewards, env.net.pkt_log
+
+
+def test_on_traces(traces, save_dirs, seed):
+    n_proc=mp.cpu_count()//2
+    arguments = [(trace, save_dir, seed) for trace, save_dir in zip(traces, save_dirs)]
+    with mp.Pool(processes=n_proc) as pool:
+        results = pool.starmap(test_on_trace, arguments)
+    rewards = [result[0] for result in results]
+    pkt_logs = [result[1] for result in results]
+    # rewards = []
+    # pkt_logs = []
+    # for trace, save_dir in zip(traces, save_dirs):
+    #     reward, pkt_log = test_on_trace(trace, save_dir, seed)
+    #     rewards.append(reward)
+    #     pkt_logs.append(pkt_log)
+    return rewards, pkt_logs
 
 
 def main():
@@ -66,8 +82,12 @@ def main():
     if args.save_dir:
         os.makedirs(args.save_dir, exist_ok=True)
 
-    if args.trace_file:
+    if args.trace_file and args.trace_file.endswith('.json'):
         test_traces = [Trace.load_from_file(args.trace_file)]
+    elif args.trace_file and args.trace_file.endswith('.log'):
+        test_traces = [Trace.load_from_pantheon_file(
+            args.trace_file, args.delay, args.loss, args.queue)]
+
     elif args.config_file is not None:
         test_traces = generate_traces(args.config_file, 1, args.duration,
                                       constant_bw=not args.time_variant_bw)
@@ -79,8 +99,8 @@ def main():
                                       (args.queue, args.queue),
                                       constant_bw=not args.time_variant_bw)]
     for _, trace in enumerate(test_traces):
-        rewards = test_on_trace(trace, args.save_dir, args.seed)
-        print(np.mean(np.array(rewards)))
+        rewards, _ = test_on_trace(trace, args.save_dir, args.seed)
+        # print(np.mean(np.array(rewards)))
 
 
 if __name__ == "__main__":
