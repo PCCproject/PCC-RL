@@ -11,40 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import csv
 import heapq
 import os
-import random
 import sys
 import time
-import math
 import warnings
+
 warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
+import numpy as np
+import pandas as pd
 from gym import spaces
 from gym.envs.registration import register
 from gym.utils import seeding
-import numpy as np
 
 from common import sender_obs
-from common.utils import pcc_aurora_reward, read_json_file
-from simulator.trace import Trace
-
-import pandas as pd
-
-MAX_CWND = 5000
-MIN_CWND = 4
-
-MAX_RATE = 20000
-MIN_RATE = 5
-
-REWARD_SCALE = 0.001
-
-EVENT_TYPE_SEND = 'S'
-EVENT_TYPE_ACK = 'A'
-
-BYTES_PER_PACKET = 1500
+from common.utils import pcc_aurora_reward
+from simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
+                                 EVENT_TYPE_SEND, MAX_RATE, MI_RTT_PROPORTION,
+                                 MIN_RATE, REWARD_SCALE)
+from simulator.link import Link
+from simulator.trace import generate_traces
 
 LATENCY_PENALTY = 1.0
 LOSS_PENALTY = 1.0
@@ -55,10 +43,8 @@ MAX_LATENCY_NOISE = 1.1
 # DEBUG = True
 DEBUG = False
 
-MI_RTT_PROPORTION = 1.0
-
-PACKET_LOG_FLAG = False
-# PACKET_LOG_FLAG = True
+# PACKET_LOG_FLAG = False
+PACKET_LOG_FLAG = True
 
 
 def debug_print(msg):
@@ -85,63 +71,6 @@ class EmuReplay:
 
     def reset(self):
         self.idx = 0
-
-
-class Link():
-
-    def __init__(self, trace: Trace):
-        self.trace = trace
-        self.queue_delay = 0.0
-        self.queue_delay_update_time = 0.0
-
-        self.queue_size = self.trace.get_queue_size()
-        self.pkt_in_queue = 0
-
-    def get_cur_queue_delay(self, event_time):
-        self.pkt_in_queue = max(0, self.pkt_in_queue -
-                                (event_time - self.queue_delay_update_time) *
-                                self.get_bandwidth(event_time))
-        self.queue_delay_update_time = event_time
-        cur_queue_delay = math.ceil(
-            self.pkt_in_queue) / self.get_bandwidth(event_time)
-        return cur_queue_delay
-
-    def get_cur_latency(self, event_time):
-        q_delay = self.get_cur_queue_delay(event_time)
-        # print('queue delay: ', q_delay)
-        return self.trace.get_delay(event_time) / 1000.0 + q_delay
-
-    def packet_enters_link(self, event_time):
-        if (random.random() < self.trace.get_loss_rate()):
-            return False
-        self.queue_delay = self.get_cur_queue_delay(event_time)
-        extra_delay = 1.0 / self.get_bandwidth(event_time)
-        if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
-            # print("{}\tDrop!".format(event_time))
-            return False
-        self.queue_delay += extra_delay
-        self.pkt_in_queue += 1
-        return True
-
-    def print_debug(self):
-        print("Link:")
-        # TODO: Do not use timestamp 0.
-        print("Bandwidth: %.3fMbps" % (self.trace.get_bandwidth(0)))
-        # TODO: Do not use timestamp 0.
-        print("Delay: %.3fms" % (self.trace.get_delay(0)))
-        print("Queue Delay: %.3fms" % (self.queue_delay * 1000))
-        print("One Packet Queue Delay: %.3fms" % (
-            1000.0 * 1 / (self.trace.get_bandwidth(0) * 1e6 / 8 / BYTES_PER_PACKET)))
-        print("Queue size: %dpackets" % self.queue_size)
-        print("Loss: %.4f" % self.trace.get_loss_rate())
-
-    def reset(self):
-        self.queue_delay = 0.0
-        self.queue_delay_update_time = 0.0
-        self.pkt_in_queue = 0
-
-    def get_bandwidth(self, ts):
-        return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
 
 
 class Network():
@@ -177,20 +106,19 @@ class Network():
         return self.cur_time
 
     def run_for_dur(self, dur, action=None):
-        # if self.cur_time > 1.75:
-        #     pass
-        # else:
-        #     self.senders[0].rate = self.env.replay.get_rate()
-        #     dur = self.env.replay.get_ts() - self.cur_time
         end_time = min(self.cur_time + dur, self.env.current_trace.timestamps[-1])
         debug_print('MI from {} to {}, dur {}'.format(
             self.cur_time, end_time, dur))
         for sender in self.senders:
             sender.reset_obs()
+        # set_obs_start = False
+        extra_delays = [] # time used to put packet onto the network
         while True:
             event_time, sender, event_type, next_hop, cur_latency, dropped, \
                 event_id, rto, event_queue_delay = self.q[0]
-            if event_time >= end_time:
+
+            if event_time >= end_time and event_type == EVENT_TYPE_SEND:
+                end_time = event_time
                 self.cur_time = end_time
                 break
             event_time, sender, event_type, next_hop, cur_latency, dropped, \
@@ -227,7 +155,7 @@ class Network():
                         sender.on_packet_lost(cur_latency)
                         if PACKET_LOG_FLAG:
                             self.pkt_log.append([self.cur_time, event_id, 'lost',
-                                                 BYTES_PER_PACKET])
+                                                 BYTES_PER_PACKET, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     else:
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
@@ -235,7 +163,7 @@ class Network():
                         if PACKET_LOG_FLAG:
                             self.pkt_log.append([self.cur_time, event_id, 'acked',
                                                  BYTES_PER_PACKET, cur_latency,
-                                                 event_queue_delay])
+                                                 event_queue_delay, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                 else:
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
@@ -244,7 +172,7 @@ class Network():
                         self.cur_time)
                     # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                     # if USE_LATENCY_NOISE:
-                    #     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+                        # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                     new_latency += link_latency
                     new_event_time += link_latency
                     push_new_event = True
@@ -255,7 +183,7 @@ class Network():
                         # print('Send packet at {}'.format(self.cur_time))
                         if PACKET_LOG_FLAG:
                             self.pkt_log.append([self.cur_time, event_id, 'sent',
-                                                 BYTES_PER_PACKET])
+                                                 BYTES_PER_PACKET, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
@@ -270,19 +198,20 @@ class Network():
                     new_event_type = EVENT_TYPE_ACK
                 new_next_hop = next_hop + 1
 
-                new_dropped = not sender.path[next_hop].packet_enters_link(
-                    self.cur_time)
                 new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                     self.cur_time)
                 link_latency = sender.path[next_hop].get_cur_latency(
                     self.cur_time)
                 # if USE_LATENCY_NOISE:
-                #     link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
-
-                # link_latency += self.env.current_trace.get_delay_noise(self.cur_time) / 1000
+                # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+                link_latency += self.env.current_trace.get_delay_noise(
+                    self.cur_time, self.links[0].get_bandwidth(self.cur_time)) / 1000
                 # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                 new_latency += link_latency
                 new_event_time += link_latency
+                new_dropped = not sender.path[next_hop].packet_enters_link(
+                    self.cur_time)
+                extra_delays.append(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not new_dropped:
                     sender.queue_delay_samples.append(new_event_queue_delay)
 
@@ -304,7 +233,8 @@ class Network():
             np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
 
         if latency > 0.0:
-            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency") # + (1 / self.senders[0].rate)
+            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency") + np.mean(extra_delays)
+            # assert self.env.run_dur >= 0.03
             # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
         # print(self.env.run_dur)
         return reward * REWARD_SCALE
@@ -324,6 +254,7 @@ class Sender():
         self.bytes_in_flight = 0
         self.min_latency = None
         self.rtt_samples = []
+        self.rtt_samples_ts = []
         self.queue_delay_samples = []
         self.prev_rtt_samples = self.rtt_samples
         self.sample_time = []
@@ -341,6 +272,7 @@ class Sender():
         self.pkt_loss_wait_time = -1
         self.estRTT = 1000000 / 1e6  # SynInterval in emulation
         self.RTTVar = self.estRTT / 2  # RTT variance
+        self.got_data = False
 
     _next_id = 1
 
@@ -350,6 +282,7 @@ class Sender():
         return result
 
     def apply_rate_delta(self, delta):
+        # if self.got_data:
         delta *= self.delta_scale
         #print("Applying delta %f" % delta)
         if delta >= 0.0:
@@ -384,10 +317,12 @@ class Sender():
 
         self.acked += 1
         self.rtt_samples.append(rtt)
+        self.rtt_samples_ts.append(self.net.get_cur_time())
         # self.rtt_samples.append(self.estRTT)
         if (self.min_latency is None) or (rtt < self.min_latency):
             self.min_latency = rtt
         self.bytes_in_flight -= BYTES_PER_PACKET
+        self.got_data = True
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -411,6 +346,10 @@ class Sender():
 
     def record_run(self):
         smi = self.get_run_data()
+        # if not self.got_data and smi.rtt_samples:
+        #     self.got_data = True
+        #     self.history.step(smi)
+        # else:
         self.history.step(smi)
 
     def get_obs(self):
@@ -424,16 +363,19 @@ class Sender():
         #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
-        rtt_samples = self.rtt_samples if self.rtt_samples else self.prev_rtt_samples
+        rtt_samples = self.rtt_samples if self.rtt_samples else [np.mean(self.prev_rtt_samples)]
         # if not self.rtt_samples:
         #     print(self.obs_start_time, obs_end_time, self.rate)
         # rtt_samples is empty when there is no packet acked in MI
         # Solution: inherit from previous rtt_samples.
 
+        recv_start = self.rtt_samples_ts[0] if len(self.rtt_samples) >= 2 else self.obs_start_time
+        recv_end = self.rtt_samples_ts[-1] if len(self.rtt_samples) >= 2 else obs_end_time
+        bytes_acked = max(0, (self.acked-1)) * BYTES_PER_PACKET if len(self.rtt_samples) >= 2 else self.acked * BYTES_PER_PACKET
         return sender_obs.SenderMonitorInterval(
             self.id,
             bytes_sent=self.sent * BYTES_PER_PACKET,
-            bytes_acked=self.acked * BYTES_PER_PACKET,
+            bytes_acked=self.acked * BYTES_PER_PACKET, #max(0, (self.acked-1)) * BYTES_PER_PACKET,
             bytes_lost=self.lost * BYTES_PER_PACKET,
             send_start=self.obs_start_time,
             send_end=obs_end_time,
@@ -451,6 +393,7 @@ class Sender():
         if self.rtt_samples:
             self.prev_rtt_samples = self.rtt_samples
         self.rtt_samples = []
+        self.rtt_samples_ts = []
         self.queue_delay_samples = []
         self.obs_start_time = self.net.get_cur_time()
 
@@ -474,6 +417,8 @@ class Sender():
         self.estRTT = 1000000 / 1e6  # SynInterval in emulation
         self.RTTVar = self.estRTT / 2  # RTT variance
 
+        self.got_data = False
+
     def timeout(self):
         # placeholder
         pass
@@ -484,7 +429,7 @@ class SimulatedNetworkEnv(gym.Env):
     def __init__(self, traces, history_len=10,
                  features="sent latency inflation,latency ratio,send ratio",
                  congestion_control_type="aurora", train_flag=False,
-                 delta_scale=1.0):
+                 delta_scale=1.0, config_file=None):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
@@ -492,6 +437,7 @@ class SimulatedNetworkEnv(gym.Env):
             "Unrecognized congestion_control_type {}.".format(
                 congestion_control_type)
         # self.replay = EmuReplay()
+        self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
         self.current_trace = np.random.choice(self.traces)
@@ -584,8 +530,9 @@ class SimulatedNetworkEnv(gym.Env):
 
                 self.senders = [Sender( #self.replay.get_rate(),
                     # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
-                    (self.current_trace.get_delay(0) * 2 / 1000),
-                    # 10,
+                    # 12000000 / 8 /BYTES_PER_PACKET / 0.048,
+                    # 10 / (self.current_trace.get_delay(0) *2/1000),
+                    100,
                     [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
@@ -600,7 +547,7 @@ class SimulatedNetworkEnv(gym.Env):
                 #                        self.features,
                 #                        history_len=self.history_len,
                 #                        delta_scale=self.delta_scale)]
-                self.senders = [Sender(10 / (self.current_trace.get_delay(0) * 2 / 1000),
+                self.senders = [Sender(100,
                                        [self.links[0], self.links[1]], 0,
                                        self.features,
                                        history_len=self.history_len,
@@ -615,7 +562,8 @@ class SimulatedNetworkEnv(gym.Env):
         if not self.senders[0].rtt_samples:
             # self.run_dur = 0.473
             # self.run_dur = 5 / self.senders[0].rate
-            self.run_dur = self.current_trace.get_delay(0) * 2 / 1000
+            self.run_dur = 0.01
+            # self.run_dur = self.current_trace.get_delay(0) * 2 / 1000
             # self.run_dur = self.replay.get_ts() -  0
 
     def reset(self):
@@ -626,6 +574,10 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
+        if self.train_flag and self.config_file is not None and self.episodes_run % 500 == 0:
+            print('change traces', self.episodes_run)
+            self.traces = generate_traces(self.config_file, 100,
+                                          duration=30, constant_bw=False)
         # self.replay.reset()
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99

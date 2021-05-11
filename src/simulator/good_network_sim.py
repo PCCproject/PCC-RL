@@ -14,42 +14,25 @@
 
 import csv
 import heapq
-import json
 import os
 import random
-import sys
 import time
-import math
 import warnings
+
 warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
+import numpy as np
 from gym import spaces
 from gym.envs.registration import register
 from gym.utils import seeding
-import ipdb
-import numpy as np
 
 from common import config, sender_obs
-from common.utils import pcc_aurora_reward, write_json_file, read_json_file
-from simulator.trace import Trace
-
-MAX_CWND = 5000
-MIN_CWND = 4
-
-MAX_RATE = 4000
-MIN_RATE = 10
-
-REWARD_SCALE = 0.001
-
-# MAX_STEPS = 400
-# MAX_STEPS = 600
-# MAX_STEPS = 1000
-
-EVENT_TYPE_SEND = 'S'
-EVENT_TYPE_ACK = 'A'
-
-BYTES_PER_PACKET = 1500
+from common.utils import pcc_aurora_reward
+from simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
+                                 EVENT_TYPE_SEND, MAX_RATE, MI_RTT_PROPORTION,
+                                 MIN_CWND, MIN_RATE, REWARD_SCALE)
+from simulator.link import Link
 
 LATENCY_PENALTY = 1.0
 LOSS_PENALTY = 1.0
@@ -59,59 +42,6 @@ MAX_LATENCY_NOISE = 1.1
 
 # DEBUG = True
 DEBUG = False
-
-MI_RTT_PROPORTION = 1.0
-
-
-class Link():
-
-    def __init__(self, trace: Trace):
-        self.trace = trace
-        self.queue_delay = 0.0
-        self.queue_delay_update_time = 0.0
-        self.queue_size = self.trace.get_queue_size()
-        self.pkt_in_queue = 0
-
-    def get_cur_queue_delay(self, event_time):
-        self.pkt_in_queue = max(0, self.pkt_in_queue -
-                                (event_time - self.queue_delay_update_time) *
-                                self.get_bandwidth(event_time))
-        self.queue_delay_update_time = event_time
-        cur_queue_delay = math.ceil(self.pkt_in_queue) / self.get_bandwidth(event_time)
-        return cur_queue_delay
-
-    def get_cur_latency(self, event_time):
-        q_delay = self.get_cur_queue_delay(event_time)
-        # print('queue delay: ', q_delay)
-        return self.trace.get_delay(event_time) / 1000.0 + q_delay
-
-    def packet_enters_link(self, event_time):
-        if (random.random() < self.trace.get_loss_rate()):
-            return False
-        self.queue_delay = self.get_cur_queue_delay(event_time)
-        extra_delay = 1.0 / self.get_bandwidth(event_time)
-        if 1 + math.ceil(self.pkt_in_queue) > self.queue_size:
-            return False
-        self.queue_delay += extra_delay
-        self.pkt_in_queue += 1
-        return True
-
-    def print_debug(self):
-        print("Link:")
-        print("Bandwidth: %f" % self.get_bandwidth(0))
-        print("Delay: %f" % self.trace.get_delay(0))
-        print("Queue Delay: %f" % self.queue_delay)
-        print("One Packet Queue Delay: %f" % (1.0 / self.get_bandwidth(0)))
-        print("Queue size: %d" % self.queue_size)
-        print("Loss: %f" % self.trace.get_loss_rate())
-
-    def reset(self):
-        self.queue_delay = 0.0
-        self.queue_delay_update_time = 0.0
-        self.pkt_in_queue = 0
-
-    def get_bandwidth(self, ts):
-        return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
 
 
 class Network():
@@ -516,13 +446,6 @@ class TCPCubicSender(Sender):
         # place holder
         #  do nothing
         pass
-        # raise NotImplementedError
-        # delta *= config.DELTA_SCALE
-        # #print("Applying delta %f" % delta)
-        # if delta >= 0.0:
-        #     self.set_cwnd(self.cwnd * (1.0 + delta))
-        # else:
-        #     self.set_cwnd(self.cwnd / (1.0 - delta))
 
     def on_packet_sent(self):
         self.sent += 1
@@ -588,7 +511,7 @@ class TCPCubicSender(Sender):
                 self.W_last_max = self.cwnd
             old_cwnd = self.cwnd
             self.cwnd = max(int(self.cwnd * (1 - self.beta)), 1)
-            self.ssthresh = max(self.cwnd, 2)
+            self.ssthresh = max(self.cwnd, MIN_CWND)
             # print("packet lost: cwnd change from", old_cwnd, "to", self.cwnd)
             if not self.rtt_samples and not self.prev_rtt_samples:
                 # raise RuntimeError("prev_rtt_samples is empty. TCP session is not constructed successfully!")
@@ -698,14 +621,8 @@ class SimulatedNetworkEnv(gym.Env):
         self.rand = None
 
         self.rand_ranges = None
-        # self.min_bw, self.max_bw = (100, 500)  # packet per second
-        # self.min_lat, self.max_lat = (0.05, 0.5)  # latency second
-        # self.min_queue, self.max_queue = (0, 8)
-        # self.min_loss, self.max_loss = (0.0, 0.05)
         self.history_len = history_len
-        # print("History length: %d" % history_len)
         self.features = features.split(",")
-        # print("Features: %s" % str(self.features))
 
         self.links = None
         self.senders = None
