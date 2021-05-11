@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from common.utils import pcc_aurora_reward, read_json_file
+from simulator.trace import Trace
 
 
 def parse_args():
@@ -85,7 +86,7 @@ class PacketLog():
         return cls(pkt_sent_ts, pkt_acked_ts, pkt_rtt, pkt_queue_delays,
                    first_ts, binwise_bytes_sent, binwise_bytes_acked,
                    binwise_bytes_lost, packet_log_file=packet_log_file,
-                   ms_bin_size=500)
+                   ms_bin_size=ms_bin_size)
 
     @classmethod
     def from_log(cls, pkt_log, ms_bin_size=500):
@@ -132,17 +133,21 @@ class PacketLog():
         return cls(pkt_sent_ts, pkt_acked_ts, pkt_rtt, pkt_queue_delays,
                    first_ts, binwise_bytes_sent, binwise_bytes_acked,
                    binwise_bytes_lost, packet_log_file=None,
-                   ms_bin_size=500)
+                   ms_bin_size=ms_bin_size)
 
     @staticmethod
     def ts_to_bin_id(ts, first_ts, bin_size) -> int:
         return int((ts - first_ts) / bin_size)
 
+    @staticmethod
+    def bin_id_to_s(bin_id, bin_size) -> int:
+        return bin_id * bin_size
+
     def get_throughput(self) -> Tuple[List[float], List[float]]:
         throughput_ts = []
         throughput = []
         for bin_id in sorted(self.binwise_bytes_acked):
-            throughput_ts.append((bin_id + 1) * self.bin_size)
+            throughput_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             throughput.append(
                 self.binwise_bytes_acked[bin_id] * 8 / self.bin_size / 1e6)
         return throughput_ts, throughput
@@ -151,7 +156,7 @@ class PacketLog():
         sending_rate_ts = []
         sending_rate = []
         for bin_id in sorted(self.binwise_bytes_sent):
-            sending_rate_ts.append((bin_id + 1) * self.bin_size)
+            sending_rate_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             sending_rate.append(
                 self.binwise_bytes_sent[bin_id] * 8 / self.bin_size / 1e6)
         return sending_rate_ts, sending_rate
@@ -165,19 +170,28 @@ class PacketLog():
     def get_loss_rate(self) -> float:
         return 1 - len(self.pkt_acked_ts) / len(self.pkt_sent_ts)
 
-    def get_reward(self) -> float:
+    def get_reward(self, trace_file, trace=None) -> float:
+        if trace_file and trace_file.endswith('.json'):
+            trace = Trace.load_from_file(trace_file)
+        elif trace_file and trace_file.endswith('.log'):
+            trace = Trace.load_from_pantheon_file(trace_file, 50, 0, 50, 500)
+        elif trace is not None:
+            pass
+        else:
+            raise RuntimeError
         _, throughput = self.get_throughput()
         _, rtt = self.get_rtt()
         loss = self.get_loss_rate()
         return pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
+            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
+            np.mean(trace.bandwidths)* 1e6 / 8 / 1500)
 
 
 def main():
     args = parse_args()
 
-    for log_file in args.log_file:
-        pkt_log = PacketLog.from_log_file(log_file)
+    for log_idx, log_file in enumerate(args.log_file):
+        pkt_log = PacketLog.from_log_file(log_file, 500)
         cc = os.path.splitext(os.path.basename(log_file))[0].split('_')[0]
 
         fig, axes = plt.subplots(2, 1, figsize=(6, 8))
@@ -186,20 +200,30 @@ def main():
         rtt_ts, rtt = pkt_log.get_rtt()
         queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
         loss = pkt_log.get_loss_rate()
-        reward = pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
-        print(throughput[:10])
-        axes[0].plot(throughput_ts, throughput,
+        # print(throughput[:10])
+        axes[0].plot(throughput_ts, throughput, "-o", ms=2, # drawstyle='steps-post',
                      label='throughput, avg {:.3f}Mbps'.format(np.mean(throughput)))
-        axes[0].plot(sending_rate_ts, sending_rate,
+        axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2, # drawstyle='steps-post',
                      label='sending rate, avg {:.3f}Mbps'.format(np.mean(sending_rate)))
-        if args.trace_file:
-            trace = read_json_file(args.trace_file)
-            axes[0].plot(trace['timestamps'], trace['bandwidths'],
-                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace['bandwidths'])))
+        if args.trace_file and args.trace_file.endswith('.json'):
+            trace = Trace.load_from_file(args.trace_file)
+            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
+                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
+        elif args.trace_file and args.trace_file.endswith('.log'):
+            trace = Trace.load_from_pantheon_file(
+                args.trace_file, 50, 0, 50, 500)
+            # print(trace.timestamps)
+            # print(trace.bandwidths)
+            # import ipdb
+            # ipdb.set_trace()
+            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
+                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
         axes[0].legend()
         axes[0].set_xlabel("Time(s)")
         axes[0].set_ylabel("Rate(Mbps)")
+        reward = pcc_aurora_reward(
+            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
+            avg_bw=np.mean(trace.bandwidths) * 1e6 / 8 / 1500)
         axes[0].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
             cc, loss, reward))
 
@@ -211,6 +235,12 @@ def main():
         axes[1].set_ylabel("Latency(ms)")
         axes[1].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
             cc, loss, reward))
+
+        if log_idx == 0:
+            print("{},{},{},{},{},".format(os.path.dirname(log_file),
+                np.mean(throughput), np.mean(rtt), loss, reward), end=',')
+        else:
+            print("{},{},{},{},".format(np.mean(throughput), np.mean(rtt), loss, reward), end=',')
 
         plt.tight_layout()
         if args.save_dir:

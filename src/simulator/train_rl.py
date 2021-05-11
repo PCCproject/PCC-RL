@@ -5,6 +5,7 @@ import time
 import warnings
 
 import ipdb
+from mpi4py.MPI import COMM_WORLD
 import numpy as np
 
 from simulator import network
@@ -44,19 +45,19 @@ def parse_args():
     parser.add_argument("--val-queue", type=float, nargs="+", default=[])
 
     parser.add_argument('--seed', type=int, default=20, help='seed')
-    parser.add_argument("--total-timesteps", type=int, default=1000000,
+    parser.add_argument("--total-timesteps", type=int, default=100,
                         help="Total number of steps to be trained.")
     parser.add_argument("--pretrained-model-path", type=str, default=None,
                         help="Path to a pretrained Tensorflow checkpoint!")
     parser.add_argument("--randomization-range-file", type=str, default=None,
                         help="A json file which contains a list of "
                         "randomization ranges with their probabilites.")
-    parser.add_argument("--total-trace-count", type=int, default=100000)
+    parser.add_argument("--total-trace-count", type=int, default=500)
     parser.add_argument("--duration", type=float, default=10,
                         help='trace duration. Unit: second.')
     parser.add_argument("--tensorboard-log", type=str, default=None,
                         help="tensorboard log direcotry.")
-    parser.add_argument("--delta-scale", type=float, default=0.05,
+    parser.add_argument("--delta-scale", type=float, default=1,
                         help="delta scale.")
     parser.add_argument('--time-variant-bw', action='store_true',
                         help='Generate time variant bandwidth if specified.')
@@ -79,40 +80,42 @@ def main():
     check_args(args)
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
-    set_seed(args.seed)
+    set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
 
-    if args.randomization_range_file is not None:
-        # generate training traces
-        training_traces = generate_traces(args.randomization_range_file,
-                                          args.total_trace_count,
-                                          args.duration,
-                                          constant_bw=not args.time_variant_bw)
-        # generate validation traces
-        validation_traces = generate_traces(
-            args.randomization_range_file, 36, args.duration,
-            constant_bw=not args.time_variant_bw)
-    else:
-        # generate training traces
-        training_traces = [generate_trace(args.duration, args.bandwidth,
-                                          args.delay, args.loss, args.queue,
-                                          constant_bw=not args.time_variant_bw)
-                           for _ in range(args.total_trace_count)]
-        # generate validation traces
-        validation_traces = [generate_trace(args.duration, (bw, bw),
-                                            (lat, lat), (loss, loss),
-                                            (queue, queue),
-                                            constant_bw=not args.time_variant_bw)
-                             for bw, lat, loss, queue in itertools.product(
-            args.val_bandwidth, args.val_delay,
-            args.val_loss, args.val_queue)]
+    # if args.randomization_range_file is not None:
+    #     # generate training traces
+    #     training_traces = generate_traces(args.randomization_range_file,
+    #                                       args.total_trace_count,
+    #                                       args.duration,
+    #                                       constant_bw=not args.time_variant_bw)
+    #     # generate validation traces
+    #     validation_traces = generate_traces(
+    #         args.randomization_range_file, 50, args.duration,
+    #         constant_bw=not args.time_variant_bw)
+    # else:
+    #     # generate training traces
+    #     training_traces = [generate_trace(args.duration, args.bandwidth,
+    #                                       args.delay, args.loss, args.queue,
+    #                                       constant_bw=not args.time_variant_bw)
+    #                        for _ in range(args.total_trace_count)]
+    #     # generate validation traces
+    #     validation_traces = [generate_trace(args.duration, (bw, bw),
+    #                                         (lat, lat), (loss, loss),
+    #                                         (queue, queue),
+    #                                         constant_bw=not args.time_variant_bw)
+    #                          for bw, lat, loss, queue in itertools.product(
+    #         args.val_bandwidth, args.val_delay,
+    #         args.val_loss, args.val_queue)]
 
     # Initialize model and agent policy
-    aurora = Aurora(args.seed, args.save_dir, 7200,
+    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir, 7200,
                     args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log,
                     delta_scale=args.delta_scale)
-    aurora.train(training_traces, validation_traces,
-                 args.total_timesteps, args.exp_name)
+    # training_traces, validation_traces,
+    aurora.train(args.randomization_range_file,
+                 args.total_timesteps, tot_trace_cnt= args.total_trace_count,
+                 tb_log_name=args.exp_name)
 
 
 if __name__ == '__main__':
