@@ -64,8 +64,9 @@ def pcc_aurora_reward(throughput, delay, loss, avg_bw=None):
     loss:
     avg_bw: packets per second
     """
-    # return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
-    return 10 * throughput - 1000 * delay - 2000 * loss
+    assert avg_bw is not None
+    return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
+    # return 10 * throughput - 1000 * delay - 2000 * loss
 
 def compute_std_of_mean(data):
     return np.std(data) / np.sqrt(len(data))

@@ -42,9 +42,6 @@ MAX_LATENCY_NOISE = 1.1
 # DEBUG = True
 DEBUG = False
 
-PACKET_LOG_FLAG = False
-# PACKET_LOG_FLAG = True
-
 
 def debug_print(msg):
     if DEBUG:
@@ -154,7 +151,7 @@ class Network():
                         new_dropped = True
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
-                        if PACKET_LOG_FLAG:
+                        if not self.env.train_flag:
                             self.pkt_log.append(
                                 [self.cur_time, event_id, 'lost',
                                  BYTES_PER_PACKET, cur_latency, event_queue_delay,
@@ -165,7 +162,7 @@ class Network():
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
-                        if PACKET_LOG_FLAG:
+                        if not self.env.train_flag:
                             self.pkt_log.append(
                                 [self.cur_time, event_id, 'acked',
                                  BYTES_PER_PACKET, cur_latency,
@@ -173,7 +170,7 @@ class Network():
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                 else:
-                    if PACKET_LOG_FLAG:
+                    if not self.env.train_flag:
                         self.pkt_log.append(
                             [self.cur_time, event_id, 'arrived',
                              BYTES_PER_PACKET, cur_latency, event_queue_delay,
@@ -196,7 +193,7 @@ class Network():
                     if sender.can_send_packet():
                         sender.on_packet_sent()
                         # print('Send packet at {}'.format(self.cur_time))
-                        if PACKET_LOG_FLAG:
+                        if not self.env.train_flag:
                             self.pkt_log.append(
                                 [self.cur_time, event_id, 'sent',
                                  BYTES_PER_PACKET, cur_latency,
