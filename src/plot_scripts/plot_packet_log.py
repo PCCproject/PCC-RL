@@ -3,6 +3,8 @@ import csv
 import os
 from typing import List, Tuple
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -55,6 +57,8 @@ class PacketLog():
         with open(packet_log_file, 'r') as f:
             reader = csv.reader(f)
             for line in reader:
+                if line[0] == 'timestamp':
+                    continue
                 ts = float(line[0])
                 pkt_id = int(line[1])
                 pkt_type = line[2]
@@ -80,6 +84,8 @@ class PacketLog():
                     bin_id = cls.ts_to_bin_id(ts, first_ts, bin_size)
                     binwise_bytes_lost[bin_id] = binwise_bytes_lost.get(
                         bin_id, 0) + pkt_byte
+                elif pkt_type == 'arrived':
+                    pass
                 else:
                     raise RuntimeError(
                         "Unrecognized pkt_type {}!".format(pkt_type))
@@ -184,11 +190,18 @@ class PacketLog():
         loss = self.get_loss_rate()
         return pcc_aurora_reward(
             np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths)* 1e6 / 8 / 1500)
+            np.mean(trace.bandwidths) * 1e6 / 8 / 1500)
 
 
 def main():
     args = parse_args()
+    if args.trace_file and args.trace_file.endswith('.json'):
+        trace = Trace.load_from_file(args.trace_file)
+    elif args.trace_file and args.trace_file.endswith('.log'):
+        trace = Trace.load_from_pantheon_file(
+            args.trace_file, 50, 0, 50, 500)
+    else:
+        trace = None
 
     for log_idx, log_file in enumerate(args.log_file):
         pkt_log = PacketLog.from_log_file(log_file, 500)
@@ -201,22 +214,12 @@ def main():
         queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
         loss = pkt_log.get_loss_rate()
         # print(throughput[:10])
-        axes[0].plot(throughput_ts, throughput, "-o", ms=2, # drawstyle='steps-post',
+        axes[0].plot(throughput_ts, throughput, "-o", ms=2,  # drawstyle='steps-post',
                      label='throughput, avg {:.3f}Mbps'.format(np.mean(throughput)))
-        axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2, # drawstyle='steps-post',
+        axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2,  # drawstyle='steps-post',
                      label='sending rate, avg {:.3f}Mbps'.format(np.mean(sending_rate)))
-        if args.trace_file and args.trace_file.endswith('.json'):
-            trace = Trace.load_from_file(args.trace_file)
-            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
-                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
-        elif args.trace_file and args.trace_file.endswith('.log'):
-            trace = Trace.load_from_pantheon_file(
-                args.trace_file, 50, 0, 50, 500)
-            # print(trace.timestamps)
-            # print(trace.bandwidths)
-            # import ipdb
-            # ipdb.set_trace()
-            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
+        if trace is not None:
+            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                          label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
         axes[0].legend()
         axes[0].set_xlabel("Time(s)")
@@ -228,7 +231,9 @@ def main():
             cc, loss, reward))
 
         axes[1].plot(
-            rtt_ts, rtt, label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
+            rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
+        if trace is not None:
+            axes[1].plot(rtt_ts, np.ones_like(rtt) * 2*min(trace.delays), c='C2', label="trace minRTT {:.3f}ms".format(2*min(trace.delays)))
         # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
         axes[1].legend()
         axes[1].set_xlabel("Time(s)")
@@ -238,9 +243,10 @@ def main():
 
         if log_idx == 0:
             print("{},{},{},{},{},".format(os.path.dirname(log_file),
-                np.mean(throughput), np.mean(rtt), loss, reward), end=',')
+                                           np.mean(throughput), np.mean(rtt), loss, reward), end=',')
         else:
-            print("{},{},{},{},".format(np.mean(throughput), np.mean(rtt), loss, reward), end=',')
+            print("{},{},{},{},".format(np.mean(throughput),
+                                        np.mean(rtt), loss, reward), end=',')
 
         plt.tight_layout()
         if args.save_dir:

@@ -136,7 +136,7 @@ class Trace():
             downlink = Flow(downlink_filename, ms_per_bin)
         else:
             raise FileNotFoundError
-        delay = (np.min(flow.one_way_delay) + np.mean(downlink.one_way_delay)) / 2
+        delay = (np.min(flow.one_way_delay) + np.min(downlink.one_way_delay)) / 2
         timestamps = []
         bandwidths = []
         # offset = 17.514990

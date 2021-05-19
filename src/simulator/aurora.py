@@ -7,11 +7,16 @@ import time
 import types
 from typing import List
 import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 from mpi4py.MPI import COMM_WORLD
+from mpi4py.futures import MPIPoolExecutor
 
 import gym
 import numpy as np
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 from stable_baselines import PPO1
 from stable_baselines.bench import Monitor
 from stable_baselines.common.callbacks import BaseCallback
@@ -19,19 +24,16 @@ from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
 from simulator import network
-from simulator.network import BYTES_PER_PACKET
+from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog
 from udt_plugins.testing.loaded_agent import LoadedModel
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
     tf.contrib._warning = None
 
-
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 set_tf_loglevel(logging.FATAL)
 
 
@@ -280,14 +282,52 @@ class Aurora():
             pkt_logs.append(pkt_log)
             results.append(result)
         return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
         # n_proc=mp.cpu_count()//2
         # arguments = [(self.pretrained_model_path, trace, save_dir, self.seed) for trace, save_dir in zip(traces, save_dirs)]
         # with mp.Pool(processes=n_proc) as pool:
-        #     results = pool.starmap(test_model, arguments)
-        #     print(results)
-        # rewards = [result[0] for result in results]
-        # pkt_logs = [result[1] for result in results]
-        # return rewards, pkt_logs
+        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #             send_rate_list, action_list, obs_list, mi_list, pkt_log  in pool.starmap(test_model, arguments):
+        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                           delay_list, loss_list, action_list, obs_list, mi_list))
+        #         pkt_logs.append(pkt_log)
+        #         results.append(result)
+        # return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
+        # with MPIPoolExecutor(max_workers=4) as executor:
+        #     iterable = ((trace, save_dir) for trace, save_dir in zip(traces, save_dirs))
+        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #         send_rate_list, action_list, obs_list, mi_list, pkt_log  in executor.starmap(self.test, iterable):
+        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                           delay_list, loss_list, action_list, obs_list, mi_list))
+        #         pkt_logs.append(pkt_log)
+        #         results.append(result)
+        # return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
+        # size = self.comm.Get_size()
+        # count = int(len(traces) / size)
+        # remainder = int(len(traces) % size)
+        # rank = self.comm.Get_rank()
+        # start = rank * count + min(rank, remainder)
+        # stop = (rank + 1) * count + min(rank + 1, remainder)
+        # for i in range(start, stop):
+        #     ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.test(
+        #             traces[i], save_dirs[i])
+        #     result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                       delay_list, loss_list, action_list, obs_list, mi_list))
+        #     pkt_logs.append(pkt_log)
+        #     results.append(result)
+        # results = self.comm.gather(results, root=0)
+        # pkt_logs = self.comm.gather(pkt_logs, root=0)
+        # # need to call reduce to retrieve all return values
+        # return results, pkt_logs
 
     def save_model(self):
         raise NotImplementedError
@@ -305,6 +345,7 @@ class Aurora():
         action_list = []
         mi_list = []
         obs_list = []
+        os.makedirs(save_dir, exist_ok=True)
         with open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
             writer = csv.writer(f, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
@@ -350,7 +391,7 @@ class Aurora():
                     np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
 
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].rate * 1500 * 8, 0),
+                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * 8, 0),
                     round(send_rate, 0), round(throughput, 0), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
@@ -380,6 +421,9 @@ class Aurora():
                     break
         with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
             pkt_logger = csv.writer(f, lineterminator='\n')
+            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
+                                 'bytes', 'cur_latency', 'queue_delay',
+                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
             pkt_logger.writerows(env.net.pkt_log)
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
 

@@ -43,10 +43,10 @@ def main():
             axes[0].set_title(cc)
             avg_send_rate = df['bytes_sent'].sum() / df['timestamp'].iloc[-1] * 8 /1e6
             avg_recv_rate = df['bytes_acked'].sum() / df['timestamp'].iloc[-1] * 8 /1e6
-            axes[0].plot(df['timestamp'], df['recv_rate'] / 1e6,
+            axes[0].plot(df['timestamp'], df['recv_rate'] / 1e6, 'o-', ms=2,
                     label='throughput, avg {:.3f}mbps, {:.3f}'.format(
                              df['recv_rate'].mean() / 1e6, avg_recv_rate))
-            axes[0].plot(df['timestamp'], df['send_rate'] / 1e6,
+            axes[0].plot(df['timestamp'], df['send_rate'] / 1e6, 'o-', ms=2,
                     label='send rate, avg {:.3f}mbps, {:.3f}'.format(
                              df['send_rate'].mean() / 1e6, avg_send_rate))
 
@@ -58,8 +58,11 @@ def main():
                 else:
                     raise RuntimeError
                 avg_bw = np.mean(trace.bandwidths)
-                axes[0].plot(trace.timestamps, trace.bandwidths,
+                axes[0].plot(trace.timestamps, trace.bandwidths, 'o-', ms=2, drawstyle='steps-post',
                              label='bw, avg {:.3f}mbps'.format(avg_bw))
+                axes[0].plot(np.arange(0, trace.timestamps[-1], 0.01),
+                             [trace.get_bandwidth(ts) for ts in np.arange(0, trace.timestamps[-1], 0.01)],
+                             label='bw, avg {:.3f}mbps'.format(df['bandwidth'].mean() / 1e6))
             else:
                 axes[0].plot(df['timestamp'], df['bandwidth'] / 1e6,
                              label='bw, avg {:.3f}mbps'.format(df['bandwidth'].mean() / 1e6))

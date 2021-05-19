@@ -16,7 +16,6 @@ import os
 import sys
 import time
 import warnings
-
 warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
@@ -43,8 +42,8 @@ MAX_LATENCY_NOISE = 1.1
 # DEBUG = True
 DEBUG = False
 
-# PACKET_LOG_FLAG = False
-PACKET_LOG_FLAG = True
+PACKET_LOG_FLAG = False
+# PACKET_LOG_FLAG = True
 
 
 def debug_print(msg):
@@ -61,7 +60,7 @@ class EmuReplay:
 
     def get_ts(self):
         if self.idx > len(self.ts):
-            self.idx = len(self.ts) -1
+            self.idx = len(self.ts) - 1
         ts = self.ts[self.idx]
         self.idx += 1
         return ts
@@ -106,13 +105,15 @@ class Network():
         return self.cur_time
 
     def run_for_dur(self, dur, action=None):
-        end_time = min(self.cur_time + dur, self.env.current_trace.timestamps[-1])
+        start_time = self.cur_time
+        end_time = min(self.cur_time + dur,
+                       self.env.current_trace.timestamps[-1])
         debug_print('MI from {} to {}, dur {}'.format(
             self.cur_time, end_time, dur))
         for sender in self.senders:
             sender.reset_obs()
         # set_obs_start = False
-        extra_delays = [] # time used to put packet onto the network
+        extra_delays = []  # time used to put packet onto the network
         while True:
             event_time, sender, event_type, next_hop, cur_latency, dropped, \
                 event_id, rto, event_queue_delay = self.q[0]
@@ -154,17 +155,31 @@ class Network():
                     elif dropped:
                         sender.on_packet_lost(cur_latency)
                         if PACKET_LOG_FLAG:
-                            self.pkt_log.append([self.cur_time, event_id, 'lost',
-                                                 BYTES_PER_PACKET, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                            self.pkt_log.append(
+                                [self.cur_time, event_id, 'lost',
+                                 BYTES_PER_PACKET, cur_latency, event_queue_delay,
+                                 self.links[0].pkt_in_queue,
+                                 sender.rate * BYTES_PER_PACKET * 8,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     else:
                         sender.on_packet_acked(cur_latency)
                         debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
                         if PACKET_LOG_FLAG:
-                            self.pkt_log.append([self.cur_time, event_id, 'acked',
-                                                 BYTES_PER_PACKET, cur_latency,
-                                                 event_queue_delay, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                            self.pkt_log.append(
+                                [self.cur_time, event_id, 'acked',
+                                 BYTES_PER_PACKET, cur_latency,
+                                 event_queue_delay, self.links[0].pkt_in_queue,
+                                 sender.rate * BYTES_PER_PACKET * 8,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                 else:
+                    if PACKET_LOG_FLAG:
+                        self.pkt_log.append(
+                            [self.cur_time, event_id, 'arrived',
+                             BYTES_PER_PACKET, cur_latency, event_queue_delay,
+                             self.links[0].pkt_in_queue,
+                             sender.rate * BYTES_PER_PACKET * 8,
+                             self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                         self.cur_time)
@@ -172,7 +187,7 @@ class Network():
                         self.cur_time)
                     # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                     # if USE_LATENCY_NOISE:
-                        # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
+                    # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                     new_latency += link_latency
                     new_event_time += link_latency
                     push_new_event = True
@@ -182,8 +197,12 @@ class Network():
                         sender.on_packet_sent()
                         # print('Send packet at {}'.format(self.cur_time))
                         if PACKET_LOG_FLAG:
-                            self.pkt_log.append([self.cur_time, event_id, 'sent',
-                                                 BYTES_PER_PACKET, self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                            self.pkt_log.append(
+                                [self.cur_time, event_id, 'sent',
+                                 BYTES_PER_PACKET, cur_latency,
+                                 event_queue_delay, self.links[0].pkt_in_queue,
+                                 sender.rate * BYTES_PER_PACKET * 8,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
@@ -211,7 +230,8 @@ class Network():
                 new_event_time += link_latency
                 new_dropped = not sender.path[next_hop].packet_enters_link(
                     self.cur_time)
-                extra_delays.append(1 / self.links[0].get_bandwidth(self.cur_time))
+                extra_delays.append(
+                    1 / self.links[0].get_bandwidth(self.cur_time))
                 if not new_dropped:
                     sender.queue_delay_samples.append(new_event_queue_delay)
 
@@ -224,7 +244,7 @@ class Network():
 
         sender_mi = self.senders[0].get_run_data()
         throughput = sender_mi.get("recv rate")  # bits/sec
-        latency = sender_mi.get("avg latency") # second
+        latency = sender_mi.get("avg latency")  # second
         loss = sender_mi.get("loss ratio")
         debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
             throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
@@ -233,10 +253,11 @@ class Network():
             np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
 
         if latency > 0.0:
-            self.env.run_dur = MI_RTT_PROPORTION * sender_mi.get("avg latency") + np.mean(extra_delays)
+            self.env.run_dur = MI_RTT_PROPORTION * \
+                sender_mi.get("avg latency") + np.mean(extra_delays)
+        # elif self.env.run_dur != 0.01:
             # assert self.env.run_dur >= 0.03
             # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
-        # print(self.env.run_dur)
         return reward * REWARD_SCALE
 
 
@@ -363,25 +384,32 @@ class Sender():
         #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
-        rtt_samples = self.rtt_samples if self.rtt_samples else [np.mean(self.prev_rtt_samples)]
+        if not self.rtt_samples and self.prev_rtt_samples:
+            rtt_samples = [np.mean(self.prev_rtt_samples)]
+        else:
+            rtt_samples = self.rtt_samples
         # if not self.rtt_samples:
         #     print(self.obs_start_time, obs_end_time, self.rate)
         # rtt_samples is empty when there is no packet acked in MI
         # Solution: inherit from previous rtt_samples.
 
-        recv_start = self.rtt_samples_ts[0] if len(self.rtt_samples) >= 2 else self.obs_start_time
-        recv_end = self.rtt_samples_ts[-1] if len(self.rtt_samples) >= 2 else obs_end_time
-        bytes_acked = max(0, (self.acked-1)) * BYTES_PER_PACKET if len(self.rtt_samples) >= 2 else self.acked * BYTES_PER_PACKET
+        recv_start = self.rtt_samples_ts[0] if len(
+            self.rtt_samples) >= 2 else self.obs_start_time
+        recv_end = self.rtt_samples_ts[-1] if len(
+            self.rtt_samples) >= 2 else obs_end_time
+        bytes_acked = max(0, (self.acked-1)) * BYTES_PER_PACKET if len(
+            self.rtt_samples) >= 2 else self.acked * BYTES_PER_PACKET
         return sender_obs.SenderMonitorInterval(
             self.id,
             bytes_sent=self.sent * BYTES_PER_PACKET,
-            bytes_acked=self.acked * BYTES_PER_PACKET, #max(0, (self.acked-1)) * BYTES_PER_PACKET,
+            # max(0, (self.acked-1)) * BYTES_PER_PACKET,
+            bytes_acked=self.acked * BYTES_PER_PACKET,
             bytes_lost=self.lost * BYTES_PER_PACKET,
             send_start=self.obs_start_time,
             send_end=obs_end_time,
             recv_start=self.obs_start_time,
             recv_end=obs_end_time,
-            rtt_samples=self.rtt_samples,
+            rtt_samples=rtt_samples,
             queue_delay_samples=self.queue_delay_samples,
             packet_size=BYTES_PER_PACKET
         )
@@ -528,15 +556,15 @@ class SimulatedNetworkEnv(gym.Env):
         if self.congestion_control_type == "aurora":
             if not self.train_flag:
 
-                self.senders = [Sender( #self.replay.get_rate(),
+                self.senders = [Sender(  # self.replay.get_rate(),
                     # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
                     # 12000000 / 8 /BYTES_PER_PACKET / 0.048,
                     # 10 / (self.current_trace.get_delay(0) *2/1000),
                     100,
                     [self.links[0], self.links[1]], 0,
-                                       self.features,
-                                       history_len=self.history_len,
-                                       delta_scale=self.delta_scale)]
+                    self.features,
+                    history_len=self.history_len,
+                    delta_scale=self.delta_scale)]
             else:
                 # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
                 #                        [self.links[0], self.links[1]], 0,
