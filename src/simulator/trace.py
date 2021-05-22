@@ -30,13 +30,8 @@ class Trace():
                  queue_size: int, delay_noise: float = 0, offset=0):
         assert len(timestamps) == len(bandwidths)
         self.timestamps = timestamps
-        bandwidths = np.array(bandwidths)
-        bandwidths[bandwidths < 0.1] = 0.1
-        # for i, (bw, ts) in enumerate(zip(bandwidths, timestamps)):
-        #     if ts < 2:
-        #         bandwidths[i] = 0.6
 
-        self.bandwidths = bandwidths.tolist()
+        self.bandwidths = [val if val >= 0.1 else 0.1 for val in bandwidths]
         self.delays = delays
         self.loss_rate = loss_rate
         self.queue_size = queue_size
@@ -44,7 +39,6 @@ class Trace():
         self.noise = 0
         self.noise_change_ts = 0
         self.idx = 0  # track the position in the trace
-
 
         self.noise_timestamps = []
         self.noises = []
@@ -57,8 +51,8 @@ class Trace():
         while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
             self.idx += 1
         if self.idx >= len(self.bandwidths):
-            return max(0.1, self.bandwidths[-1])
-        return max(self.bandwidths[self.idx], 0.1)
+            return self.bandwidths[-1]
+        return self.bandwidths[self.idx]
 
     def get_delay(self, ts):
         """Return link one-way delay(millisecond) at ts(second)."""
