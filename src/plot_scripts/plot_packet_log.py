@@ -204,6 +204,8 @@ def main():
         trace = None
 
     for log_idx, log_file in enumerate(args.log_file):
+        if not os.path.exists(log_file):
+            continue
         pkt_log = PacketLog.from_log_file(log_file, 500)
         cc = os.path.splitext(os.path.basename(log_file))[0].split('_')[0]
 
