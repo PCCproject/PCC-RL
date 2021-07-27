@@ -1,4 +1,6 @@
 import argparse
+from bisect import bisect_right
+import copy
 import csv
 import os
 from typing import List, Tuple, Union
@@ -30,6 +32,10 @@ class Trace():
                  queue_size: int, delay_noise: float = 0, offset=0):
         assert len(timestamps) == len(bandwidths)
         self.timestamps = timestamps
+        if len(timestamps) >= 2:
+            self.dt = timestamps[1] - timestamps[0]
+        else:
+            self.dt = 0.01
 
         self.bandwidths = [val if val >= 0.1 else 0.1 for val in bandwidths]
         self.delays = delays
@@ -44,6 +50,39 @@ class Trace():
         self.noises = []
         self.noise_idx = 0
         self.return_noise = False
+
+    def get_next_ts(self):
+        if self.idx + 1 < len(self.timestamps):
+            return self.timestamps[self.idx+1]
+        return 1e6
+
+    def get_avail_bits2send(self, lo_ts, up_ts):
+        lo_idx = bisect_right(self.timestamps, lo_ts) - 1
+        up_idx = bisect_right(self.timestamps, up_ts) - 1
+        avail_bits = sum(self.bandwidths[lo_idx: up_idx]) * 1e6 * self.dt
+        avail_bits -= self.bandwidths[lo_idx] * 1e6 * (lo_ts - self.timestamps[lo_idx])
+        avail_bits += self.bandwidths[up_idx] * 1e6 * (up_ts - self.timestamps[up_idx])
+        return avail_bits
+
+
+    def get_sending_t_usage(self, bits_2_send, ts):
+        cur_idx = copy.copy(self.idx)
+        t_used = 0
+
+        while bits_2_send > 0:
+            tmp_t_used = bits_2_send / (self.get_bandwidth(ts) * 1e6)
+            if self.idx + 1 < len(self.timestamps) and tmp_t_used + ts > self.timestamps[self.idx + 1]:
+                t_used += self.timestamps[self.idx + 1] - ts
+                bits_2_send -= (self.timestamps[self.idx + 1] - ts) * (self.get_bandwidth(ts) * 1e6)
+                ts = self.timestamps[self.idx + 1]
+            else:
+                t_used += tmp_t_used
+                bits_2_send -= tmp_t_used * (self.get_bandwidth(ts) * 1e6)
+                ts += tmp_t_used
+            bits_2_send = round(bits_2_send, 9)
+
+        self.idx = cur_idx # recover index
+        return t_used
 
     def get_bandwidth(self, ts):
         """Return bandwidth(Mbps) at ts(second)."""
@@ -145,6 +184,11 @@ class Trace():
         #         break
         #     timestamps.append(ts + end_ts)
         #     bandwidths.append(bw)
+
+        # added to shift the trace 5 seconds
+        # timestamps = [ts  - 5 for ts in flow.throughput_timestamps if ts >= 5]
+        # tputs  = [tput for ts, tput in zip(flow.throughput_timestamps, flow.throughput) if ts >= 5]
+        # tr = Trace(timestamps, tputs, [delay], loss, queue)
 
         tr = Trace(flow.throughput_timestamps, flow.throughput, [delay], loss, queue)
         # flow = Flow('/tank/zxxia/PCC-RL/src/simulator/emu_traces/aurora_datalink_run1.log')

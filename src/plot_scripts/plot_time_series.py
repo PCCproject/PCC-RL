@@ -58,6 +58,7 @@ def main():
                 else:
                     raise RuntimeError
                 avg_bw = np.mean(trace.bandwidths)
+                min_rtt = np.mean(trace.delays) * 2 / 1e3
                 axes[0].plot(trace.timestamps, trace.bandwidths, 'o-', ms=2, drawstyle='steps-post',
                              label='bw, avg {:.3f}mbps'.format(avg_bw))
                 axes[0].plot(np.arange(0, trace.timestamps[-1], 0.01),
@@ -99,10 +100,13 @@ def main():
             axes[2].set_ylim(0, 1)
 
             avg_reward = pcc_aurora_reward(avg_recv_rate / 1e6 / 8 / 1500,
-                                           avg_lat /1000, avg_loss, avg_bw / 1e6/ 8 / 1500)
+                                           avg_lat /1000, avg_loss,
+                                           avg_bw / 1e6/ 8 / 1500, min_rtt)
 
-            avg_reward_mi = pcc_aurora_reward(df['recv_rate'].mean() / 8 / 1500,
-                                           df['latency'].mean(), df['loss'].mean(), avg_bw * 1e6/ 8 / 1500)
+            avg_reward_mi = pcc_aurora_reward(
+                    df['recv_rate'].mean() / 8 / 1500,
+                    df['latency'].mean(), df['loss'].mean(),
+                    avg_bw * 1e6/ 8 / 1500, min_rtt)
 
 
             axes[3].plot(df['timestamp'], df['reward'],

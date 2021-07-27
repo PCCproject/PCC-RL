@@ -190,7 +190,7 @@ class PacketLog():
         loss = self.get_loss_rate()
         return pcc_aurora_reward(
             np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths) * 1e6 / 8 / 1500)
+            np.mean(trace.bandwidths) * 1e6 / 8 / 1500, np.mean(trace.delays) * 2 / 1e3)
 
 
 def main():
@@ -204,6 +204,8 @@ def main():
         trace = None
 
     for log_idx, log_file in enumerate(args.log_file):
+        if not os.path.exists(log_file):
+            continue
         pkt_log = PacketLog.from_log_file(log_file, 500)
         cc = os.path.splitext(os.path.basename(log_file))[0].split('_')[0]
 
@@ -226,7 +228,7 @@ def main():
         axes[0].set_ylabel("Rate(Mbps)")
         reward = pcc_aurora_reward(
             np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            avg_bw=np.mean(trace.bandwidths) * 1e6 / 8 / 1500)
+            avg_bw=np.mean(trace.bandwidths) * 1e6 / 8 / 1500, min_rtt=np.mean(trace.delays) * 2 / 1e3)
         axes[0].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
             cc, loss, reward))
 
