@@ -23,7 +23,7 @@ from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
-from simulator import network
+from simulator import my_heuristic, network
 from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
@@ -219,7 +219,7 @@ class Aurora():
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
                                       timesteps_per_actorbatch/4),
-                                  optim_epochs=12,
+                                  optim_epochs=4,
                                   gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
                 # print('create_ppo1,{}'.format(time.time() - model_create_start))
                 tf_restore_start = time.time()
@@ -239,7 +239,7 @@ class Aurora():
             self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
-                              optim_batchsize=int(timesteps_per_actorbatch/4),
+                              optim_batchsize=int(timesteps_per_actorbatch/12),
                               optim_epochs=12,
                               gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
@@ -349,7 +349,7 @@ class Aurora():
         with open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
             writer = csv.writer(f, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
-                             'recv_rate', 'latency',
+                             'recv_rate', 'max_recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
                              "bytes_acked", "bytes_lost", "MI",
                              "send_start_time",
@@ -359,11 +359,13 @@ class Aurora():
                              'latency_ratio', 'send_ratio',
                              'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto"])
+                             'ssthresh', "rto", "recv_ratio"])
             env = gym.make(
                 'PccNs-v0', traces=[trace], delta_scale=self.delta_scale)
             env.seed(self.seed)
             obs = env.reset()
+            # print(obs)
+            # heuristic = my_heuristic.MyHeuristic()
             while True:
                 pred_start = time.time()
                 if isinstance(self.model, LoadedModel):
@@ -371,13 +373,27 @@ class Aurora():
                     action = self.model.act(obs)
                     action = action['act'][0]
                 else:
-                    action, _states = self.model.predict(
-                        obs, deterministic=True)
+                    if env.net.senders[0].got_data:
+                        action, _states = self.model.predict(
+                            obs, deterministic=True)
+                    else:
+                        action = np.array([0])
                 # print("pred,{}".format(time.time() - pred_start))
                 # print(env.senders[0].rate * 1500 * 8 / 1e6)
 
                 # get the new MI and stats collected in the MI
-                sender_mi = env.senders[0].get_run_data()
+                # sender_mi = env.senders[0].get_run_data()
+                sender_mi = env.senders[0].history.back() #get_run_data()
+                # if env.net.senders[0].got_data:
+                #     action = heuristic.step(obs, sender_mi)
+                #     # action = my_heuristic.stateless_step(env.senders[0].send_rate,
+                #     #         env.senders[0].avg_latency, env.senders[0].lat_diff, env.senders[0].start_stage,
+                #     #         env.senders[0].max_tput, env.senders[0].min_rtt, sender_mi.rtt_samples[-1])
+                #     # action = my_heuristic.stateless_step(*obs)
+                # else:
+                #     action = np.array([0])
+                # max_recv_rate = heuristic.max_tput
+                max_recv_rate = env.senders[0].max_tput
                 throughput = sender_mi.get("recv rate")  # bits/sec
                 send_rate = sender_mi.get("send rate")  # bits/sec
                 latency = sender_mi.get("avg latency")
@@ -386,13 +402,14 @@ class Aurora():
                 sent_latency_inflation = sender_mi.get('sent latency inflation')
                 latency_ratio = sender_mi.get('latency ratio')
                 send_ratio = sender_mi.get('send ratio')
+                recv_ratio = sender_mi.get('recv ratio')
                 reward = pcc_aurora_reward(
                     throughput / 8 / BYTES_PER_PACKET, latency, loss,
-                    np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
+                    np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
 
                 writer.writerow([
                     env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * 8, 0),
-                    round(send_rate, 0), round(throughput, 0), latency, loss,
+                    round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
                     sender_mi.send_start, sender_mi.send_end,
@@ -403,7 +420,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto])
+                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio])
                 reward_list.append(reward)
                 loss_list.append(loss)
                 delay_list.append(latency * 1000)

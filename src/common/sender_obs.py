@@ -222,6 +222,8 @@ def _mi_metric_send_ratio(mi):
 def _mi_metric_recv_ratio(mi):
     thpt = mi.get("recv rate")
     send_rate = mi.get("send rate")
+    if send_rate == 0:
+        return 1.0
     return thpt / send_rate
 
 def _mi_metric_latency_ratio(mi):
