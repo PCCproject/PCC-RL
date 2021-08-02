@@ -217,8 +217,6 @@ def generate_trace(duration_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
                    queue_size_range: Tuple[int, int],
-                   d_bw_range: Union[Tuple[float, float], None] = None,
-                   d_delay_range: Union[Tuple[float, float], None] = None,
                    T_s_range: Union[Tuple[float, float], None] = None,
                    delay_noise_range: Union[Tuple[float, float], None] = None,
                    constant_bw: bool = True):
