@@ -231,15 +231,17 @@ def generate_trace(duration_range: Tuple[float, float],
         loss_rate_range: Uplink loss rate range.
         queue_size_range: queue size range in packets.
     """
-    assert len(
-        duration_range) == 2 and duration_range[0] <= duration_range[1]
-    assert len(
-        bandwidth_range) == 2 and bandwidth_range[0] <= bandwidth_range[1]
-    assert len(delay_range) == 2 and delay_range[0] <= delay_range[1]
-    assert len(
-        loss_rate_range) == 2 and loss_rate_range[0] <= loss_rate_range[1]
-    assert len(
-        queue_size_range) == 2 and queue_size_range[0] <= queue_size_range[1] + 1
+    assert len(duration_range) == 2 and \
+            duration_range[0] <= duration_range[1] and duration_range[0] > 0
+    assert len(bandwidth_range) == 2 and \
+            bandwidth_range[0] <= bandwidth_range[1] and bandwidth_range[0] > 0
+    assert len(delay_range) == 2 and delay_range[0] <= delay_range[1] and \
+            delay_range[0] > 0
+    assert len(loss_rate_range) == 2 and \
+            loss_rate_range[0] <= loss_rate_range[1] and loss_rate_range[0] >= 0
+    assert len(queue_size_range) == 2 and \
+            queue_size_range[0] <= queue_size_range[1] + 1 and \
+            queue_size_range[0] >= 0
 
     delay = float(np.random.uniform(delay_range[0], delay_range[1], 1))
     loss_rate = float(np.random.uniform(
