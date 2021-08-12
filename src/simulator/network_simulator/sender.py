@@ -67,6 +67,7 @@ class Sender:
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         self.acked += 1
+        assert self.bytes_in_flight >= pkt.pkt_size
         self.bytes_in_flight -= pkt.pkt_size
         if self.srtt is None and self.rttvar is None:
             self.srtt = pkt.rtt
@@ -80,6 +81,7 @@ class Sender:
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
+        assert self.bytes_in_flight >= pkt.pkt_size
         self.bytes_in_flight -= pkt.pkt_size
 
     def get_cur_time(self) -> float:

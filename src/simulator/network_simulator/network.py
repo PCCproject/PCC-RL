@@ -66,8 +66,9 @@ class Network:
             # heapq.heappush(self.q, (0, sender,
             #                         EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
 
-            pkt = Packet(0, sender, 0)
-            self.add_packet(0, pkt)
+            # pkt = Packet(0, sender, 0)
+            # self.add_packet(0, pkt)
+            sender.schedule_send(True)
 
     def add_packet(self, event_time: float, pkt: Packet) -> None:
         """Add a packet to the packet event queue."""
@@ -129,6 +130,8 @@ class Network:
                         sender.timeout()
                         pkt.drop()
                     elif pkt.dropped:
+                        sender.debug_print()
+                        pkt.debug_print()
                         sender.on_packet_lost(pkt)
                         if self.record_pkt_log:
                             self.pkt_log.append(
@@ -138,9 +141,12 @@ class Network:
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     else:
+                        sender.debug_print()
+                        pkt.debug_print()
                         sender.on_packet_acked(pkt)
                         # debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
+                        sender.schedule_send()
                         if self.record_pkt_log:
                             self.pkt_log.append(
                                 [self.cur_time, pkt.pkt_id, 'acked',
@@ -171,8 +177,11 @@ class Network:
             elif pkt.event_type == EVENT_TYPE_SEND:  # in datalink
                 if pkt.next_hop == 0:
                     if sender.can_send_packet():
+                        sender.debug_print()
                         sender.on_packet_sent(pkt)
+                        pkt.debug_print()
                         # print('Send packet at {}'.format(self.cur_time))
+                        sender.schedule_send()
                         if self.record_pkt_log:
                             self.pkt_log.append(
                                 [self.cur_time, pkt.pkt_id, 'sent',
@@ -181,7 +190,6 @@ class Network:
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                         push_new_event = True
-                    sender.schedule_send()
                 else:
                     push_new_event = True
 

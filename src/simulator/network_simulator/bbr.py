@@ -33,6 +33,11 @@ class BBRPacket(packet.Packet):
         self.first_sent_time = 0
         self.is_app_limited = False
 
+    def debug_print(self):
+        print("Event {}: ts={}, type={}, delivered={}, delivered_time={}, first_sent_time={}, pkt_in_flight: {}".format(
+            self.pkt_id, self.ts, self.event_type, self.delivered, self.delivered_time, self.first_sent_time,
+            self.sender.bytes_in_flight /  1500))
+
 
 class RateSample:
     def __init__(self):
@@ -43,19 +48,19 @@ class RateSample:
         # whether the rate sample is application-limited.
         self.is_app_limited = False
         # The length of the sampling interval.
-        self.interval = 0
+        self.interval = 0.0
         # The amount of data marked as delivered over the sampling interval.
         self.delivered = 0
         # The P.delivered count from the most recent packet delivered.
-        self.prior_delivered = -1
+        self.prior_delivered = 0
         # The P.delivered_time from the most recent packet delivered.
-        self.prior_time = 0
+        self.prior_time = 0.0
         # Send time interval calculated from the most recent packet delivered
         # (see the "Send Rate" section above).
-        self.send_elapsed = 0
+        self.send_elapsed = 0.0
         # ACK time interval calculated from the most recent packet delivered
         # (see the "ACK Rate" section above).
-        self.ack_elapsed = 0
+        self.ack_elapsed = 0.0
         # in flight before this ACK
         self.prior_in_flight = 0
         # number of packets marked lost upon ACK
@@ -75,7 +80,7 @@ class BBRBtlBwFilter:
         # TODO: not finished yet
         self.cache.append(delivery_rate)
         if len(self.cache) > self.btlbw_filter_len:
-            self.cache.pop()
+            self.cache.pop(0)
 
     def get_btlbw(self) -> float:
         return max(self.cache)
@@ -149,7 +154,9 @@ class BBRSender(Sender):
         # SACKed or marked lost (e.g. "pipe" from [RFC6675]).
         self.pipe = 0
 
-        self.pacing_gain = BBR_HIGH_GAIN # referece:
+        self.pacing_gain = BBR_HIGH_GAIN  # referece:
+
+        self.target_cwnd = 0
 
         self.init()
 
@@ -242,23 +249,24 @@ class BBRSender(Sender):
             self.rtprop_stamp = self.get_cur_time()
 
     def set_send_quantum(self):
-        if self.pacing_rate < 1.2:  # 1.2Mbps
+        if self.pacing_rate < 1.2 * 1e6 / BITS_PER_BYTE:  # 1.2Mbps
             self.send_quantum = 1 * BYTES_PER_PACKET  # MSS
-        elif self.pacing_rate < 24:  # Mbps
+        elif self.pacing_rate < 24 * 1e6 / BITS_PER_BYTE:  # Mbps
             self.send_quantum = 2 * BYTES_PER_PACKET  # MSS
         else:
             # 1 means 1ms, fix the unit, 64 means 64Kbytes
             self.send_quantum = min(self.pacing_rate * 1e-3, 64*1e3)
 
-    def inflight(self, gain):
+    def inflight(self, gain: float):
         if self.rtprop > 0 and math.isinf(self.rtprop):
-            return TCP_INIT_CWND  # no valid RTT samples yet
+            return TCP_INIT_CWND * BYTES_PER_PACKET  # no valid RTT samples yet
         quanta = 3 * self.send_quantum
         estimated_bdp = self.btlbw * self.rtprop
         return gain * estimated_bdp + quanta
 
     def update_target_cwnd(self):
-        self.target_cwnd = self.inflight(self.cwnd_gain)
+        self.target_cwnd = int(self.inflight(
+            self.cwnd_gain) / BYTES_PER_PACKET)
 
     def modulate_cwnd_for_probe_rtt(self):
         if self.state == BBRMode.BBR_PROBE_RTT:
@@ -272,7 +280,7 @@ class BBRSender(Sender):
             return max(self.prior_cwnd, self.cwnd)
 
     def restore_cwnd(self):
-        self.BBcwnd = max(self.cwnd, self.prior_cwnd)
+        self.cwnd = max(self.cwnd, self.prior_cwnd)
 
     def set_cwnd(self):
         # on each ACK that acknowledges "packets_delivered"
@@ -285,7 +293,7 @@ class BBRSender(Sender):
             if self.filled_pipe:
                 self.cwnd = min(self.cwnd + packets_delivered,
                                 self.target_cwnd)
-            elif self.cwnd < self.target_cwnd or self.delivered < TCP_INIT_CWND:
+            elif self.cwnd < self.target_cwnd or self.delivered < TCP_INIT_CWND * BYTES_PER_PACKET:
                 self.cwnd = self.cwnd + packets_delivered
             self.cwnd = max(self.cwnd, BBR_MIN_PIPE_CWND)
 
@@ -303,8 +311,7 @@ class BBRSender(Sender):
 
         if self.state == BBRMode.BBR_STARTUP and self.filled_pipe:
             self.enter_drain()
-        packets_in_flight = self.bytes_in_flight / BYTES_PER_PACKET
-        if self.state == BBRMode.BBR_DRAIN and packets_in_flight <= self.inflight(1.0):
+        if self.state == BBRMode.BBR_DRAIN and self.bytes_in_flight <= self.inflight(1.0):
             self.enter_probe_bw()  # we estimate queue is drained
 
     def enter_probe_bw(self):
@@ -398,13 +405,14 @@ class BBRSender(Sender):
         self.handle_restart_from_idle()
 
     def send_packet(self, pkt):
-        if self.pipe == 0:
+        # self.pipe = self.bytes_in_flight / BYTES_PER_PACKET
+        if self.bytes_in_flight / BYTES_PER_PACKET == 0:
             self.first_sent_time = self.get_cur_time()
             self.delivered_time = self.get_cur_time()
         pkt.first_sent_time = self.first_sent_time
         pkt.delivered_time = self.delivered_time
         pkt.delivered = self.delivered
-        pkt.is_app_limited = False # (self.app_limited != 0)
+        pkt.is_app_limited = False  # (self.app_limited != 0)
 
     # Upon receiving ACK, fill in delivery rate sample rs.
     def generate_rate_sample(self, pkt):
@@ -422,8 +430,10 @@ class BBRSender(Sender):
 
         # Use the longer of the send_elapsed and ack_elapsed
         self.rs.interval = max(self.rs.send_elapsed, self.rs.ack_elapsed)
+        # print(self.rs.send_elapsed, self.rs.ack_elapsed)
 
         self.rs.delivered = self.delivered - self.rs.prior_delivered
+        # print("C.delivered: {}, rs.prior_delivered: {}".format(self.delivered, self.rs.prior_delivered))
 
         # Normally we expect interval >= MinRTT.
         # Note that rate may still be over-estimated when a spuriously
@@ -444,7 +454,7 @@ class BBRSender(Sender):
         return True  # we filled in rs with a rate sample */
 
     # Update rs when packet is SACKed or ACKed. */
-    def update_rate_sample(self, pkt):
+    def update_rate_sample(self, pkt: BBRPacket):
         # comment out because we don't need this in the simulator.
         # if pkt.delivered_time == 0:
         #     return  # P already SACKed
@@ -453,12 +463,16 @@ class BBRSender(Sender):
         self.delivered_time = self.get_cur_time()
 
         # Update info using the newest packet:
-        if pkt.delivered > self.rs.prior_delivered:
+        # print(pkt.delivered, self.rs.prior_delivered)
+        # pkt.debug_print()
+        if (not self.rs.prior_delivered) or pkt.delivered > self.rs.prior_delivered:
             self.rs.prior_delivered = pkt.delivered
             self.rs.prior_time = pkt.delivered_time
             self.rs.is_app_limited = pkt.is_app_limited
             self.rs.send_elapsed = pkt.sent_time - pkt.first_sent_time
             self.rs.ack_elapsed = self.delivered_time - pkt.delivered_time
+            # print(pkt.sent_time, pkt.first_sent_time, self.rs.send_elapsed)
+            # print(self.delivered_time, pkt.delivered_time, self.rs.ack_elapsed)
             self.first_sent_time = pkt.sent_time
 
         # Mark the packet as delivered once it's SACKed to
@@ -467,36 +481,40 @@ class BBRSender(Sender):
         # pkt.delivered_time = 0
 
     def can_send_packet(self):
-        if not self.srtt or self.btlbw == 0: # no valid rtt measurement yet
+        if not self.srtt or self.btlbw == 0:  # no valid rtt measurement yet
             estimated_bdp = TCP_INIT_CWND
             cwnd_gain = 1
 
         else:
             estimated_bdp = self.btlbw * self.rtprop / BYTES_PER_PACKET
             cwnd_gain = self.cwnd_gain
-        if self.bytes_in_flight >= cwnd_gain * estimated_bdp * BYTES_PER_PACKET:
+        if self.bytes_in_flight >= self.cwnd * BYTES_PER_PACKET: # cwnd_gain * estimated_bdp * BYTES_PER_PACKET:
             # wait for ack or timeout
             return False
         return True
 
-    def schedule_send(self):
+    def schedule_send(self, first_pkt=False):
         assert self.net, "network is not registered in sender."
-        self.next_send_time = self.get_cur_time() + BYTES_PER_PACKET / self.pacing_rate
-        print("ts: {:.3f}, pacing_rate: {:.3f}Mbps, next_send_time: {:.3f}".format(self.get_cur_time(), self.pacing_rate * 8 / 1e6, self.next_send_time))
+        if first_pkt:
+            self.next_send_time = 0
+        else:
+            self.next_send_time = self.get_cur_time() + BYTES_PER_PACKET / self.pacing_rate
         next_pkt = BBRPacket(self.next_send_time, self, 0)
         self.net.add_packet(self.next_send_time, next_pkt)
 
     def on_packet_sent(self, pkt: BBRPacket) -> None:
-        if self.get_cur_time() >= self.next_send_time:
-            # packet = nextPacketToSend() # assume always a packet to send from app
-            if not pkt:
-                self.app_limited_until = self.bytes_in_flight
-                return
-            self.send_packet(pkt)
-            # ship(packet) # no need to do this in the simulator.
-            super().on_packet_sent(pkt)
-            # self.next_send_time = self.net.get_cur_time() + pkt.pkt_size / \
-            #     (self.pacing_gain * self.btlbw)
+        # if self.get_cur_time() >= self.next_send_time:
+        # packet = nextPacketToSend() # assume always a packet to send from app
+        if not pkt:
+            self.app_limited_until = self.bytes_in_flight
+            return
+        self.send_packet(pkt)
+        # ship(packet) # no need to do this in the simulator.
+        super().on_packet_sent(pkt)
+        # self.next_send_time = self.net.get_cur_time() + pkt.pkt_size / \
+        #     (self.pacing_gain * self.btlbw)
+        # else:
+        #     ipdb.set_trace()
         # timerCallbackAt(send, nextSendTime)
         # TODO: potential bug here if previous call return at if inflight < cwnd
 
@@ -514,6 +532,18 @@ class BBRSender(Sender):
 
     def reset(self):
         raise NotImplementedError
+
+    def debug_print(self):
+        print("ts: {:.3f}, pacing_rate: {:.3f}Mbps, next_send_time: {:.3f}, "
+                "cwnd: {}, target_cwnd: {}, bbr_state: {}, btlbw: {:.3f}Mbps, rtprop: {:.3f}, "
+              "rs.delivery_rate: {:.3f}Mbps, can_send_packet: {}, "
+              "pkt_in_flight: {}, full_bw: {:.3f}Mbps, full_bw_count: {}, filled_pipe: {}".format(
+                  self.get_cur_time(), self.pacing_rate * 8 / 1e6,
+                  self.next_send_time, self.cwnd, self.target_cwnd,
+                  self.state.value, self.btlbw * 8 / 1e6, self.rtprop,
+                  self.rs.delivery_rate * 8 / 1e6, self.can_send_packet(),
+                  self.bytes_in_flight / BYTES_PER_PACKET,
+                  self.full_bw * 8 / 1e6, self.full_bw_count, self.filled_pipe))
 
 
 class BBR:
