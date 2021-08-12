@@ -5,6 +5,9 @@ from simulator.network_simulator import network, packet
 
 class Sender:
 
+    SRTT_ALPHA = 1/8
+    SRTT_BETA = 1/4
+
     def __init__(self, sender_id: int, dest: int):
         """Create a sender object.
 
@@ -31,6 +34,9 @@ class Sender:
         self.net = None
         self.dest = dest
         self.rto = -1
+
+        self.srtt = None
+        self.rttvar = None
 
     # def apply_rate_delta(self, delta):
     #     delta *= config.DELTA_SCALE
@@ -62,6 +68,15 @@ class Sender:
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         self.acked += 1
         self.bytes_in_flight -= pkt.pkt_size
+        if self.srtt is None and self.rttvar is None:
+            self.srtt = pkt.rtt
+            self.rttvar = pkt.rtt / 2
+        elif self.srtt and self.rttvar:
+            self.rttvar = (1 - self.SRTT_BETA) * self.rttvar + self.SRTT_BETA * abs(self.srtt - pkt.rtt)
+            self.srtt = (1 - self.SRTT_ALPHA) * self.srtt + self.SRTT_ALPHA * pkt.rtt
+        else:
+            raise ValueError("srtt and rttvar shouldn't be None.")
+
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
@@ -70,6 +85,9 @@ class Sender:
     def get_cur_time(self) -> float:
         assert self.net, "network is not registered in sender."
         return self.net.get_cur_time()
+
+    def schedule_send(self) -> None:
+        return
 
     # def set_rate(self):
     #     raise NotImplementedError

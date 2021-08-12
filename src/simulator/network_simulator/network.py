@@ -98,6 +98,7 @@ class Network:
         end_time = min(self.cur_time + dur, self.links[0].trace.timestamps[-1])
         while True:
             pkt = self.q[0]
+            # pkt.debug_print()
             if pkt.ts >= end_time and pkt.event_type == EVENT_TYPE_SEND:
                 end_time = pkt.ts
                 self.cur_time = end_time
@@ -169,7 +170,7 @@ class Network:
                     push_new_event = True
             elif pkt.event_type == EVENT_TYPE_SEND:  # in datalink
                 if pkt.next_hop == 0:
-                    if sender.can_send_packet():  # TODO: investigate the need of this function
+                    if sender.can_send_packet():
                         sender.on_packet_sent(pkt)
                         # print('Send packet at {}'.format(self.cur_time))
                         if self.record_pkt_log:
@@ -180,6 +181,7 @@ class Network:
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                         push_new_event = True
+                    sender.schedule_send()
                 else:
                     push_new_event = True
 

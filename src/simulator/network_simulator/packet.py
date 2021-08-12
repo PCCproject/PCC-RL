@@ -8,7 +8,7 @@ class Packet:
 
     def __init__(self, ts: float, sender: "sender.Sender", pkt_id: int):
         self.ts = ts
-        self.send_time = ts
+        self.sent_time = ts
         self.dropped = False
         self.sender = sender
         self.event_type = EVENT_TYPE_SEND
@@ -16,7 +16,7 @@ class Packet:
         self.pkt_id = pkt_id
         self.queue_delay = 0
         self.propagation_delay = 0
-        self.pkt_size = BYTES_PER_PACKET
+        self.pkt_size = BYTES_PER_PACKET # bytes
 
     def drop(self) -> None:
         """Mark packet as dropped."""
@@ -40,6 +40,13 @@ class Packet:
         """
         return self.queue_delay + self.propagation_delay
 
+    @property
+    def rtt(self) -> float:
+        return self.cur_latency
+
     # override the comparison operator
     def __lt__(self, nxt):
         return self.ts < nxt.ts
+
+    def debug_print(self):
+        print("Event {}: ts={}, type={}".format(self.pkt_id, self.ts, self.event_type))

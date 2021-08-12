@@ -181,7 +181,8 @@ class TCPCubicSender(Sender):
         if not self.net:
             raise RuntimeError("network is not registered in sender.")
         for _ in range(int(self.cwnd - self.bytes_in_flight / BYTES_PER_PACKET)):
-            self.net.add_packet(self.get_cur_time(), self)
+            pkt = Packet(self.get_cur_time(), self, 0)
+            self.net.add_packet(self.get_cur_time(), pkt)
 
     def can_send_packet(self) -> bool:
         return int(self.bytes_in_flight) / BYTES_PER_PACKET < self.cwnd
@@ -197,7 +198,7 @@ class Cubic:
 
         links = [Link(trace), Link(trace)]
         senders = [TCPCubicSender(0, 0)]
-        net = Network(senders, links)
+        net = Network(senders, links, True)
 
         run_dur = trace.get_delay(0) * 2 / 1000
 
