@@ -1,3 +1,5 @@
+import time
+
 from simulator.constants import BYTES_PER_PACKET
 from simulator.network_simulator.constants import EVENT_TYPE_SEND
 from simulator.network_simulator import sender
@@ -17,6 +19,7 @@ class Packet:
         self.queue_delay = 0
         self.propagation_delay = 0
         self.pkt_size = BYTES_PER_PACKET # bytes
+        self.real_ts = time.time()
 
     def drop(self) -> None:
         """Mark packet as dropped."""
@@ -46,7 +49,9 @@ class Packet:
 
     # override the comparison operator
     def __lt__(self, nxt):
+        if self.ts == nxt.ts:
+            return self.real_ts < nxt.real_ts
         return self.ts < nxt.ts
 
     def debug_print(self):
-        print("Event {}: ts={}, type={}".format(self.pkt_id, self.ts, self.event_type))
+        print("Event {}: ts={}, type={}, dropped={}".format(self.pkt_id, self.ts, self.event_type, self.dropped))

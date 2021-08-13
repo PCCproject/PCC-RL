@@ -60,7 +60,7 @@ class Network:
     def queue_initial_packets(self):
         for sender in self.senders:
             sender.register_network(self)
-            # sender.reset_obs()
+            sender.reset_obs()
             # heapq.heappush(self.q, (1.0 / sender.rate, sender,
             #                         EVENT_TYPE_SEND, 0, 0.0, False, self.event_count, sender.rto, 0))
             # heapq.heappush(self.q, (0, sender,
@@ -96,6 +96,8 @@ class Network:
         """Run the network with specified duration."""
         start_time = self.cur_time
         # TODO: change how to get the last time stamp in trace
+        for sender in self.senders:
+            sender.reset_obs()
         end_time = min(self.cur_time + dur, self.links[0].trace.timestamps[-1])
         while True:
             pkt = self.q[0]
@@ -130,8 +132,8 @@ class Network:
                         sender.timeout()
                         pkt.drop()
                     elif pkt.dropped:
-                        sender.debug_print()
-                        pkt.debug_print()
+                        # sender.debug_print()
+                        # pkt.debug_print()
                         sender.on_packet_lost(pkt)
                         if self.record_pkt_log:
                             self.pkt_log.append(
@@ -141,12 +143,12 @@ class Network:
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     else:
-                        sender.debug_print()
-                        pkt.debug_print()
+                        # sender.debug_print()
+                        # pkt.debug_print()
                         sender.on_packet_acked(pkt)
                         # debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
-                        sender.schedule_send()
+                        sender.schedule_send(on_ack=True)
                         if self.record_pkt_log:
                             self.pkt_log.append(
                                 [self.cur_time, pkt.pkt_id, 'acked',
@@ -177,9 +179,9 @@ class Network:
             elif pkt.event_type == EVENT_TYPE_SEND:  # in datalink
                 if pkt.next_hop == 0:
                     if sender.can_send_packet():
-                        sender.debug_print()
+                        # sender.debug_print()
                         sender.on_packet_sent(pkt)
-                        pkt.debug_print()
+                        # pkt.debug_print()
                         # print('Send packet at {}'.format(self.cur_time))
                         sender.schedule_send()
                         if self.record_pkt_log:
