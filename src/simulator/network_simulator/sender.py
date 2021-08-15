@@ -7,8 +7,8 @@ from simulator.network_simulator.constants import BYTES_PER_PACKET
 
 class Sender:
 
-    SRTT_ALPHA = 1/8
-    SRTT_BETA = 1/4
+    SRTT_ALPHA = 1 / 8
+    SRTT_BETA = 1 / 4
 
     def __init__(self, sender_id: int, dest: int):
         """Create a sender object.
@@ -28,6 +28,7 @@ class Sender:
         self.acked = 0
         self.lost = 0
         self.rtt_samples = []
+        self.queue_delay_samples = []
 
         self.rate = 0
         self.pkt_loss_wait_time = 0
@@ -76,13 +77,15 @@ class Sender:
             self.srtt = pkt.rtt
             self.rttvar = pkt.rtt / 2
         elif self.srtt and self.rttvar:
-            self.rttvar = (1 - self.SRTT_BETA) * self.rttvar + self.SRTT_BETA * abs(self.srtt - pkt.rtt)
-            self.srtt = (1 - self.SRTT_ALPHA) * self.srtt + self.SRTT_ALPHA * pkt.rtt
+            self.rttvar = (1 - self.SRTT_BETA) * self.rttvar + \
+                self.SRTT_BETA * abs(self.srtt - pkt.rtt)
+            self.srtt = (1 - self.SRTT_ALPHA) * self.srtt + \
+                self.SRTT_ALPHA * pkt.rtt
         else:
             raise ValueError("srtt and rttvar shouldn't be None.")
 
         self.rtt_samples.append(pkt.rtt)
-
+        self.queue_delay_samples.append(pkt.queue_delay)
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
@@ -104,7 +107,7 @@ class Sender:
         #print("Sent %d packets in %f seconds" % (self.sent, obs_dur))
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
-        rtt_samples = self.rtt_samples # if self.rtt_samples else self.prev_rtt_samples
+        # rtt_samples = self.rtt_samples # if self.rtt_samples else self.prev_rtt_samples
 
         return sender_obs.SenderMonitorInterval(
             self.sender_id,
