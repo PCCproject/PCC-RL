@@ -583,7 +583,24 @@ class BBRSender(Sender):
         # self.on_enter_fast_recovery()
 
     def reset(self):
-        raise NotImplementedError
+        super().reset()
+        self.cwnd = TCP_INIT_CWND
+
+        self.conn_state = ConnectionState()
+        self.rs = RateSample()
+        self.btlbw = 0  # bottleneck bw in bytes/sec
+
+        self.app_limited_until = 0
+        self.next_send_time = 0
+
+
+        self.pacing_gain = BBR_HIGH_GAIN  # referece:
+
+        self.target_cwnd = 0
+
+        self.in_fast_recovery_mode = False
+
+        self.init()
 
     def debug_print(self):
         print("ts: {:.3f}, round_count: {}, pacing_gain:{}, "
@@ -656,12 +673,10 @@ class BBR:
             writer.writerow([
                 net.get_cur_time(), send_rate, throughput, latency, loss,
                 reward, action, mi.bytes_sent, mi.bytes_acked, mi.bytes_lost,
-                mi.send_start, mi.send_end, mi.recv_start,
-                mi.recv_end, mi.get('latency increase'),
-                mi.packet_size,
+                mi.send_start, mi.send_end, mi.recv_start, mi.recv_end,
+                mi.get('latency increase'), mi.packet_size,
                 links[0].get_bandwidth(net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
-                avg_queue_delay, links[0].pkt_in_queue,
-                links[0].queue_size,
+                avg_queue_delay, links[0].pkt_in_queue, links[0].queue_size,
                 senders[0].cwnd, ssthresh, senders[0].rto])
             if senders[0].srtt:
                 run_dur = senders[0].srtt

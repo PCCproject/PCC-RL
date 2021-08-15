@@ -15,25 +15,18 @@ class Sender:
 
         Args
             sender_id: id of sender device.
-            rate: start sending rate. (Unit: packets per second).
             dest: id of destination device.
-            features: a list of features used by RL model.
-            cwnd: size of congestion window. (Unit: number of packets)
-            history_len: length of history array. History array is used as the
-                input of RL model.
         """
         self.sender_id = sender_id
         # variables to track in a MonitorInterval. Units: packet
-        self.sent = 0
-        self.acked = 0
-        self.lost = 0
+        self.sent = 0  # no. of packets
+        self.acked = 0  # no. of packets
+        self.lost = 0  # no. of packets
         self.rtt_samples = []
         self.queue_delay_samples = []
 
-        self.rate = 0
-        self.pkt_loss_wait_time = 0
-        self.bytes_in_flight = 0
-        self.min_latency = None
+        self.pacing_rate = 0  # bytes/s
+        self.bytes_in_flight = 0  # bytes
         self.net = None
         self.dest = dest
         self.rto = -1
@@ -42,22 +35,7 @@ class Sender:
         self.srtt = None
         self.rttvar = None
 
-    # def apply_rate_delta(self, delta):
-    #     delta *= config.DELTA_SCALE
-    #     if delta >= 0.0:
-    #         self.set_rate(self.rate * (1.0 + delta))
-    #     else:
-    #         self.set_rate(self.rate / (1.0 - delta))
-    #     # print("current rate {} after applying delta {}".format(self.rate, delta))
-    #     # print("rate %f" % delta)
-    #
-    # def apply_cwnd_delta(self, delta):
-    #     delta *= config.DELTA_SCALE
-    #     #print("Applying delta %f" % delta)
-    #     if delta >= 0.0:
-    #         self.set_cwnd(self.cwnd * (1.0 + delta))
-    #     else:
-    #         self.set_cwnd(self.cwnd / (1.0 - delta))
+        self.event_count = 0
 
     def can_send_packet(self) -> bool:
         return True
@@ -66,6 +44,8 @@ class Sender:
         self.net = net
 
     def on_packet_sent(self, pkt: "packet.Packet") -> None:
+        pkt.pkt_id = self.event_count
+        self.event_count += 1
         self.sent += 1
         self.bytes_in_flight += pkt.pkt_size
 
@@ -122,11 +102,6 @@ class Sender:
             queue_delay_samples=self.queue_delay_samples,
             packet_size=BYTES_PER_PACKET
         )
-    # def set_rate(self):
-    #     raise NotImplementedError
-
-    # def set_cwnd(self):
-    #     raise NotImplementedError
 
     # def print_debug(self):
     #     print("Sender:")
@@ -146,13 +121,19 @@ class Sender:
         self.obs_start_time = self.get_cur_time()
 
     def reset(self):
-        self.rate = 0
+        self.event_count = 0
+        self.pacing_rate = 0
         self.bytes_in_flight = 0
+        self.srtt = None
+        self.rttvar = None
         self.reset_obs()
 
     def timeout(self):
         # placeholder
         raise NotImplementedError
+
+    def debug_print(self):
+        pass
 
 
 SenderType = TypeVar('SenderType', bound=Sender)

@@ -3,7 +3,8 @@ import os
 
 import numpy as np
 
-from simulator.network_simulator.constants import BYTES_PER_PACKET, MIN_CWND
+from common.utils import pcc_aurora_reward
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET, MIN_CWND
 from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
 from simulator.network_simulator.packet import Packet
@@ -33,6 +34,7 @@ class TCPCubicSender(Sender):
         self.srtt = None  # (self.ALPHA * self.srtt) + (1 - self.ALPHA) * rtt)
         self.timeout_cnt = 0
         self.timeout_mode = False
+        self.min_latency = None
 
         self.cubic_reset()
         self.rtt_samples = []
@@ -169,6 +171,7 @@ class TCPCubicSender(Sender):
     def reset(self):
         super().reset()
         self.cubic_reset()
+        self.min_latency = None
         # initialize rto to 3s for waiting SYC packets of TCP handshake
         self.rto = 3  # retransmission timeout (seconds)
         self.srtt = None
@@ -182,10 +185,17 @@ class TCPCubicSender(Sender):
             raise RuntimeError("network is not registered in sender.")
         for _ in range(int(self.cwnd - self.bytes_in_flight / BYTES_PER_PACKET)):
             pkt = Packet(self.get_cur_time(), self, 0)
-            self.net.add_packet(self.get_cur_time(), pkt)
+            self.net.add_packet(pkt)
 
     def can_send_packet(self) -> bool:
         return int(self.bytes_in_flight) / BYTES_PER_PACKET < self.cwnd
+
+    def schedule_send(self, first_pkt=False, on_ack=False):
+        assert self.net, "network is not registered in sender."
+        if first_pkt:
+            for _ in range(self.cwnd):
+                pkt = Packet(self.get_cur_time(), self, 0)
+                self.net.add_packet(pkt)
 
 
 class Cubic:
@@ -200,14 +210,54 @@ class Cubic:
         senders = [TCPCubicSender(0, 0)]
         net = Network(senders, links, True)
 
-        run_dur = trace.get_delay(0) * 2 / 1000
+        rewards = []
+        start_rtt = trace.get_delay(0) * 2 / 1000
+        run_dur = start_rtt
+        writer = csv.writer(open(os.path.join(self.save_dir, '{}_simulation_log.csv'.format(
+            self.cc_name)), 'w', 1), lineterminator='\n')
+        writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
+                             'loss', 'reward', "action", "bytes_sent",
+                             "bytes_acked", "bytes_lost", "send_start_time",
+                             "send_end_time", 'recv_start_time',
+                             'recv_end_time', 'latency_increase',
+                             "packet_size", 'bandwidth', "queue_delay",
+                             'packet_in_queue', 'queue_size', 'cwnd',
+                             'ssthresh', "rto"])
 
         while True:
             net.run(run_dur)
+            mi = senders[0].get_run_data()
+
+            throughput = mi.get("recv rate")  # bits/sec
+            send_rate = mi.get("send rate")  # bits/sec
+            latency = mi.get("avg latency")
+            avg_queue_delay = mi.get("avg queue delay")
+            loss = mi.get("loss ratio")
+
+            reward = pcc_aurora_reward(
+                throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
+                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+            rewards.append(reward)
+            ssthresh = senders[0].ssthresh
+            action = 0
+
+            writer.writerow([
+                net.get_cur_time(), send_rate, throughput, latency, loss,
+                reward, action, mi.bytes_sent, mi.bytes_acked, mi.bytes_lost,
+                mi.send_start, mi.send_end, mi.recv_start, mi.recv_end,
+                mi.get('latency increase'), mi.packet_size,
+                links[0].get_bandwidth(net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
+                avg_queue_delay, links[0].pkt_in_queue, links[0].queue_size,
+                senders[0].cwnd, ssthresh, senders[0].rto])
+            if senders[0].srtt:
+                run_dur = senders[0].srtt
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        with open(os.path.join(self.save_dir, "cubic_packet_log.csv"), 'w', 1) as f:
+        with open(os.path.join(self.save_dir, "{}_packet_log_new.csv".format(self.cc_name)), 'w', 1) as f:
             pkt_logger = csv.writer(f, lineterminator='\n')
+            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
+                                 'bytes', 'cur_latency', 'queue_delay',
+                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
             pkt_logger.writerows(net.pkt_log)
         return 0

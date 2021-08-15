@@ -49,8 +49,6 @@ class Packet:
 
     # override the comparison operator
     def __lt__(self, nxt):
-        if self.ts == nxt.ts:
-            return self.real_ts < nxt.real_ts
         return self.ts < nxt.ts
 
     def debug_print(self):
