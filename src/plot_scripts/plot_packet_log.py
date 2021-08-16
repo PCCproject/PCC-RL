@@ -8,7 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-from common.utils import pcc_aurora_reward, read_json_file
+from common.utils import pcc_aurora_reward
 from simulator.trace import Trace
 
 
@@ -224,11 +224,13 @@ def main():
             axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                          label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
         else:
-            axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
-                         label='bandwidth, avg {:.3f}Mbps'.format(5))
+            pass
+            # axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
+            #              label='bandwidth, avg {:.3f}Mbps'.format(6))
         axes[0].legend()
         axes[0].set_xlabel("Time(s)")
         axes[0].set_ylabel("Rate(Mbps)")
+        axes[0].set_ylim(0, )
         if trace is not None:
             reward = pcc_aurora_reward(
                 np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
