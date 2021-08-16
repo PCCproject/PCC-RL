@@ -685,11 +685,13 @@ class BBR:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-
-        with open(os.path.join(self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
-            pkt_logger = csv.writer(f, lineterminator='\n')
-            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
-                                 'bytes', 'cur_latency', 'queue_delay',
-                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
-            pkt_logger.writerows(net.pkt_log)
+        if self.record_pkt_log:
+            with open(os.path.join(
+                self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
+                pkt_logger = csv.writer(f, lineterminator='\n')
+                pkt_logger.writerow(['timestamp', 'packet_event_id',
+                                     'event_type', 'bytes', 'cur_latency',
+                                     'queue_delay', 'packet_in_queue',
+                                     'sending_rate', 'bandwidth'])
+                pkt_logger.writerows(net.pkt_log)
         return np.mean(rewards), net.pkt_log

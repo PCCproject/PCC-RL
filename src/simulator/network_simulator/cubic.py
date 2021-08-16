@@ -1,5 +1,6 @@
 import csv
 import os
+from typing import List, Tuple
 
 import numpy as np
 
@@ -205,7 +206,7 @@ class Cubic:
         self.save_dir = save_dir
         self.record_pkt_log = record_pkt_log
 
-    def test(self, trace: Trace) -> float:
+    def test(self, trace: Trace) -> Tuple[float, List]:
 
         links = [Link(trace), Link(trace)]
         senders = [TCPCubicSender(0, 0)]
@@ -255,10 +256,13 @@ class Cubic:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        with open(os.path.join(self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
-            pkt_logger = csv.writer(f, lineterminator='\n')
-            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
-                                 'bytes', 'cur_latency', 'queue_delay',
-                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
-            pkt_logger.writerows(net.pkt_log)
-        return 0
+        if self.record_pkt_log:
+            with open(os.path.join(
+                self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
+                pkt_logger = csv.writer(f, lineterminator='\n')
+                pkt_logger.writerow(['timestamp', 'packet_event_id',
+                                     'event_type', 'bytes', 'cur_latency',
+                                     'queue_delay', 'packet_in_queue',
+                                     'sending_rate', 'bandwidth'])
+                pkt_logger.writerows(net.pkt_log)
+        return np.mean(rewards), net.pkt_log
