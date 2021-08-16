@@ -626,15 +626,17 @@ class BBRSender(Sender):
 class BBR:
     cc_name = 'bbr'
 
-    def __init__(self, save_dir: str, seed: int = 42):
+    def __init__(self, save_dir: str, record_pkt_log: bool = False,
+                 seed: int = 42):
         self.save_dir = save_dir
+        self.record_pkt_log = record_pkt_log
         set_seed(seed)
 
     def test(self, trace: Trace) -> Tuple[float, List]:
 
         links = [Link(trace), Link(trace)]
         senders = [BBRSender(0, 0)]
-        net = Network(senders, links, True)
+        net = Network(senders, links, self.record_pkt_log)
 
         rewards = []
         start_rtt = trace.get_delay(0) * 2 / 1000

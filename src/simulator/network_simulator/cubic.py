@@ -201,14 +201,15 @@ class TCPCubicSender(Sender):
 class Cubic:
     cc_name = 'cubic'
 
-    def __init__(self, save_dir: str):
+    def __init__(self, save_dir: str, record_pkt_log: bool = False):
         self.save_dir = save_dir
+        self.record_pkt_log = record_pkt_log
 
     def test(self, trace: Trace) -> float:
 
         links = [Link(trace), Link(trace)]
         senders = [TCPCubicSender(0, 0)]
-        net = Network(senders, links, True)
+        net = Network(senders, links, self.record_pkt_log)
 
         rewards = []
         start_rtt = trace.get_delay(0) * 2 / 1000
@@ -254,7 +255,7 @@ class Cubic:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        with open(os.path.join(self.save_dir, "{}_packet_log_new.csv".format(self.cc_name)), 'w', 1) as f:
+        with open(os.path.join(self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
             pkt_logger = csv.writer(f, lineterminator='\n')
             pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
                                  'bytes', 'cur_latency', 'queue_delay',
