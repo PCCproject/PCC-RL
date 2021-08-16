@@ -121,7 +121,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             #             print("Saving new best model to {}".format(self.save_path))
             #         # self.model.save(self.save_path)
 
-            if self.aurora.comm.Get_rank() == 0:
+            if self.aurora.comm.Get_rank() == 0 and self.val_log_writer is not None:
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.save(
@@ -195,9 +195,9 @@ def save_model_to_serve(model, export_dir):
 
 
 class Aurora():
-    def __init__(self, seed, log_dir, timesteps_per_actorbatch,
-                 pretrained_model_path=None, gamma=0.99, tensorboard_log=None,
-                 delta_scale=1):
+    def __init__(self, seed: int, log_dir: str, timesteps_per_actorbatch: int,
+                 pretrained_model_path=None, gamma: float = 0.99,
+                 tensorboard_log=None, delta_scale=1):
         init_start = time.time()
         self.comm = COMM_WORLD
         self.delta_scale = delta_scale
