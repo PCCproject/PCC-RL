@@ -10,6 +10,7 @@ class Link():
 
     def __init__(self, trace: Trace):
         self.trace = trace
+        self.trace.reset()
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
         self.queue_size = self.trace.get_queue_size()
@@ -59,6 +60,7 @@ class Link():
         print("Loss: %f" % self.trace.get_loss_rate())
 
     def reset(self):
+        self.trace.reset()
         self.queue_delay = 0.0
         self.queue_delay_update_time = 0.0
         self.pkt_in_queue = 0

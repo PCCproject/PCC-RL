@@ -1,10 +1,11 @@
 import csv
 import os
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 
 from common.utils import pcc_aurora_reward
+from plot_scripts.plot_packet_log import PacketLog
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET, MIN_CWND
 from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
@@ -202,11 +203,10 @@ class TCPCubicSender(Sender):
 class Cubic:
     cc_name = 'cubic'
 
-    def __init__(self, save_dir: str, record_pkt_log: bool = False):
-        self.save_dir = save_dir
+    def __init__(self, record_pkt_log: bool = False):
         self.record_pkt_log = record_pkt_log
 
-    def test(self, trace: Trace) -> Tuple[float, List]:
+    def test(self, trace: Trace, save_dir: str) -> Tuple[float, float]:
 
         links = [Link(trace), Link(trace)]
         senders = [TCPCubicSender(0, 0)]
@@ -215,7 +215,7 @@ class Cubic:
         rewards = []
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
-        writer = csv.writer(open(os.path.join(self.save_dir, '{}_simulation_log.csv'.format(
+        writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
             self.cc_name)), 'w', 1), lineterminator='\n')
         writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
@@ -256,13 +256,16 @@ class Cubic:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
+        pkt_level_reward = 0
         if self.record_pkt_log:
             with open(os.path.join(
-                self.save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
+                save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
                 pkt_logger = csv.writer(f, lineterminator='\n')
                 pkt_logger.writerow(['timestamp', 'packet_event_id',
                                      'event_type', 'bytes', 'cur_latency',
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
-        return np.mean(rewards), net.pkt_log
+            pkt_log = PacketLog.from_log(net.pkt_log)
+            pkt_level_reward = pkt_log.get_reward("", trace)
+        return np.mean(rewards), pkt_level_reward

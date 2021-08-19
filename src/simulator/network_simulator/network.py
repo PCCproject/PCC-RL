@@ -111,8 +111,8 @@ class Network:
                                  sender.pacing_rate * BYTES_PER_PACKET,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                     else:
-                        sender.debug_print()
-                        pkt.debug_print()
+                        # sender.debug_print()
+                        # pkt.debug_print()
                         sender.on_packet_acked(pkt)
                         # debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
@@ -145,7 +145,7 @@ class Network:
             elif pkt.event_type == EVENT_TYPE_SEND:  # in datalink
                 if pkt.next_hop == 0:
                     if sender.can_send_packet():
-                        sender.debug_print()
+                        # sender.debug_print()
                         sender.on_packet_sent(pkt)
                         # pkt.debug_print()
                         # print('Send packet at {}'.format(self.cur_time))
