@@ -23,7 +23,7 @@ from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
-from simulator import my_heuristic, network
+from simulator import network
 from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward

@@ -133,6 +133,8 @@ class PacketLog():
                 bin_id = cls.ts_to_bin_id(ts, first_ts, bin_size)
                 binwise_bytes_lost[bin_id] = binwise_bytes_lost.get(
                     bin_id, 0) + pkt_byte
+            elif pkt_type == 'arrived':
+                pass
             else:
                 raise RuntimeError(
                     "Unrecognized pkt_type {}!".format(pkt_type))
@@ -223,22 +225,27 @@ def main():
         if trace is not None:
             axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                          label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
+            queue_size = trace.queue_size
         else:
-            pass
+            queue_size = "N/A"
             # axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
             #              label='bandwidth, avg {:.3f}Mbps'.format(6))
         axes[0].legend()
         axes[0].set_xlabel("Time(s)")
         axes[0].set_ylabel("Rate(Mbps)")
         axes[0].set_ylim(0, )
+        reward = pcc_aurora_reward(
+            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
         if trace is not None:
-            reward = pcc_aurora_reward(
-                np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
+            normalized_reward = pcc_aurora_reward(
+                np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
+                np.mean(trace.bandwidths) * 1e6 / 8 /1500)
         else:
             reward = pcc_aurora_reward(
                 np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
-        axes[0].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
-            cc, loss, reward))
+            normalized_reward = reward
+        axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
+            cc, reward, normalized_reward))
 
         axes[1].plot(
             rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
@@ -248,8 +255,8 @@ def main():
         axes[1].legend()
         axes[1].set_xlabel("Time(s)")
         axes[1].set_ylabel("Latency(ms)")
-        axes[1].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
-            cc, loss, reward))
+        axes[1].set_title('{} loss rate={:.3f}, queue={:.3f}'.format(
+            cc, loss, queue_size))
 
         if log_idx == 0:
             print("{},{},{},{},{},".format(os.path.dirname(log_file),
