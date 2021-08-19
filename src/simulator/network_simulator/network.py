@@ -158,7 +158,10 @@ class Network:
                                  sender.pacing_rate * BYTES_PER_PACKET,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                         push_new_event = True
-                    sender.schedule_send()
+                        sender.schedule_send()
+                    else:
+                        sender.schedule_send()
+                        continue
                 else:
                     push_new_event = True
 

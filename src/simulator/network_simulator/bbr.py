@@ -307,7 +307,7 @@ class BBRSender(Sender):
         #    steps to update cwnd:
         packets_delivered = 1
         self.update_target_cwnd()
-        self.modulate_cwnd_for_recovery(packets_delivered, 0)
+        self.modulate_cwnd_for_recovery(packets_delivered)
         if not self.packet_conservation:
             if self.filled_pipe:
                 self.cwnd = min(self.cwnd + packets_delivered,
@@ -318,7 +318,8 @@ class BBRSender(Sender):
 
         self.modulate_cwnd_for_probe_rtt()
 
-    def modulate_cwnd_for_recovery(self, packets_delivered, packets_lost):
+    def modulate_cwnd_for_recovery(self, packets_delivered):
+        packets_lost = self.rs.losses
         if packets_lost > 0:
             self.cwnd = max(self.cwnd - packets_lost, 1)
         if self.packet_conservation:
@@ -567,7 +568,8 @@ class BBRSender(Sender):
     def on_packet_acked(self, pkt: BBRPacket) -> None:
         if not self.net:
             raise RuntimeError("network is not registered in sender.")
-        # self.rs.losses = 0
+        if not self.in_fast_recovery_mode:
+            self.rs.losses = 0
         self.generate_rate_sample(pkt)
         super().on_packet_acked(pkt)
         self.update_on_ack(pkt)
@@ -580,8 +582,8 @@ class BBRSender(Sender):
         if not self.net:
             raise RuntimeError("network is not registered in sender.")
         super().on_packet_lost(pkt)
-        # self.rs.losses = 1
-        # self.on_enter_fast_recovery()
+        self.rs.losses += 1
+        self.on_enter_fast_recovery()
 
     def reset(self):
         super().reset()
@@ -649,7 +651,7 @@ class BBR:
                              'recv_end_time', 'latency_increase',
                              "packet_size", 'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto"])
+                             'ssthresh', "rto", "packets_in_flight"])
 
         while True:
             net.run(run_dur)
@@ -678,7 +680,8 @@ class BBR:
                 mi.get('latency increase'), mi.packet_size,
                 links[0].get_bandwidth(net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
                 avg_queue_delay, links[0].pkt_in_queue, links[0].queue_size,
-                senders[0].cwnd, ssthresh, senders[0].rto])
+                senders[0].cwnd, ssthresh, senders[0].rto,
+                senders[0].bytes_in_flight / BYTES_PER_PACKET])
             if senders[0].srtt:
                 run_dur = senders[0].srtt
             should_stop = trace.is_finished(net.get_cur_time())
