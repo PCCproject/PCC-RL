@@ -50,14 +50,15 @@ class Link():
         self.pkt_in_queue += 1
         return True
 
-    def print_debug(self):
+    def debug_print(self):
         print("Link:")
-        print("Bandwidth: %f" % self.get_bandwidth(0))
-        print("Delay: %f" % self.trace.get_delay(0))
-        print("Queue Delay: %f" % self.queue_delay)
+        print("Trace Avg Bandwidth: {:.3f}Mbps".format(self.get_bandwidth(0)))
+        print("Trace Avg One-way Delay: {:.3f}ms".format(self.trace.get_delay(0)))
+        print("Queue Delay: {:.3f}ms" % self.queue_delay)
         print("One Packet Queue Delay: %f" % (1.0 / self.get_bandwidth(0)))
-        print("Queue size: %d" % self.queue_size)
-        print("Loss: %f" % self.trace.get_loss_rate())
+        print("Queue size: {}" % self.queue_size)
+        print("Loss: {:.3f}" % self.trace.get_loss_rate())
+        raise NotImplementedError
 
     def reset(self):
         self.trace.reset()

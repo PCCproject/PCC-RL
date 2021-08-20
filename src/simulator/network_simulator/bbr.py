@@ -11,7 +11,7 @@ import numpy as np
 from common.utils import pcc_aurora_reward, set_seed
 from plot_scripts.plot_packet_log import PacketLog
 from simulator.network_simulator.constants import (BITS_PER_BYTE,
-                                                   BYTES_PER_PACKET)
+                                                   BYTES_PER_PACKET, TCP_INIT_CWND)
 from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
 from simulator.network_simulator.sender import Sender
@@ -26,7 +26,6 @@ BTLBW_FILTER_LEN = 10  # packet-timed round trips.
 
 RTPROP_FILTER_LEN = 10  # seconds
 PROBE_RTT_DURATION = 0.2  # 200ms
-TCP_INIT_CWND = 10
 BBR_MIN_PIPE_CWND = 4  # packets
 BBR_GAIN_CYCLE_LEN = 8
 

@@ -6,9 +6,14 @@ from simulator.network_simulator.constants import BYTES_PER_PACKET
 
 
 class Sender:
+    """Base class of senders.
+
+    srtt and retransmission reference: https://datatracker.ietf.org/doc/html/rfc6298
+    """
 
     SRTT_ALPHA = 1 / 8
     SRTT_BETA = 1 / 4
+    RTO_K = 4
 
     def __init__(self, sender_id: int, dest: int):
         """Create a sender object.
@@ -29,11 +34,12 @@ class Sender:
         self.bytes_in_flight = 0  # bytes
         self.net = None
         self.dest = dest
-        self.rto = -1
-        self.ssthresh = 0
+        self.ssthresh = 80
 
         self.srtt = None
         self.rttvar = None
+        # initialize rto to 3s for waiting SYC packets of TCP handshake
+        self.rto = 3  # retransmission timeout (seconds)
 
         self.event_count = 0
 
@@ -56,11 +62,14 @@ class Sender:
         if self.srtt is None and self.rttvar is None:
             self.srtt = pkt.rtt
             self.rttvar = pkt.rtt / 2
+            # RTO <- SRTT + max (G, K*RTTVAR) ignore G because clock granularity of modern os is tiny
+            self.rto = max(1, min(self.srtt + self.RTO_K * self.rttvar, 60))
         elif self.srtt and self.rttvar:
             self.rttvar = (1 - self.SRTT_BETA) * self.rttvar + \
                 self.SRTT_BETA * abs(self.srtt - pkt.rtt)
             self.srtt = (1 - self.SRTT_ALPHA) * self.srtt + \
                 self.SRTT_ALPHA * pkt.rtt
+            self.rto = max(1, min(self.srtt + self.RTO_K * self.rttvar, 60))
         else:
             raise ValueError("srtt and rttvar shouldn't be None.")
 
@@ -121,11 +130,13 @@ class Sender:
         self.obs_start_time = self.get_cur_time()
 
     def reset(self):
+        self.ssthresh = 80
         self.event_count = 0
         self.pacing_rate = 0
         self.bytes_in_flight = 0
         self.srtt = None
         self.rttvar = None
+        self.rto = 3  # retransmission timeout (seconds)
         self.reset_obs()
 
     def timeout(self):
