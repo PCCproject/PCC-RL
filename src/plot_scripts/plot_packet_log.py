@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from common.utils import pcc_aurora_reward
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import Trace
 
 
@@ -157,7 +158,7 @@ class PacketLog():
         for bin_id in sorted(self.binwise_bytes_acked):
             throughput_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             throughput.append(
-                self.binwise_bytes_acked[bin_id] * 8 / self.bin_size / 1e6)
+                self.binwise_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
         return throughput_ts, throughput
 
     def get_sending_rate(self) -> Tuple[List[float], List[float]]:
@@ -166,7 +167,7 @@ class PacketLog():
         for bin_id in sorted(self.binwise_bytes_sent):
             sending_rate_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             sending_rate.append(
-                self.binwise_bytes_sent[bin_id] * 8 / self.bin_size / 1e6)
+                self.binwise_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
         return sending_rate_ts, sending_rate
 
     def get_rtt(self) -> Tuple[List[float], List[float]]:
@@ -191,8 +192,8 @@ class PacketLog():
         _, rtt = self.get_rtt()
         loss = self.get_loss_rate()
         return pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths) * 1e6 / 8 / 1500, np.mean(trace.delays) * 2 / 1e3)
+            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(rtt) / 1e3, loss,
+            np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(trace.delays) * 2 / 1e3)
 
 
 def main():
@@ -233,16 +234,17 @@ def main():
         axes[0].legend()
         axes[0].set_xlabel("Time(s)")
         axes[0].set_ylabel("Rate(Mbps)")
+        axes[0].set_xlim(0, )
         axes[0].set_ylim(0, )
         reward = pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
+            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(rtt) / 1e3, loss)
         if trace is not None:
             normalized_reward = pcc_aurora_reward(
-                np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-                np.mean(trace.bandwidths) * 1e6 / 8 /1500)
+                np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(rtt) / 1e3, loss,
+                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE /BYTES_PER_PACKET)
         else:
             reward = pcc_aurora_reward(
-                np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss)
+                np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(rtt) / 1e3, loss)
             normalized_reward = reward
         axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
             cc, reward, normalized_reward))
@@ -257,6 +259,8 @@ def main():
         axes[1].set_ylabel("Latency(ms)")
         axes[1].set_title('{} loss rate={:.3f}, queue={:.3f}'.format(
             cc, loss, queue_size))
+        axes[1].set_xlim(0, )
+        axes[1].set_ylim(0, )
 
         if log_idx == 0:
             print("{},{},{},{},{},".format(os.path.dirname(log_file),
@@ -273,5 +277,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# plt.show()
