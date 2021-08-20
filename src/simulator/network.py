@@ -180,13 +180,14 @@ class Network():
                                  sender.rate * BYTES_PER_PACKET * 8,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                 else:
-                    if not self.env.train_flag:
-                        self.pkt_log.append(
-                            [self.cur_time, event_id, 'arrived',
-                             BYTES_PER_PACKET, cur_latency, event_queue_delay,
-                             self.links[0].pkt_in_queue,
-                             sender.rate * BYTES_PER_PACKET * 8,
-                             self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                    # comment out to save disk usage
+                    # if not self.env.train_flag:
+                    #     self.pkt_log.append(
+                    #         [self.cur_time, event_id, 'arrived',
+                    #          BYTES_PER_PACKET, cur_latency, event_queue_delay,
+                    #          self.links[0].pkt_in_queue,
+                    #          sender.rate * BYTES_PER_PACKET * 8,
+                    #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     new_next_hop = next_hop + 1
                     new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                         self.cur_time)

@@ -127,14 +127,15 @@ class Network:
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
                                  sender.cwnd, sender.rto])
                 else:  # in acklink
-                    if self.record_pkt_log:
-                        self.pkt_log.append(
-                            [self.cur_time, pkt.pkt_id, 'arrived',
-                             pkt.pkt_size, pkt.cur_latency, pkt.queue_delay,
-                             self.links[0].pkt_in_queue,
-                             sender.pacing_rate * BYTES_PER_PACKET,
-                             self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
-                             sender.cwnd, sender.rto])
+                    # comment out to save disk usage
+                    # if self.record_pkt_log:
+                    #     self.pkt_log.append(
+                    #         [self.cur_time, pkt.pkt_id, 'arrived',
+                    #          pkt.pkt_size, pkt.cur_latency, pkt.queue_delay,
+                    #          self.links[0].pkt_in_queue,
+                    #          sender.pacing_rate * BYTES_PER_PACKET,
+                    #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
+                    #          sender.cwnd, sender.rto])
                     link_prop_latency, q_delay = self.links[pkt.next_hop].get_cur_latency(
                         self.cur_time)
                     # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
