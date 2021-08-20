@@ -109,26 +109,22 @@ class Genet:
         seed: random seed.
     """
 
-    def __init__(self, config_file: str, save_dir: str, black_box_function: Callable,
-                 heuristic, rl_method, seed: int = 42):
+    def __init__(self, config_file: str, save_dir: str,
+                 black_box_function: Callable, heuristic, rl_method,
+                 seed: int = 42):
+        self.black_box_function = black_box_function
+        self.seed = seed
         self.config_file = config_file
         self.cur_config_file = config_file
         self.rand_ranges = RandomizationRanges(config_file)
         self.param_names = self.rand_ranges.get_parameter_names()
-        pbounds = self.rand_ranges.get_original_range()
-        if 'duration' in pbounds:
-            pbounds.pop('duration')
+        self.pbounds = self.rand_ranges.get_original_range()
+        if 'duration' in self.pbounds:
+            self.pbounds.pop('duration')
 
         self.save_dir = save_dir
         self.heuristic = heuristic
         self.rl_method = rl_method
-        self.optimizer = BayesianOptimization(
-            f=lambda bandwidth, delay, queue, loss, T_s, delay_noise: black_box_function(
-                bandwidth, delay, queue, loss, T_s, delay_noise,
-                heuristic=self.heuristic, rl_method=self.rl_method),
-            pbounds=pbounds, random_state=seed)
-        logger = JSONLogger(path=os.path.join(save_dir, "bo_logs.json"))
-        self.optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -138,18 +134,26 @@ class Genet:
     def train(self):
         """Genet trains rl_method."""
         for i in range(12):
-            best_param = self.find_best_param()
+            optimizer = BayesianOptimization(
+                f=lambda bandwidth, delay, queue, loss, T_s,
+                delay_noise: self.black_box_function(
+                    bandwidth, delay, queue, loss, T_s, delay_noise,
+                    heuristic=self.heuristic, rl_method=self.rl_method),
+                pbounds=self.pbounds, random_state=self.seed+i)
+            os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
+                        exist_ok=True)
+            logger = JSONLogger(path=os.path.join(
+                self.save_dir, "bo_{}_logs.json".format(i)))
+            optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
+            optimizer.maximize(init_points=13, n_iter=2, kappa=20, xi=0.1)
+            best_param = optimizer.max
             print(best_param)
             self.rand_ranges.add_ranges([best_param['params']])
             self.cur_config_file = os.path.join(
                 self.save_dir, "bo_"+str(i) + ".json")
             self.rand_ranges.dump(self.cur_config_file)
-            self.rl_method.train(self.cur_config_file, 3.6e4, 500)
-
-    def find_best_param(self):
-        self.optimizer.maximize(init_points=13, n_iter=2, kappa=20, xi=0.1)
-        best_param = self.optimizer.max
-        return best_param
+            self.rl_method.log_dir = os.path.join(self.save_dir, "bo_{}".format(i))
+            self.rl_method.train(self.cur_config_file, 7.2e4, 100)
 
 
 def black_box_function(bandwidth: float, delay: float, queue: Union[int, float],
@@ -165,16 +169,16 @@ def black_box_function(bandwidth: float, delay: float, queue: Union[int, float],
                            T_s_range=(T_s, T_s),
                            delay_noise_range=(delay_noise, delay_noise),
                            constant_bw=False)
-    print("trace generation used {}s".format(time.time() - t_start))
-    t_start = time.time()
+    # print("trace generation used {}s".format(time.time() - t_start))
+    # t_start = time.time()
     # heuristic_reward, _ = heuristic.test(trace)
     heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
         trace, rl_method.log_dir)
-    print("heuristic used {}s".format(time.time() - t_start))
+    # print("heuristic used {}s".format(time.time() - t_start))
     t_start = time.time()
     _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(
         trace, rl_method.log_dir)
-    print("rl_method used {}s".format(time.time() - t_start))
+    # print("rl_method used {}s".format(time.time() - t_start))
     rl_mi_level_reward = np.mean(reward_list)
 
     rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
