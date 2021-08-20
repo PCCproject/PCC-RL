@@ -5,12 +5,15 @@ from typing import Callable, Dict, List, Set, Union
 
 import numpy as np
 from bayes_opt import BayesianOptimization
-# from bayes_opt.event import DEFAULT_EVENTS, Events
+from bayes_opt.logger import JSONLogger
+from bayes_opt.event import Events
 from common.utils import (read_json_file, set_seed, write_json_file)
 # from plot_scripts.plot_packet_log import PacketLog
 
+from plot_scripts.plot_packet_log import PacketLog
 from simulator.aurora import Aurora
-from simulator.cubic import Cubic
+# from simulator.cubic import Cubic
+from simulator.network_simulator.cubic import Cubic
 from simulator.trace import generate_trace
 
 MODEL_PATH = ""
@@ -64,6 +67,10 @@ class RandomizationRanges:
         for range_map in range_maps:
             range_map_to_add = dict()
             for param in self.parameters:
+                if param == 'duration':
+                    range_map_to_add[param] = [30, 30]
+                    continue
+
                 assert param in range_map, "range_map does not contain '{}'".format(
                     param)
                 range_map_to_add[param] = [range_map[param], range_map[param]]
@@ -110,15 +117,19 @@ class Genet:
         self.rand_ranges = RandomizationRanges(config_file)
         self.param_names = self.rand_ranges.get_parameter_names()
         pbounds = self.rand_ranges.get_original_range()
+        if 'duration' in pbounds:
+            pbounds.pop('duration')
 
         self.save_dir = save_dir
         self.heuristic = heuristic
         self.rl_method = rl_method
         self.optimizer = BayesianOptimization(
-            f=lambda bandwidth, delay, queue, loss, T_s, d_bw, d_delay: black_box_function(
-                bandwidth, delay, queue, loss, T_s, d_bw, d_delay,
+            f=lambda bandwidth, delay, queue, loss, T_s, delay_noise: black_box_function(
+                bandwidth, delay, queue, loss, T_s, delay_noise,
                 heuristic=self.heuristic, rl_method=self.rl_method),
             pbounds=pbounds, random_state=seed)
+        logger = JSONLogger(path=os.path.join(save_dir, "bo_logs.json"))
+        self.optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -142,26 +153,30 @@ class Genet:
         return best_param
 
 
-def black_box_function(bandwidth, delay, queue, loss, T_s, heuristic, rl_method):
+def black_box_function(bandwidth, delay, queue, loss, T_s, delay_noise, heuristic, rl_method):
     t_start = time.time()
     trace = generate_trace(duration_range=(30, 30),
-                           bandwidth_range=(1, bandwidth),
+                           bandwidth_range=(0.6, bandwidth),
                            delay_range=(delay, delay),
                            loss_rate_range=(loss, loss),
                            queue_size_range=(queue, queue),
                            T_s_range=(T_s, T_s),
-                           delay_noise_range=(0, 0),
+                           delay_noise_range=(delay_noise, delay_noise),
                            constant_bw=False)
     print("trace generation used {}s".format(time.time() - t_start))
     t_start = time.time()
-    heuristic_reward, _ = heuristic.test(trace)
+    # heuristic_reward, _ = heuristic.test(trace)
+    heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(trace, 'test')
     print("heuristic used {}s".format(time.time() - t_start))
     t_start = time.time()
-    _, reward_list, _, _, _, _, \
-        _, _, _, _ = rl_method.test(trace, 'test')
+    _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(trace, 'test')
     print("rl_method used {}s".format(time.time() - t_start))
-    rl_method_reward = np.mean(reward_list)
-    return heuristic_reward - rl_method_reward
+    rl_mi_level_reward = np.mean(reward_list)
+
+    rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
+    return heuristic_pkt_level_reward - rl_pkt_level_reward
+    # return heuristic_mi_level_reward - rl_mi_level_reward
+
     # reward_diffs = []
     # cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
     #
@@ -181,10 +196,11 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    cubic = Cubic(args.save_dir, args.seed)
+    # cubic = Cubic(args.save_dir, args.seed)
+    cubic = Cubic(True)
     aurora = Aurora(seed=args.seed, log_dir=args.save_dir,
                     pretrained_model_path=args.model_path,
-                    timesteps_per_actorbatch=10, delta_scale=1)
+                    timesteps_per_actorbatch=7200, delta_scale=1)
     genet = Genet(args.config_file, args.save_dir, black_box_function, cubic,
                   aurora)
     genet.train()

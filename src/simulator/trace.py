@@ -312,8 +312,8 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
             duration_min, duration_max = duration, duration
 
         # used by bandwidth generation
-        d_bw_min, d_bw_max = env_config['d_bw'] if 'd_bw' in env_config else (0, 0)
-        d_delay_min, d_delay_max = env_config['d_delay'] if 'd_delay' in env_config else (0, 0)
+        # d_bw_min, d_bw_max = env_config['d_bw'] if 'd_bw' in env_config else (0, 0)
+        # d_delay_min, d_delay_max = env_config['d_delay'] if 'd_delay' in env_config else (0, 0)
         delay_noise_min, delay_noise_max = env_config['delay_noise'] if 'delay_noise' in env_config else (0, 0)
         T_s_min, T_s_max = env_config['T_s'] if 'T_s' in env_config else (1, 1)
         trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
@@ -323,11 +323,11 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
                                    (delay_min, delay_max),
                                    (loss_min, loss_max),
                                    (queue_min, queue_max),
-                                   (d_bw_min, d_bw_max),
-                                   (d_delay_min, d_delay_max),
                                    (T_s_min, T_s_max),
                                    (delay_noise_min, delay_noise_max),
                                    constant_bw=constant_bw)
+                                   # (d_bw_min, d_bw_max),
+                                   # (d_delay_min, d_delay_max),
             traces.append(trace)
     return traces
 
