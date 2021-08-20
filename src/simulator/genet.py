@@ -7,9 +7,8 @@ import numpy as np
 from bayes_opt import BayesianOptimization
 from bayes_opt.logger import JSONLogger
 from bayes_opt.event import Events
-from common.utils import (read_json_file, set_seed, write_json_file)
-# from plot_scripts.plot_packet_log import PacketLog
 
+from common.utils import (read_json_file, set_seed, write_json_file)
 from plot_scripts.plot_packet_log import PacketLog
 from simulator.aurora import Aurora
 # from simulator.cubic import Cubic
@@ -153,7 +152,10 @@ class Genet:
         return best_param
 
 
-def black_box_function(bandwidth, delay, queue, loss, T_s, delay_noise, heuristic, rl_method):
+def black_box_function(bandwidth: float, delay: float, queue: Union[int, float],
+                       loss: float, T_s: float, delay_noise: float,
+                       heuristic, rl_method):
+    queue = int(queue)
     t_start = time.time()
     trace = generate_trace(duration_range=(30, 30),
                            bandwidth_range=(0.6, bandwidth),
@@ -166,30 +168,18 @@ def black_box_function(bandwidth, delay, queue, loss, T_s, delay_noise, heuristi
     print("trace generation used {}s".format(time.time() - t_start))
     t_start = time.time()
     # heuristic_reward, _ = heuristic.test(trace)
-    heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(trace, 'test')
+    heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
+        trace, rl_method.log_dir)
     print("heuristic used {}s".format(time.time() - t_start))
     t_start = time.time()
-    _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(trace, 'test')
+    _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(
+        trace, rl_method.log_dir)
     print("rl_method used {}s".format(time.time() - t_start))
     rl_mi_level_reward = np.mean(reward_list)
 
     rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
     return heuristic_pkt_level_reward - rl_pkt_level_reward
     # return heuristic_mi_level_reward - rl_mi_level_reward
-
-    # reward_diffs = []
-    # cubic_rewards, cubic_pkt_log = test_cubic_on_trace(trace, "tmp", 20)
-    #
-    # aurora = Aurora(seed=20, log_dir="tmp", timesteps_per_actorbatch=10,
-    #                 pretrained_model_path=MODEL_PATH, delta_scale=1)
-    # ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, \
-    #     action_list, obs_list, mi_list, pkt_log = aurora.test(trace, 'tmp')
-    # reward_diffs.append(PacketLog.from_log(cubic_pkt_log).get_reward(None, trace=trace)
-    #                     - PacketLog.from_log(pkt_log).get_reward(None, trace=trace))
-    # reward_diffs.append(np.mean(np.array(cubic_rewards)
-    #                             ) - np.mean(np.array(reward_list)))
-
-    # return np.mean(np.array(reward_diffs))
 
 
 def main():
