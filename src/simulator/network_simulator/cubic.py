@@ -197,6 +197,20 @@ class Cubic:
         self.record_pkt_log = record_pkt_log
 
     def test(self, trace: Trace, save_dir: str) -> Tuple[float, float]:
+        """Test a network trace and return rewards.
+
+        The 1st return value is the reward in Monitor Interval(MI) level and
+        the length of MI is 1 srtt. The 2nd return value is the reward in
+        packet level. It is computed by using throughput, average rtt, and
+        loss rate in each 500ms bin of the packet log. The 2nd value will be 0
+        if record_pkt_log flag is False.
+
+        Args:
+            trace: network trace.
+            save_dir: where a MI level log will be saved if save_dir is a
+                valid path. A packet level log will be saved if record_pkt_log
+                flag is True and save_dir is a valid path.
+        """
 
         links = [Link(trace), Link(trace)]
         senders = [TCPCubicSender(0, 0)]
@@ -205,16 +219,19 @@ class Cubic:
         rewards = []
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
-        writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
-            self.cc_name)), 'w', 1), lineterminator='\n')
-        writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
-                             'loss', 'reward', "action", "bytes_sent",
-                             "bytes_acked", "bytes_lost", "send_start_time",
-                             "send_end_time", 'recv_start_time',
-                             'recv_end_time', 'latency_increase',
-                             "packet_size", 'bandwidth', "queue_delay",
-                             'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto"])
+        if save_dir:
+            writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
+                self.cc_name)), 'w', 1), lineterminator='\n')
+            writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
+                                 'loss', 'reward', "action", "bytes_sent",
+                                 "bytes_acked", "bytes_lost", "send_start_time",
+                                 "send_end_time", 'recv_start_time',
+                                 'recv_end_time', 'latency_increase',
+                                 "packet_size", 'bandwidth', "queue_delay",
+                                 'packet_in_queue', 'queue_size', 'cwnd',
+                                 'ssthresh', "rto", "packets_in_flight"])
+        else:
+            writer = None
 
         while True:
             net.run(run_dur)
@@ -232,22 +249,23 @@ class Cubic:
             rewards.append(reward)
             ssthresh = senders[0].ssthresh
             action = 0
-
-            writer.writerow([
-                net.get_cur_time(), send_rate, throughput, latency, loss,
-                reward, action, mi.bytes_sent, mi.bytes_acked, mi.bytes_lost,
-                mi.send_start, mi.send_end, mi.recv_start, mi.recv_end,
-                mi.get('latency increase'), mi.packet_size,
-                links[0].get_bandwidth(net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
-                avg_queue_delay, links[0].pkt_in_queue, links[0].queue_size,
-                senders[0].cwnd, ssthresh, senders[0].rto])
+            if save_dir and writer:
+                writer.writerow([
+                    net.get_cur_time(), send_rate, throughput, latency, loss,
+                    reward, action, mi.bytes_sent, mi.bytes_acked, mi.bytes_lost,
+                    mi.send_start, mi.send_end, mi.recv_start, mi.recv_end,
+                    mi.get('latency increase'), mi.packet_size,
+                    links[0].get_bandwidth(net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
+                    avg_queue_delay, links[0].pkt_in_queue, links[0].queue_size,
+                    senders[0].cwnd, ssthresh, senders[0].rto,
+                    senders[0].bytes_in_flight / BYTES_PER_PACKET])
             if senders[0].srtt:
                 run_dur = senders[0].srtt
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
         pkt_level_reward = 0
-        if self.record_pkt_log:
+        if self.record_pkt_log and save_dir:
             with open(os.path.join(
                 save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
                 pkt_logger = csv.writer(f, lineterminator='\n')
