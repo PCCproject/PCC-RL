@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import Trace
-from common.utils import read_json_file, pcc_aurora_reward
+from common.utils import pcc_aurora_reward
 
 
 PLOT = True
@@ -41,8 +42,8 @@ def main():
         if PLOT:
             fig, axes = plt.subplots(6, 1, figsize=(12, 10))
             axes[0].set_title(cc)
-            avg_send_rate = df['bytes_sent'].sum() / df['timestamp'].iloc[-1] * 8 /1e6
-            avg_recv_rate = df['bytes_acked'].sum() / df['timestamp'].iloc[-1] * 8 /1e6
+            avg_send_rate = df['bytes_sent'].sum() / df['timestamp'].iloc[-1] * BITS_PER_BYTE /1e6
+            avg_recv_rate = df['bytes_acked'].sum() / df['timestamp'].iloc[-1] * BITS_PER_BYTE /1e6
             axes[0].plot(df['timestamp'], df['recv_rate'] / 1e6, 'o-', ms=2,
                     label='throughput, avg {:.3f}mbps, {:.3f}'.format(
                              df['recv_rate'].mean() / 1e6, avg_recv_rate))
@@ -99,14 +100,14 @@ def main():
             axes[2].set_xlim(0, )
             axes[2].set_ylim(0, 1)
 
-            avg_reward = pcc_aurora_reward(avg_recv_rate / 1e6 / 8 / 1500,
+            avg_reward = pcc_aurora_reward(avg_recv_rate / 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
                                            avg_lat /1000, avg_loss,
-                                           avg_bw / 1e6/ 8 / 1500, min_rtt)
+                                           avg_bw / 1e6/ BITS_PER_BYTE / BYTES_PER_PACKET, min_rtt)
 
             avg_reward_mi = pcc_aurora_reward(
-                    df['recv_rate'].mean() / 8 / 1500,
+                    df['recv_rate'].mean() / BITS_PER_BYTE / BYTES_PER_PACKET,
                     df['latency'].mean(), df['loss'].mean(),
-                    avg_bw * 1e6/ 8 / 1500, min_rtt)
+                    avg_bw * 1e6/ BITS_PER_BYTE / BYTES_PER_PACKET, min_rtt)
 
 
             axes[3].plot(df['timestamp'], df['reward'],
