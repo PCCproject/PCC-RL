@@ -521,25 +521,17 @@ class SimulatedNetworkEnv(gym.Env):
     def __init__(self, traces, history_len=10,
                  # features="sent latency inflation,latency ratio,send ratio",
                  features="sent latency inflation,latency ratio,recv ratio",
-                 congestion_control_type="aurora", train_flag=False,
-                 delta_scale=1.0, config_file=None):
+                 train_flag=False, delta_scale=1.0, config_file=None):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
-        assert congestion_control_type in {"aurora", "cubic"}, \
-            "Unrecognized congestion_control_type {}.".format(
-                congestion_control_type)
         # self.replay = EmuReplay()
         self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
         self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
-        self.congestion_control_type = congestion_control_type
-        if self.congestion_control_type == 'aurora':
-            self.use_cwnd = False
-        elif self.congestion_control_type == 'cubic':
-            self.use_cwnd = True
+        self.use_cwnd = False
 
         self.history_len = history_len
         # print("History length: %d" % history_len)
@@ -629,40 +621,34 @@ class SimulatedNetworkEnv(gym.Env):
     def create_new_links_and_senders(self):
         # self.replay.reset()
         self.links = [Link(self.current_trace), Link(self.current_trace)]
-        if self.congestion_control_type == "aurora":
-            if not self.train_flag:
+        if not self.train_flag:
 
-                self.senders = [Sender(  # self.replay.get_rate(),
-                    # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
-                    # 12000000 / 8 /BYTES_PER_PACKET / 0.048,
-                    10 / (self.current_trace.get_delay(0) *2/1000),
-                    # 100,
-                    [self.links[0], self.links[1]], 0,
-                    self.features,
-                    history_len=self.history_len,
-                    delta_scale=self.delta_scale)]
-            else:
-                # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
-                #                        [self.links[0], self.links[1]], 0,
-                #                        self.features,
-                #                        history_len=self.history_len)]
-                # self.senders = [Sender(random.uniform(10/bw, 1.5) * bw,
-                #                        [self.links[0], self.links[1]], 0,
-                #                        self.features,
-                #                        history_len=self.history_len,
-                #                        delta_scale=self.delta_scale)]
-                self.senders = [Sender(
-                    # 100,
-                    10 / (self.current_trace.get_delay(0) *2/1000),
-                                       [self.links[0], self.links[1]], 0,
-                                       self.features,
-                                       history_len=self.history_len,
-                                       delta_scale=self.delta_scale)]
-        elif self.congestion_control_type == "cubic":
-            raise NotImplementedError
+            self.senders = [Sender(  # self.replay.get_rate(),
+                # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
+                # 12000000 / 8 /BYTES_PER_PACKET / 0.048,
+                10 / (self.current_trace.get_delay(0) *2/1000),
+                # 100,
+                [self.links[0], self.links[1]], 0,
+                self.features,
+                history_len=self.history_len,
+                delta_scale=self.delta_scale)]
         else:
-            raise RuntimeError("Unrecognized congestion_control_type {}".format(
-                self.congestion_control_type))
+            # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
+            #                        [self.links[0], self.links[1]], 0,
+            #                        self.features,
+            #                        history_len=self.history_len)]
+            # self.senders = [Sender(random.uniform(10/bw, 1.5) * bw,
+            #                        [self.links[0], self.links[1]], 0,
+            #                        self.features,
+            #                        history_len=self.history_len,
+            #                        delta_scale=self.delta_scale)]
+            self.senders = [Sender(
+                # 100,
+                10 / (self.current_trace.get_delay(0) *2/1000),
+                                   [self.links[0], self.links[1]], 0,
+                                   self.features,
+                                   history_len=self.history_len,
+                                   delta_scale=self.delta_scale)]
         # self.run_dur = 3 * lat
         # self.run_dur = 1 * lat
         if not self.senders[0].rtt_samples:
