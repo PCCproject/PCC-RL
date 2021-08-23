@@ -27,6 +27,8 @@ def parse_args():
                         help="path to Aurora model to start from.")
     parser.add_argument("--config-file", type=str,
                         help="Path to configuration file.")
+    parser.add_argument("--bo-rounds", type=int, default=30,
+                        help="Rounds of BO.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
 
     return parser.parse_args()
@@ -131,9 +133,13 @@ class Genet:
         #     subscriber=my_observer,
         #     callback=None)
 
-    def train(self):
-        """Genet trains rl_method."""
-        for i in range(12):
+    def train(self, rounds: int):
+        """Genet trains rl_method.
+        Args
+            rounds: rounds of BO.
+
+        """
+        for i in range(rounds):
             optimizer = BayesianOptimization(
                 f=lambda bandwidth, delay, queue, loss, T_s,
                 delay_noise: self.black_box_function(
@@ -158,7 +164,7 @@ class Genet:
 
 def black_box_function(bandwidth: float, delay: float, queue: Union[int, float],
                        loss: float, T_s: float, delay_noise: float,
-                       heuristic, rl_method):
+                       heuristic, rl_method) -> float:
     queue = int(queue)
     t_start = time.time()
     trace = generate_trace(duration_range=(30, 30),
@@ -197,7 +203,7 @@ def main():
                     timesteps_per_actorbatch=7200, delta_scale=1)
     genet = Genet(args.config_file, args.save_dir, black_box_function, cubic,
                   aurora)
-    genet.train()
+    genet.train(args.bo_rounds)
 
 
 if __name__ == "__main__":

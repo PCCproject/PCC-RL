@@ -60,8 +60,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List = [],
-                 verbose=0, patience=10, steps_trained=0, config_file=None,
-                 tot_trace_cnt=100, update_training_traces_freq=5):
+                 verbose=0, steps_trained=0, config_file=None, tot_trace_cnt=100):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
@@ -72,7 +71,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.val_traces = val_traces
         self.config_file = config_file
         self.tot_trace_cnt=tot_trace_cnt
-        self.update_training_traces_freq = update_training_traces_freq
         if self.aurora.comm.Get_rank() == 0:
             self.val_log_writer = csv.writer(
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
@@ -83,7 +81,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         else:
             self.val_log_writer = None
         self.best_val_reward = -np.inf
-        self.patience = patience
         self.val_times = 0
 
         self.t_start = time.time()
@@ -96,13 +93,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         if self.n_calls % self.check_freq == 0:
-            # self.val_times += 1
-            # if self.val_times % self.update_training_traces_freq == 0:
-            #     training_traces = generate_traces(
-            #         self.config_file, self.tot_trace_cnt, duration=30,
-            #         constant_bw=False)
-            #     self.model.env.traces = training_traces
-
             # Retrieve training reward
             # x, y = ts2xy(load_results(self.log_dir), 'timesteps')
             # if len(x) > 0:
@@ -218,9 +208,10 @@ class Aurora():
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
-                                      timesteps_per_actorbatch/4),
-                                  optim_epochs=4,
-                                  gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
+                                      timesteps_per_actorbatch/12),
+                                  optim_epochs=12, gamma=gamma,
+                                  tensorboard_log=tensorboard_log,
+                                  n_cpu_tf_sess=1)
                 # print('create_ppo1,{}'.format(time.time() - model_create_start))
                 tf_restore_start = time.time()
                 with self.model.graph.as_default():
@@ -240,8 +231,8 @@ class Aurora():
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
                               optim_batchsize=int(timesteps_per_actorbatch/12),
-                              optim_epochs=12,
-                              gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
+                              optim_epochs=12, gamma=gamma,
+                              tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
     def train(self, config_file,
@@ -254,7 +245,7 @@ class Aurora():
                                           duration=30, constant_bw=False)
         # generate validation traces
         validation_traces = generate_traces(
-            config_file, 100, duration=30, constant_bw=False)
+            config_file, 20, duration=30, constant_bw=False)
         env = gym.make('PccNs-v0', traces=training_traces,
                        train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)
@@ -265,8 +256,7 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_traces=validation_traces,
-            config_file=config_file, tot_trace_cnt=tot_trace_cnt,
-            update_training_traces_freq=10)
+            config_file=config_file, tot_trace_cnt=tot_trace_cnt)
         self.model.learn(total_timesteps=total_timesteps,
                          tb_log_name=tb_log_name, callback=callback)
 
@@ -420,7 +410,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio])
+                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, sender_mi.rtt_samples])
                 reward_list.append(reward)
                 loss_list.append(loss)
                 delay_list.append(latency * 1000)
@@ -443,12 +433,3 @@ class Aurora():
                                  'packet_in_queue', 'sending_rate', 'bandwidth'])
             pkt_logger.writerows(env.net.pkt_log)
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
-
-def test_model(model_path: str, trace: Trace, save_dir: str, seed: int):
-    model = Aurora(seed, "", 10, model_path)
-    pid = os.getpid()
-    # print(pid, 'create model')
-
-    # ret = model.test(trace, save_dir)
-    print(pid, 'return')
-    return ret
