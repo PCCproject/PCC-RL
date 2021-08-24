@@ -13,6 +13,7 @@ from plot_scripts.plot_packet_log import PacketLog
 from simulator.aurora import Aurora
 # from simulator.cubic import Cubic
 from simulator.network_simulator.cubic import Cubic
+from simulator.network_simulator.bbr import BBR
 from simulator.trace import generate_trace
 
 MODEL_PATH = ""
@@ -30,10 +31,14 @@ def parse_args():
     parser.add_argument("--bo-rounds", type=int, default=30,
                         help="Rounds of BO.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
+    parser.add_argument('--heuristic', type=str, default="cubic",
+                        choices=('bbr', 'cubic'),
+                        help='Congestion control rule based method.')
 
     return parser.parse_args()
 
 
+# TODO: add more new configuraiton adding policies
 class RandomizationRanges:
     """Manage randomization ranges used in GENET training."""
 
@@ -197,12 +202,17 @@ def main():
     set_seed(args.seed)
 
     # cubic = Cubic(args.save_dir, args.seed)
-    cubic = Cubic(True)
+    if args.heuristic == 'bbr':
+        heuristic = BBR(True)
+    elif args.heuristic == 'cubic':
+        heuristic = Cubic(True)
+    else:
+        raise ValueError
     aurora = Aurora(seed=args.seed, log_dir=args.save_dir,
                     pretrained_model_path=args.model_path,
                     timesteps_per_actorbatch=7200, delta_scale=1)
-    genet = Genet(args.config_file, args.save_dir, black_box_function, cubic,
-                  aurora)
+    genet = Genet(args.config_file, args.save_dir, black_box_function,
+                  heuristic, aurora)
     genet.train(args.bo_rounds)
 
 
