@@ -1,11 +1,17 @@
 from typing import Union
+from simulator.network_simulator.packet import Packet
 from simulator.network_simulator.pcc.monitor_interval import MonitorInterval
+from simulator.network_simulator.pcc.vivace.vivace_latency import VivaceLatencySender
 
 
 class MonitorIntervalQueue:
 
-    def __init__(self) -> None:
+    def __init__(self, sender: VivaceLatencySender) -> None:
         self.q = []
+        self.sender = sender
+        self.num_useful_intervals = 0
+        self.num_available_intervals = 0
+        self.mi_cnt = 0
 
     def push(self, mi: MonitorInterval) -> None:
         self.q.append(mi)
@@ -19,7 +25,7 @@ class MonitorIntervalQueue:
     def empty(self) -> bool:
         return len(self.q) == 0
 
-    def current_mi(self) -> MonitorInterval:
+    def current(self) -> MonitorInterval:
         if self.empty():
             raise RuntimeError("MI queue is empty!")
         return self.q[-1]
@@ -29,14 +35,20 @@ class MonitorIntervalQueue:
             raise RuntimeError("MI queue is empty!")
         return self.q[0]
 
-    def on_pkt_sent(self, ts: float, pkt_id: int,
-                    target_send_rate: float) -> None:
+    def on_packet_sent(self, pkt: Packet, sent_interval: float) -> None:
         if self.empty():
-            raise RuntimeError("MI queue is empty!")
-        current_mi = self.q[-1]
-        current_mi.on_pkt_sent(ts, pkt_id, target_send_rate)
+            # raise RuntimeError("MI queue is empty!")
+            return
+        cur_mi = self.q[-1]
+        if cur_mi.bytes_sent == 0:
+            cur_mi.first_packet_sent_time = pkt.sent_time
+            cur_mi.first_packet_id = pkt.pkt_id
+        self.q[-1].last_packet_sent_time = pkt.sent_time
+        self.q[-1].last_packet_id = pkt.pkt_id
+        self.q[-1].bytes_sent += pkt.pkt_size
+        self.q[-1].packet_sent_intervals.push_back(sent_interval)
 
-    def on_pkt_acked(self, ts: float, pkt_id: int, rtt: float,
+    def on_packet_acked(self, ts: float, pkt_id: int, rtt: float,
                      queue_delay: float) -> None:
         if self.empty():
             raise RuntimeError("MI queue is empty!")
@@ -72,3 +84,23 @@ class MonitorIntervalQueue:
         for mi in self.q:
             output += str(mi.mi_id) + ", "
         print(output)
+
+    def extend_current_interval(self):
+        if self.empty():
+            raise RuntimeError("MI queue is empty!")
+        self.q[-1].is_monitor_duration_extended = True
+
+    def enqueue_new_monitor_interval(
+        self, sending_rate: float, is_useful: bool,
+        rtt_fluctuation_tolerance_ratio: float, rtt: float) -> None:
+        if is_useful:
+            self.num_useful_intervals += 1
+        mi = MonitorInterval(self.mi_cnt, sending_rate, is_useful,
+                             rtt_fluctuation_tolerance_ratio, rtt)
+        self.q.append(mi)
+        self.mi_cnt += 1
+
+    def on_rtt_inflation_in_starting(self):
+        self.q = []
+        self.num_useful_intervals = 0
+        self.num_available_intervals = 0

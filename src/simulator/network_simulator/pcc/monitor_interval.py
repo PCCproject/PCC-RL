@@ -8,13 +8,12 @@ from simulator.network_simulator.constants import BYTES_PER_PACKET, START_SENDIN
 
 class MonitorInterval:
 
-    def __init__(self, mi_id: int, sender_id: int,
-                 send_rate: float = START_SENDING_RATE,
-                 end_time: float = 0) -> None:
+    def __init__(self, mi_id: int, send_rate: float,
+                 is_useful: bool, rtt_fluctuation_tolerance_ratio: float,
+                 rtt: float, end_time: float = 0) -> None:
         self.send_rate = send_rate
         self.end_time = end_time
         self.features = {}
-        self.sender_id = sender_id
         self.bytes_sent = 0
         self.bytes_acked = 0
         self.bytes_lost = 0
@@ -32,6 +31,13 @@ class MonitorInterval:
         self.last_pkt_id = -1  # last pkt sent
 
         self.mi_id = mi_id
+
+        # added for Vivace
+        self.is_monitor_duration_extended = False
+        self.num_reliable_rtt = 0
+        self.has_enough_reliable_rtt = False
+        self.is_useful = True
+        self.rtt_on_monitor_start = 0
 
     def debug_print(self) -> None:
         print("mi_id={}, end_time={:.3f}s, send_rate={:.0f}bps, "
@@ -73,7 +79,7 @@ class MonitorInterval:
         self.send_rate = target_send_rate
 
     def on_pkt_acked(self, ts: float, pkt_id: int, rtt: float,
-                     queue_delay:float) -> None:
+                     queue_delay: float) -> None:
         if self.contain_pkt(pkt_id):
             self.bytes_acked += BYTES_PER_PACKET
             self.rtt_samples.append(round(rtt, 9))
