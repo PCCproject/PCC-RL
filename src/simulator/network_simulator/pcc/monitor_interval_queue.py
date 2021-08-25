@@ -5,6 +5,8 @@ from simulator.network_simulator.pcc.vivace.vivace_latency import VivaceLatencyS
 
 
 class MonitorIntervalQueue:
+    # Minimum number of reliable RTT samples per monitor interval.
+    kMinReliableRtt = 4
 
     def __init__(self, sender: VivaceLatencySender) -> None:
         self.q = []
@@ -12,6 +14,14 @@ class MonitorIntervalQueue:
         self.num_useful_intervals = 0
         self.num_available_intervals = 0
         self.mi_cnt = 0
+        self.pending_acked_packets = []
+        self.pending_avg_rtt = 0.0
+        self.burst_flag = False
+        self.pending_ack_interval = 0.0
+        self.pending_event_time = 0.0
+        self.pending_rtt = 0.0
+        self.pending_avg_rtt = 0.0
+        self.avg_interval_ratio = -1.0
 
     def push(self, mi: MonitorInterval) -> None:
         self.q.append(mi)
@@ -48,16 +58,101 @@ class MonitorIntervalQueue:
         self.q[-1].bytes_sent += pkt.pkt_size
         self.q[-1].packet_sent_intervals.push_back(sent_interval)
 
-    def on_packet_acked(self, ts: float, pkt_id: int, rtt: float,
-                     queue_delay: float) -> None:
+    def on_packet_acked(self, pkt, ack_interval: float, latest_rtt: float,
+            avg_rtt: float, min_rtt: float) -> None:
         if self.empty():
             raise RuntimeError("MI queue is empty!")
-        for mi in self.q:
-            if mi.all_pkts_accounted_for(ts):
-                continue
-            mi.on_pkt_acked(ts, pkt_id, rtt, queue_delay)
+        self.num_available_intervals = 0
 
-    def on_pkt_lost(self, ts, pkt_id) -> None:
+        if self.num_useful_intervals == 0:
+            # Skip all the received packets if no intervals are useful.
+            return
+        has_invalid_utility = False
+
+        for mi in self.q:
+            if not mi.is_useful:
+                continue
+            for pending_acked_pkt in self.pending_acked_packets:
+                if mi.contain_pkt(pending_acked_pkt):
+                    if mi.bytes_acked == 0:
+                        mi.rtt_on_monitor_start = self.pending_avg_rtt
+                    mi.bytes_acked += pending_acked_pkt.pkt_size
+                    is_reliable = False
+                    if self.pending_ack_interval != 0:
+                        interval_ratio = self.pending_ack_interval / ack_interval
+                        if interval_ratio < 1.0:
+                            interval_ratio = 1.0 / interval_ratio
+
+                        if self.avg_interval_ratio < 0:
+                            self.avg_interval_ratio = interval_ratio
+
+
+                        if interval_ratio > 50.0 * self.avg_interval_ratio:
+                            self.burst_flag = True
+                        elif self.burst_flag:
+                            if latest_rtt > self.pending_rtt and self.pending_rtt < self.pending_avg_rtt:
+                                self.burst_flag = False
+                        else:
+                            is_reliable = True
+                            mi.num_reliable_rtt += 1
+
+                        self.avg_interval_ratio = self.avg_interval_ratio * 0.9 + interval_ratio * 0.1
+                    is_reliable_for_gradient_calculation = False
+                    if is_reliable:
+                        is_reliable_for_gradient_calculation = True
+                        mi.num_reliable_rtt_for_gradient_calculation += 1
+
+
+                    mi.packet_rtt_samples.push_back(PacketRttSample(
+                        pending_acked_pkt.packet_number, self.pending_rtt, self.pending_event_time,
+                        is_reliable, is_reliable_for_gradient_calculation))
+                    if mi.num_reliable_rtt >= self.kMinReliableRtt:
+                        mi.has_enough_reliable_rtt = True
+            if self.is_utility_available(mi):
+                mi.rtt_on_monitor_end = avg_rtt
+                mi.min_rtt = min_rtt
+                has_invalid_utility = self.has_invalid_utility(mi)
+                if has_invalid_utility:
+                    break
+
+                self.num_available_intervals += 1
+                assert self.num_available_intervals <= self.num_useful_intervals
+        self.pending_acked_packets = []
+        self.pending_acked_packets.append(pkt)
+        self.pending_rtt = latest_rtt
+        self.pending_avg_rtt = avg_rtt
+        self.pending_ack_interval = ack_interval
+        self.pending_event_time = pkt.ts
+
+        if self.num_useful_intervals > self.num_available_intervals and not has_invalid_utility:
+            return
+
+
+        if not has_invalid_utility:
+            assert self.num_useful_intervals > 0
+
+            useful_intervals = []
+            for mi in self.q:
+                if not mi.is_useful:
+                    continue
+
+                useful_intervals.append(mi)
+
+            assert self.num_available_intervals == len(useful_intervals)
+
+            self.sender.on_utility_available(useful_intervals, pkt.ts)
+
+        # Remove MonitorIntervals from the head of the queue,
+        # until all useful intervals are removed.
+        while self.num_useful_intervals > 0:
+            if self.q[0].is_useful:
+                self.num_useful_intervals -= 1
+            self.q.pop(0)
+
+        self.num_available_intervals = 0
+
+
+    def on_packet_lost(self, ts, pkt_id) -> None:
         if self.empty():
             raise RuntimeError("MI queue is empty!")
         for mi in self.q:
@@ -104,3 +199,12 @@ class MonitorIntervalQueue:
         self.q = []
         self.num_useful_intervals = 0
         self.num_available_intervals = 0
+
+    def is_utility_available(self, interval):
+        return (interval.has_enough_reliable_rtt and
+          interval.bytes_acked + interval.bytes_lost == interval.bytes_sent)
+
+
+    def has_invalid_utility(self, interval):
+        return interval.first_packet_sent_time == interval.last_packet_sent_time
+

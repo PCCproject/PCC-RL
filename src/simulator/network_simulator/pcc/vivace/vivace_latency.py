@@ -17,7 +17,7 @@ from simulator.network_simulator.network import Network
 from simulator.network_simulator.sender import Sender
 from simulator.network_simulator import packet
 from simulator.trace import Trace
-from simulator.network_simulator.pcc import monitor_interval_queue
+from simulator.network_simulator.pcc import monitor_interval_queue, utility_manager
 
 FLAGS_max_rtt_fluctuation_tolerance_ratio_in_starting = 100.0
 FLAGS_max_rtt_fluctuation_tolerance_ratio_in_decision_made = 1.0
@@ -31,6 +31,7 @@ kProbingStepSize = 0.05
 kDecisionMadeStepSize = 0.02
 # Maximum percentile step size for rate change in DECISION_MADE mode.
 kMaxDecisionMadeStepSize = 0.10
+
 
 class PccSenderMode(Enum):
     # Initial phase of the connection. Sending rate gets doubled as
@@ -69,6 +70,8 @@ class VivaceLatencySender(Sender):
         self.conn_start_time = 0.0
         self.rtt_on_inflation_start = 0.0
         self.latest_ack_timestamp = 0.0
+        self.latest_utility = 0.0
+        self.utility_manager = utility_manager.UtilityManager()
 
     def on_packet_sent(self, pkt: "packet.Packet") -> None:
         if self.conn_start_time == 0.0:
@@ -83,14 +86,15 @@ class VivaceLatencySender(Sender):
             is_useful = self.create_useful_interval()
             if is_useful:
                 self.mi_q.enqueue_new_monitor_interval(
-              self.pacing_rate, is_useful,
-              self.get_max_rtt_fluctuation_tolerance(), self.avg_rtt)
+                    self.pacing_rate, is_useful,
+                    self.get_max_rtt_fluctuation_tolerance(), self.avg_rtt)
             else:
                 self.mi_q.enqueue_new_monitor_interval(
-              self.get_sending_rate_for_non_useful_interval(),
-              is_useful, self.get_max_rtt_fluctuation_tolerance(), self.avg_rtt)
+                    self.get_sending_rate_for_non_useful_interval(),
+                    is_useful, self.get_max_rtt_fluctuation_tolerance(), self.avg_rtt)
 
-        self.mi_q.on_packet_sent(pkt, pkt.sent_time - self.latest_sent_timestamp)
+        self.mi_q.on_packet_sent(
+            pkt, pkt.sent_time - self.latest_sent_timestamp)
         self.latest_sent_timestamp = pkt.sent_time
         super().on_packet_sent(pkt)
 
@@ -110,11 +114,12 @@ class VivaceLatencySender(Sender):
         avg_rtt = self.avg_rtt
         if not self.has_seen_valid_rtt:
             self.has_seen_valid_rtt = True
-            # Update sending rate if the actual RTT is smaller than initial rtt value
-            # in RttStats, so PCC can start with larger rate and ramp up faster.
+            # Update sending rate if the actual RTT is smaller than initial rtt
+            # value in RttStats, so PCC can start with larger rate and ramp up
+            # faster.
             if self.latest_rtt < kInitialRtt:
-                self.pacing_rate = self.pacing_rate * (kInitialRtt / self.latest_rtt)
-
+                self.pacing_rate = self.pacing_rate * \
+                    (kInitialRtt / self.latest_rtt)
 
         if self.mode == PccSenderMode.STARTING and self.check_for_rtt_inflation():
             # Directly enter PROBING when rtt inflation already exceeds the
@@ -124,7 +129,8 @@ class VivaceLatencySender(Sender):
             self.enter_probing()
             return
 
-        self.mi_q.OnCongestionEvent(acked_packets, lost_packets, avg_rtt, self.latest_rtt, self.min_rtt, event_time, ack_interval)
+        self.mi_q.on_packet_acked(pkt, ack_interval, self.latest_rtt, avg_rtt,
+                                  self.min_rtt)
         return super().on_packet_acked(pkt)
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
@@ -180,7 +186,9 @@ class VivaceLatencySender(Sender):
         # In STARTING and DECISION_MADE mode, there should be at most one useful
         # intervals in the queue; while in PROBING mode, there should be at most
         # 2 * GetNumIntervalGroupsInProbing().
-        max_num_useful = 2 * self.get_num_interval_groups_in_probing() if self.mode == PccSenderMode.PROBING else 1
+        max_num_useful = 2 * \
+            self.get_num_interval_groups_in_probing(
+            ) if self.mode == PccSenderMode.PROBING else 1
         return self.mi_q.num_useful_intervals < max_num_useful
 
     def get_num_interval_groups_in_probing(self):
@@ -189,14 +197,13 @@ class VivaceLatencySender(Sender):
     def maybe_set_sending_rate(self):
         if (self.mode != PccSenderMode.PROBING or (
             self.mi_q.num_useful_intervals == 2 * self.get_num_interval_groups_in_probing()
-            and not self.mi_q.current().is_useful)):
+                and not self.mi_q.current().is_useful)):
             # Do not change sending rate when (1) current mode is STARTING or
             # DECISION_MADE (since sending rate is already changed in
             # OnUtilityAvailable), or (2) more than 2 *
             # GetNumIntervalGroupsInProbing() intervals have been created in
             # PROBING mode.
             return
-
 
         if self.mi_q.num_useful_intervals != 0:
             # Restore central sending rate.
@@ -211,16 +218,16 @@ class VivaceLatencySender(Sender):
         # interval with increased sending rate and an interval with decreased sending
         # rate. Which interval goes first is randomly decided.
         if self.mi_q.num_useful_intervals % 2 == 0:
-            self.direction = RateChangeDirection.INCREASE if random.randint(0, 9) % 2 == 1 else RateChangeDirection.DECREASE
+            self.direction = RateChangeDirection.INCREASE if random.randint(
+                0, 9) % 2 == 1 else RateChangeDirection.DECREASE
         else:
-            self.direction = RateChangeDirection.DECREASE if (self.direction == RateChangeDirection.INCREASE) else  RateChangeDirection.INCREASE
+            self.direction = RateChangeDirection.DECREASE if (
+                self.direction == RateChangeDirection.INCREASE) else RateChangeDirection.INCREASE
 
         if self.direction == RateChangeDirection.INCREASE:
             self.pacing_rate = self.pacing_rate * (1 + kProbingStepSize)
         else:
             self.pacing_rate = self.pacing_rate * (1 - kProbingStepSize)
-
-
 
     def restore_central_sending_rate(self):
         if self.mode == PccSenderMode.STARTING:
@@ -231,15 +238,20 @@ class VivaceLatencySender(Sender):
             # Change sending rate back to central probing rate.
             if self.mi_q.current().is_useful:
                 if self.direction == RateChangeDirection.INCREASE:
-                    self.pacing_rate = self.pacing_rate * (1.0 / (1 + kProbingStepSize))
+                    self.pacing_rate = self.pacing_rate * \
+                        (1.0 / (1 + kProbingStepSize))
                 else:
-                    self.pacing_rate = self.pacing_rate * (1.0 / (1 - kProbingStepSize))
+                    self.pacing_rate = self.pacing_rate * \
+                        (1.0 / (1 - kProbingStepSize))
         elif self.mode == PccSenderMode.DECISION_MADE:
             if self.direction == RateChangeDirection.INCREASE:
-                self.pacing_rate = self.pacing_rate * (1.0 / (1 + min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
+                self.pacing_rate = self.pacing_rate * \
+                    (1.0 / (1 + min(self.rounds *
+                     kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
             else:
-                self.pacing_rate = self.pacing_rate * (1.0 / (1 - min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
-
+                self.pacing_rate = self.pacing_rate * \
+                    (1.0 / (1 - min(self.rounds *
+                     kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
 
     def check_for_rtt_inflation(self) -> bool:
         if self.mi_q.empty() or self.mi_q.front().rtt_on_monitor_start == 0.0 or self.latest_rtt <= self.avg_rtt:
@@ -247,13 +259,11 @@ class VivaceLatencySender(Sender):
             self.rtt_on_inflation_start = 0.0
             return False
 
-
         # Once the latest RTT exceeds the smoothed RTT, store the corresponding
         # smoothed RTT as the RTT at the start of inflation. RTT inflation will
         # continue as long as latest RTT keeps being larger than smoothed RTT.
         if self.rtt_on_inflation_start == 0.0:
             self.rtt_on_inflation_start = self.avg_rtt
-
 
         max_inflation_ratio = 1 + self.get_max_rtt_fluctuation_tolerance()
         rtt_on_monitor_start = self.mi_q.current().rtt_on_monitor_start
@@ -265,7 +275,6 @@ class VivaceLatencySender(Sender):
             self.rtt_on_inflation_start = 0.0
 
         return is_inflated
-
 
     def get_max_rtt_fluctuation_tolerance(self) -> float:
         if self.mode == PccSenderMode.STARTING:
@@ -291,7 +300,6 @@ class VivaceLatencySender(Sender):
         #
         # return tolerance_ratio;
 
-
     def enter_probing(self):
         if self.mode == PccSenderMode.STARTING:
             # Fall back to the minimum between halved sending rate and
@@ -310,9 +318,8 @@ class VivaceLatencySender(Sender):
         self.mode = PccSenderMode.PROBING
         self.rounds = 1
 
-
     def get_sending_rate_for_non_useful_interval(self) -> float:
-        if self.mode ==  PccSenderMode.STARTING:
+        if self.mode == PccSenderMode.STARTING:
             # Use halved sending rate for non-useful intervals in STARTING.
             return self.pacing_rate * 0.5
         elif self.mode == PccSenderMode.PROBING:
@@ -327,13 +334,13 @@ class VivaceLatencySender(Sender):
             return self.pacing_rate * (1.0 / (1 + min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
         assert False
 
-
     def update_rtt(self, event_time, rtt: float):
         self.latest_rtt = rtt
         if self.rtt_deviation == 0:
             self.rtt_deviation = rtt / 2
         else:
-            self.rtt_deviation = 0.75 * self.rtt_deviation + 0.25 * abs(self.avg_rtt - rtt)
+            self.rtt_deviation = 0.75 * self.rtt_deviation + \
+                0.25 * abs(self.avg_rtt - rtt)
         if self.min_rtt_deviation == 0 or self.rtt_deviation < self.min_rtt_deviation:
             self.min_rtt_deviation = self.rtt_deviation
         if self.avg_rtt == 0:
@@ -345,9 +352,115 @@ class VivaceLatencySender(Sender):
 
         self.latest_ack_timestamp = event_time
 
+    def on_utility_available(self, useful_intervals, event_time):
+        # Calculate the utilities for all available intervals.
+        utility_info = []
+        for mi in useful_intervals:
+            utility_info.append(UtilityInfo(mi.sending_rate,
+                    self.utility_manager.calculate_utility(mi, event_time - self.conn_start_time)))
+        # /*std::cerr << "End MI (rate: "
+        #           << useful_intervals[i]->sending_rate.ToKBitsPerSecond()
+        #           << ", rtt "
+        #           << useful_intervals[i]->rtt_on_monitor_start.ToMicroseconds()
+        #           << "->"
+        #           << useful_intervals[i]->rtt_on_monitor_end.ToMicroseconds()
+        #           << ", " << useful_intervals[i]->rtt_fluctuation_tolerance_ratio
+        #           << ", " << useful_intervals[i]->bytes_acked << "/"
+        #           << useful_intervals[i]->bytes_sent << ") with utility "
+        #           << utility_manager_.CalculateUtility(useful_intervals[i])
+        #           << " (latest " << latest_utility_ << ")" << std::endl;*/
 
-    def on_utility_availabel(self):
-        raise NotImplementedError
+
+        if self.mode == PccSenderMode.STARTING:
+            assert len(utility_info) == 1
+            if (utility_info[0].utility > self.latest_utility):
+                # Stay in STARTING mode. Double the sending rate and update
+                # latest_utility.
+                self.pacing_rate = self.pacing_rate * 2
+                self.latest_utility = utility_info[0].utility
+                self.rounds += 1
+            else:
+                # Enter PROBING mode if utility decreases.
+                self.enter_probing()
+        elif self.mode == PccSenderMode.PROBING:
+            if self.can_make_decision(utility_info):
+                assert len(utility_info) == 2 * self.get_num_interval_groups_in_probing()
+                # Enter DECISION_MADE mode if a decision is made.
+                if utility_info[0].utility > utility_info[1].utility:
+                    if utility_info[0].sending_rate > utility_info[1].sending_rate:
+                        self.direction = RateChangeDirection.INCREASE
+                    else:
+                        self.direction = RateChangeDirection.DECREASE
+                else:
+                    if utility_info[0].sending_rate > utility_info[1].sending_rate:
+                        self.direction = RateChangeDirection.DECREASE
+                    else:
+                        self.direciton = RateChangeDirection.INCREASE
+                self.latest_utility = max(
+                    utility_info[2 * self.get_num_interval_groups_in_probing() - 2].utility,
+                    utility_info[2 * self.get_num_interval_groups_in_probing() - 1].utility)
+                self.enter_decision_made()
+            else:
+                # Stays in PROBING mode.
+                self.enter_probing()
+        elif self.mode == PccSenderMode.DECISION_MADE:
+            assert len(utility_info) == 1
+            if (utility_info[0].utility > self.latest_utility):
+                # Remain in DECISION_MADE mode. Keep increasing or decreasing
+                # the sending rate.
+                self.rounds += 1
+                if self.direction == RateChangeDirection.INCREASE:
+                    self.pacing_rate = self.pacing_rate * (1 + min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
+                else:
+                    self.pacing_rate = self.pacing_rate * (1 - min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
+
+                self.latest_utility = utility_info[0].utility
+            else:
+                # Enter PROBING mode if utility decreases.
+                self.enter_probing()
+
+    def can_make_decision(self, utility_info):
+        # Determine whether increased or decreased probing rate has better utility.
+        # Cannot make decision if number of utilities are less than
+        # 2 * GetNumIntervalGroupsInProbing(). This happens when sender does not have
+        # enough data to send.
+        if (utility_info.size() < 2 * self.get_num_interval_groups_in_probing()):
+            return False
+
+
+        increase = False
+        # All the probing groups should have consistent decision. If not, directly
+        # return false.
+        i = 0
+        while i < self.get_num_interval_groups_in_probing():
+            if utility_info[2 * i].utility > utility_info[2 * i + 1].utility:
+                increase_i =  utility_info[2 * i].sending_rate > utility_info[2 * i + 1].sending_rate
+            else:
+                increase_i = utility_info[2 * i].sending_rate < utility_info[2 * i + 1].sending_rate
+            if i == 0:
+                increase = increase_i
+
+            # Cannot make decision if groups have inconsistent results.
+            if increase_i != increase:
+                return False
+            i += 1
+
+        return True
+
+
+    def enter_decision_made(self):
+        assert self.mode == PccSenderMode.PROBING
+
+        # Change sending rate from central rate based on the probing rate with
+        # higher utility.
+        if self.direction == RateChangeDirection.INCREASE:
+            self.pacing_rate = self.pacing_rate * (1 + kProbingStepSize) * (1 + kDecisionMadeStepSize)
+        else:
+            self.pacing_rate = self.pacing_rate * (1 - kProbingStepSize) * (1 - kDecisionMadeStepSize)
+
+        self.mode = PccSenderMode.DECISION_MADE
+        self.rounds = 1
+
 
 
     def can_send(self):
