@@ -410,7 +410,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, sender_mi.rtt_samples])
+                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio])
                 reward_list.append(reward)
                 loss_list.append(loss)
                 delay_list.append(latency * 1000)
