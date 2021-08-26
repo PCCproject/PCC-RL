@@ -1,7 +1,7 @@
 import argparse
 import csv
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import matplotlib
 matplotlib.use('Agg')
@@ -183,7 +183,7 @@ class PacketLog():
         if trace_file and trace_file.endswith('.json'):
             trace = Trace.load_from_file(trace_file)
         elif trace_file and trace_file.endswith('.log'):
-            trace = Trace.load_from_pantheon_file(trace_file, 50, 0, 50, 500)
+            trace = Trace.load_from_pantheon_file(trace_file, 0, 50, 500)
         elif trace is not None:
             pass
         else:
@@ -198,7 +198,7 @@ class PacketLog():
             np.mean(trace.delays) * 2 / 1e3)
 
 
-def plot(trace: Trace, pkt_log: PacketLog, save_dir: str, cc: str):
+def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     fig, axes = plt.subplots(2, 1, figsize=(6, 8))
     sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
     throughput_ts, throughput = pkt_log.get_throughput()
@@ -256,6 +256,7 @@ def plot(trace: Trace, pkt_log: PacketLog, save_dir: str, cc: str):
     plt.tight_layout()
     if save_dir:
         plt.savefig(os.path.join(save_dir, 'binwise_{}_plot.png'.format(cc)))
+    plt.close()
 
 def main():
     args = parse_args()
@@ -263,7 +264,7 @@ def main():
         trace = Trace.load_from_file(args.trace_file)
     elif args.trace_file and args.trace_file.endswith('.log'):
         trace = Trace.load_from_pantheon_file(
-            args.trace_file, 50, 0, 50, 500)
+            args.trace_file, 0, 50, 500)
     else:
         trace = None
 

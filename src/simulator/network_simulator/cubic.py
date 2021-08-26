@@ -5,7 +5,7 @@ from typing import Tuple
 import numpy as np
 
 from common.utils import pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog
+from plot_scripts.plot_packet_log import PacketLog, plot
 from simulator.network_simulator.constants import (BITS_PER_BYTE, BYTES_PER_PACKET, MIN_CWND, TCP_INIT_CWND)
 from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
@@ -198,7 +198,7 @@ class Cubic:
     def __init__(self, record_pkt_log: bool = False):
         self.record_pkt_log = record_pkt_log
 
-    def test(self, trace: Trace, save_dir: str) -> Tuple[float, float]:
+    def test(self, trace: Trace, save_dir: str, plot_flag: bool = False) -> Tuple[float, float]:
         """Test a network trace and return rewards.
 
         The 1st return value is the reward in Monitor Interval(MI) level and
@@ -278,4 +278,6 @@ class Cubic:
                 pkt_logger.writerows(net.pkt_log)
             pkt_log = PacketLog.from_log(net.pkt_log)
             pkt_level_reward = pkt_log.get_reward("", trace)
+            if plot_flag:
+                plot(trace, pkt_log, save_dir, self.cc_name)
         return np.mean(rewards), pkt_level_reward

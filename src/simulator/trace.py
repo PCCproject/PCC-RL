@@ -161,8 +161,8 @@ class Trace():
         return tr
 
     @staticmethod
-    def load_from_pantheon_file(uplink_filename, delay, loss, queue,
-                                ms_per_bin=500):
+    def load_from_pantheon_file(uplink_filename: str, loss: float, queue: int,
+                                ms_per_bin: int = 500):
         flow = Flow(uplink_filename, ms_per_bin)
         downlink_filename = uplink_filename.replace('datalink', 'acklink')
         if downlink_filename and os.path.exists(downlink_filename):
