@@ -219,7 +219,7 @@ def generate_trace(duration_range: Tuple[float, float],
                    queue_size_range: Tuple[int, int],
                    T_s_range: Union[Tuple[float, float], None] = None,
                    delay_noise_range: Union[Tuple[float, float], None] = None,
-                   constant_bw: bool = True, seed: int = 42):
+                   constant_bw: bool = True, seed: Union[int, None] = None):
     """Generate trace for a network flow.
 
     Args:
@@ -229,7 +229,8 @@ def generate_trace(duration_range: Tuple[float, float],
         loss_rate_range: Uplink loss rate range.
         queue_size_range: queue size range in packets.
     """
-    set_seed(seed)
+    if seed:
+        set_seed(seed)
     assert len(duration_range) == 2 and \
             duration_range[0] <= duration_range[1] and duration_range[0] > 0
     assert len(bandwidth_range) == 2 and \
