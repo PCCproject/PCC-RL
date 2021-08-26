@@ -319,14 +319,16 @@ class BBRSender(Sender):
         if self.packet_conservation:
             self.cwnd = max(self.cwnd, self.bytes_in_flight / BYTES_PER_PACKET + packets_delivered)
 
-    def on_enter_fast_recovery(self):
+    def on_enter_fast_recovery(self, pkt: BBRPacket):
         self.prior_cwnd = self.save_cwnd()
         packets_delivered = 1
         self.cwnd = self.bytes_in_flight / BYTES_PER_PACKET + max(packets_delivered, 1)
         self.packet_conservation = True
         self.in_fast_recovery_mode = True
-        assert self.srtt is not None
-        self.exit_fast_recovery_ts = self.get_cur_time() + self.srtt
+        if self.srtt is None:
+            self.exit_fast_recovery_ts = self.get_cur_time() + pkt.rtt
+        else:
+            self.exit_fast_recovery_ts = self.get_cur_time() + self.srtt
 
     def on_exit_fast_recovery(self):
         self.packet_conservation = False
@@ -579,7 +581,7 @@ class BBRSender(Sender):
             raise RuntimeError("network is not registered in sender.")
         super().on_packet_lost(pkt)
         self.rs.losses += 1
-        self.on_enter_fast_recovery()
+        self.on_enter_fast_recovery(pkt)
 
     def reset(self):
         super().reset()

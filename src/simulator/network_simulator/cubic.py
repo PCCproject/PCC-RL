@@ -65,8 +65,10 @@ class TCPCubicSender(Sender):
         # print('packet_loss,', self.net.get_cur_time(), rtt, self.pkt_loss_wait_time)
         if self.get_cur_time() > self.pkt_loss_wait_time:
             # : #
-            assert self.srtt
-            self.pkt_loss_wait_time = self.get_cur_time() + self.srtt
+            if self.srtt is None:
+                self.pkt_loss_wait_time = self.get_cur_time() + pkt.rtt
+            else:
+                self.pkt_loss_wait_time = self.get_cur_time() + self.srtt
 
             # print('packet_loss set wait time to', self.pkt_loss_wait_time,self.net.get_cur_time(), rtt)
             self.epoch_start = 0
