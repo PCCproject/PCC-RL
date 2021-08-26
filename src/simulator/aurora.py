@@ -27,7 +27,7 @@ from simulator import network
 from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog
+from plot_scripts.plot_packet_log import PacketLog, plot
 from udt_plugins.testing.loaded_agent import LoadedModel
 
 
@@ -185,6 +185,7 @@ def save_model_to_serve(model, export_dir):
 
 
 class Aurora():
+    cc_name = 'aurora'
     def __init__(self, seed: int, log_dir: str, timesteps_per_actorbatch: int,
                  pretrained_model_path=None, gamma: float = 0.99,
                  tensorboard_log=None, delta_scale=1):
@@ -325,7 +326,7 @@ class Aurora():
     def load_model(self):
         raise NotImplementedError
 
-    def test(self, trace: Trace, save_dir: str):
+    def test(self, trace: Trace, save_dir: str, plot_flag=False):
         reward_list = []
         loss_list = []
         tput_list = []
@@ -432,4 +433,7 @@ class Aurora():
                                  'bytes', 'cur_latency', 'queue_delay',
                                  'packet_in_queue', 'sending_rate', 'bandwidth'])
             pkt_logger.writerows(env.net.pkt_log)
+        if plot_flag:
+            pkt_log = PacketLog.from_log(env.net.pkt_log)
+            plot(trace, pkt_log, save_dir, "aurora")
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
