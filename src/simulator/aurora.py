@@ -350,7 +350,7 @@ class Aurora():
                              'latency_ratio', 'send_ratio',
                              'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto", "recv_ratio"])
+                             'ssthresh', "rto", "recv_ratio", "srtt"])
             env = gym.make(
                 'PccNs-v0', traces=[trace], delta_scale=self.delta_scale)
             env.seed(self.seed)
@@ -411,7 +411,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio])
+                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, env.senders[0].estRTT])
                 reward_list.append(reward)
                 loss_list.append(loss)
                 delay_list.append(latency * 1000)
