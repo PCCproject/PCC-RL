@@ -146,11 +146,12 @@ class Genet:
         """
         for i in range(rounds):
             optimizer = BayesianOptimization(
-                f=lambda bandwidth, delay, queue, loss, T_s,
-                delay_noise: self.black_box_function(
-                    bandwidth, delay, queue, loss, T_s, delay_noise,
-                    heuristic=self.heuristic, rl_method=self.rl_method),
-                pbounds=self.pbounds, random_state=self.seed+i)
+                f=lambda bandwidth_lower_bound, bandwidth_upper_bound, delay,
+                queue, loss, T_s, delay_noise: self.black_box_function(
+                    bandwidth_lower_bound, bandwidth_upper_bound, delay, queue,
+                    loss, T_s, delay_noise, heuristic=self.heuristic,
+                    rl_method=self.rl_method), pbounds=self.pbounds,
+                random_state=self.seed+i)
             os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
                         exist_ok=True)
             logger = JSONLogger(path=os.path.join(
@@ -167,13 +168,15 @@ class Genet:
             self.rl_method.train(self.cur_config_file, 7.2e4, 100)
 
 
-def black_box_function(bandwidth: float, delay: float, queue: Union[int, float],
+def black_box_function(bandwidth_lower_bound: float,
+                       bandwidth_upper_bound: float, delay: float, queue: float,
                        loss: float, T_s: float, delay_noise: float,
                        heuristic, rl_method) -> float:
-    queue = int(queue)
+    # queue = int(queue)
     t_start = time.time()
     trace = generate_trace(duration_range=(30, 30),
-                           bandwidth_range=(0.6, bandwidth),
+                           bandwidth_lower_bound_range=(bandwidth_lower_bound, bandwidth_lower_bound),
+                           bandwidth_upper_bound_range=(bandwidth_upper_bound, bandwidth_upper_bound),
                            delay_range=(delay, delay),
                            loss_rate_range=(loss, loss),
                            queue_size_range=(queue, queue),

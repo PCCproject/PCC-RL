@@ -7,6 +7,7 @@ from typing import List, Tuple, Union
 
 import numpy as np
 from common.utils import read_json_file, set_seed, write_json_file
+from simulator.constants import BYTES_PER_PACKET
 from simulator.pantheon_trace_parser.flow import Flow
 
 
@@ -50,6 +51,14 @@ class Trace():
         self.noises = []
         self.noise_idx = 0
         self.return_noise = False
+
+    @property
+    def avg_bw(self):
+        return np.mean(self.bandwidths)
+
+    @property
+    def min_delay(self):
+        return np.min(self.delays)
 
     def get_next_ts(self):
         if self.idx + 1 < len(self.timestamps):
@@ -213,10 +222,11 @@ class Trace():
 
 
 def generate_trace(duration_range: Tuple[float, float],
-                   bandwidth_range: Tuple[float, float],
+                   bandwidth_lower_bound_range: Tuple[float, float],
+                   bandwidth_upper_bound_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
-                   queue_size_range: Tuple[int, int],
+                   queue_size_range: Tuple[float, float],
                    T_s_range: Union[Tuple[float, float], None] = None,
                    delay_noise_range: Union[Tuple[float, float], None] = None,
                    constant_bw: bool = True, seed: Union[int, None] = None):
@@ -233,25 +243,28 @@ def generate_trace(duration_range: Tuple[float, float],
         set_seed(seed)
     assert len(duration_range) == 2 and \
             duration_range[0] <= duration_range[1] and duration_range[0] > 0
-    assert len(bandwidth_range) == 2 and \
-            bandwidth_range[0] <= bandwidth_range[1] and bandwidth_range[0] > 0
+    assert len(bandwidth_lower_bound_range) == 2 and \
+            bandwidth_lower_bound_range[0] <= bandwidth_lower_bound_range[1] and bandwidth_lower_bound_range[0] > 0
+    assert len(bandwidth_upper_bound_range) == 2 and \
+            bandwidth_upper_bound_range[0] <= bandwidth_upper_bound_range[1] and bandwidth_upper_bound_range[0] > 0
     assert len(delay_range) == 2 and delay_range[0] <= delay_range[1] and \
             delay_range[0] > 0
     assert len(loss_rate_range) == 2 and \
             loss_rate_range[0] <= loss_rate_range[1] and loss_rate_range[0] >= 0
-    assert len(queue_size_range) == 2 and \
-            queue_size_range[0] <= queue_size_range[1] + 1 and \
-            queue_size_range[0] >= 0
+    # assert len(queue_size_range) == 2 and \
+    #         queue_size_range[0] <= queue_size_range[1] + 1 and \
+    #         queue_size_range[0] >= 0
 
     delay = float(np.random.uniform(delay_range[0], delay_range[1], 1))
     loss_rate = float(np.random.uniform(
         loss_rate_range[0], loss_rate_range[1], 1))
-    # queue_size = int(np.random.randint(
-    #     queue_size_range[0], queue_size_range[1]+1))
 
-    queue_size = int(np.exp(np.random.uniform(
-        np.log(queue_size_range[0]),
-        np.log(queue_size_range[1]+1), 1)))
+    queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
+    bdp = bandwidth_upper_bound_range[1] / BYTES_PER_PACKET / 8 * 1e6 * delay_range[1] * 2 / 1000
+    queue_size = int(bdp * queue_size)
+    # queue_size = int(np.exp(np.random.uniform(
+    #     np.log(queue_size_range[0]),
+    #     np.log(queue_size_range[1]+1), 1)))
 
     # if bandwidth_file:
     #     timestamps, bandwidths = load_bandwidth_from_file(bandwidth_file)
@@ -259,11 +272,11 @@ def generate_trace(duration_range: Tuple[float, float],
 
     duration = float(np.random.uniform(
         duration_range[0], duration_range[1], 1))
-    if constant_bw:
-        bw = float(np.random.uniform(
-            bandwidth_range[0], bandwidth_range[1], 1))
-        ret_trace = Trace([duration], [bw], [delay], loss_rate, queue_size)
-        return ret_trace
+    # if constant_bw:
+    #     bw = float(np.random.uniform(
+    #         bandwidth_range[0], bandwidth_range[1], 1))
+    #     ret_trace = Trace([duration], [bw], [delay], loss_rate, queue_size)
+    #     return ret_trace
 
     # use bandwidth generator.
     # assert d_bw_range is not None and len(
@@ -287,8 +300,10 @@ def generate_trace(duration_range: Tuple[float, float],
     #     d_bw, d_delay, T_s, duration, bandwidth_range[0], bandwidth_range[1],
     #     delay_range[0], delay_range[1])
     timestamps, bandwidths, delays = generate_bw_delay_series(
-        T_s, duration, bandwidth_range[0], bandwidth_range[1],
+        T_s, duration, bandwidth_lower_bound_range[0], bandwidth_lower_bound_range[1],
+        bandwidth_upper_bound_range[0], bandwidth_upper_bound_range[1],
         delay_range[0], delay_range[1])
+
     ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size, delay_noise)
     return ret_trace
 
@@ -303,7 +318,8 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
     assert round(weight_sum, 1) == 1.0
 
     for env_config in config:
-        bw_min, bw_max = env_config['bandwidth']
+        bw_lower_bnd_min, bw_lower_bnd_max = env_config['bandwidth_lower_bound']
+        bw_upper_bnd_min, bw_upper_bnd_max = env_config['bandwidth_upper_bound']
         delay_min, delay_max = env_config['delay']
         loss_min, loss_max = env_config['loss']
         queue_min, queue_max = env_config['queue']
@@ -320,7 +336,8 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int,
         trace_cnt = int(round(env_config['weight'] * tot_trace_cnt))
         for _ in range(trace_cnt):
             trace = generate_trace((duration_min, duration_max),
-                                   (bw_min, bw_max),
+                                   (bw_lower_bnd_min, bw_lower_bnd_max),
+                                   (bw_upper_bnd_min, bw_upper_bnd_max),
                                    (delay_min, delay_max),
                                    (loss_min, loss_max),
                                    (queue_min, queue_max),
@@ -577,15 +594,18 @@ def main():
 #     return timestamps, bandwidths, delays
 
 
-def generate_bw_delay_series(T_s: float, duration: float, min_tp: float, max_tp: float,
+def generate_bw_delay_series(T_s: float, duration: float,
+                             min_bw_lower_bnd: float, max_bw_lower_bnd: float,
+                             min_bw_upper_bnd: float, max_bw_upper_bnd: float,
                              min_delay: float, max_delay: float):
     timestamps = []
     bandwidths = []
     delays = []
     round_digit = 5
-
-    bw_val = round(np.exp(float(np.random.uniform(
-        np.log(min_tp), np.log(max_tp), 1))), round_digit)
+    bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_upper_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
+    assert min_bw_lower_bnd <= bw_upper_bnd
+    bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(max_bw_lower_bnd, bw_upper_bnd)), 1))), round_digit)
+    bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
     delay_val = round(float(np.random.uniform(
         min_delay, max_delay, 1)), round_digit)
     ts = 0
@@ -594,7 +614,8 @@ def generate_bw_delay_series(T_s: float, duration: float, min_tp: float, max_tp:
 
     while ts < duration:
         if T_s !=0 and ts - bw_change_ts >= T_s:
-            bw_val = float(np.random.uniform(min_tp, max_tp, 1))
+            # TODO: how to change bw, uniform or logscale
+            bw_val = float(np.random.uniform(bw_lower_bnd, bw_upper_bnd, 1))
             bw_change_ts = ts
 
         ts = round(ts, round_digit)
