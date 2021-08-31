@@ -253,10 +253,10 @@ class Aurora():
         assert isinstance(self.model, PPO1)
 
         training_traces = generate_traces(config_file, tot_trace_cnt,
-                                          duration=30, constant_bw=False)
+                                          duration=30)
         # generate validation traces
         validation_traces = generate_traces(
-            config_file, 20, duration=30, constant_bw=False)
+            config_file, 20, duration=30)
         env = gym.make('PccNs-v0', traces=training_traces,
                        train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)
