@@ -209,7 +209,6 @@ def _mi_metric_conn_min_latency(mi):
             return 0.0  # original return value
             # return 1e4  # used in sosp submission
 
-
 def _mi_metric_send_ratio(mi):
     thpt = mi.get("recv rate")
     send_rate = mi.get("send rate")
@@ -249,5 +248,3 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0),
     SenderMonitorIntervalMetric("recv ratio", _mi_metric_recv_ratio, 0.0, 1000.0)
 ]
-
-

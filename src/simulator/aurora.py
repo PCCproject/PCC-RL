@@ -77,13 +77,15 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 delimiter='\t', lineterminator='\n')
             self.val_log_writer.writerow(
                 ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
-                 'throughput', 'latency', 'sending_rate', 'tot_t_used(min)'])
+                 'throughput', 'latency', 'sending_rate', 'tot_t_used(min)',
+                 'val_t_used(min)', 'train_t_used(min)'])
         else:
             self.val_log_writer = None
         self.best_val_reward = -np.inf
         self.val_times = 0
 
         self.t_start = time.time()
+        self.prev_t = time.time()
         self.steps_trained = steps_trained
 
     def _init_callback(self) -> None:
@@ -118,13 +120,18 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         self.model.sess, os.path.join(
                             self.save_path, "model_step_{}.ckpt".format(
                                 self.n_calls)))
+                avg_tr_bw = []
+                avg_tr_min_rtt = []
+                avg_tr_loss = []
                 avg_rewards = []
                 avg_losses = []
                 avg_tputs = []
                 avg_delays = []
                 avg_send_rates = []
+                val_start_t = time.time()
                 for idx, val_trace in enumerate(self.val_traces):
-                    # print(np.mean(val_trace.bandwidths))
+                    avg_tr_bw.append(val_trace.avg_bw)
+                    avg_tr_min_rtt.append(val_trace.avg_bw)
                     ts_list, val_rewards, loss_list, tput_list, delay_list, \
                         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora.test(
                             val_trace, self.log_dir)
@@ -140,6 +147,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
                     # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
                     # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
+                cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
                         [float(self.n_calls), float(self.num_timesteps),
@@ -148,7 +156,9 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                          np.mean(np.array(avg_tputs)),
                          np.mean(np.array(avg_delays)),
                          np.mean(np.array(avg_send_rates)),
-                         (time.time() - self.t_start) / 60]))
+                         (cur_t - self.t_start) / 60,
+                         (cur_t - val_start_t) / 60, (val_start_t - self.prev_t) / 60]))
+                self.prev_t = cur_t
         return True
 
 
@@ -197,7 +207,7 @@ class Aurora():
         self.pretrained_model_path = pretrained_model_path
         self.steps_trained = 0
         dummy_trace = generate_trace(
-            (10, 10), (2, 2), (50, 50), (0, 0), (100, 100))
+            (10, 10), (2, 2), (2, 2), (50, 50), (0, 0), (1, 1), (0, 0), (0, 0))
         env = gym.make('PccNs-v0', traces=[dummy_trace],
                        train_flag=True, delta_scale=self.delta_scale)
         # Load pretrained model
@@ -243,10 +253,10 @@ class Aurora():
         assert isinstance(self.model, PPO1)
 
         training_traces = generate_traces(config_file, tot_trace_cnt,
-                                          duration=30, constant_bw=False)
+                                          duration=30)
         # generate validation traces
         validation_traces = generate_traces(
-            config_file, 20, duration=30, constant_bw=False)
+            config_file, 20, duration=30)
         env = gym.make('PccNs-v0', traces=training_traces,
                        train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)

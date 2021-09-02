@@ -12,11 +12,7 @@ udr_large = read_json_file(
 
 def gen_random_range(val_min, val_max, logscale=False, weight=1/3):
     if logscale:
-        try:
-            range_len = (math.log10(val_max) - math.log10(val_min)) * (1 - weight)
-        except ValueError:
-            import ipdb
-            ipdb.set_trace()
+        range_len = (math.log10(val_max) - math.log10(val_min)) * (1 - weight)
         # print(range_len)
         new_val_min = random.uniform(math.log10(
             val_min), math.log10(val_min) + range_len)
@@ -35,20 +31,29 @@ def gen_random_range(val_min, val_max, logscale=False, weight=1/3):
 for i in range(10, 110, 10):
     # print(i)
     set_seed(i)
-    bw_min, bw_max = udr_large['bandwidth']
-    new_bw_min, new_bw_max = gen_random_range(bw_min, bw_max, True)
+    bw_upper_bnd_min, bw_upper_bnd_max = udr_large['bandwidth_upper_bound']
+    new_bw_upper_bnd_min, new_bw_upper_bnd_max = gen_random_range(bw_upper_bnd_min, bw_upper_bnd_max, True)
+
+    bw_lower_bnd_min, bw_lower_bnd_max = udr_large['bandwidth_lower_bound']
+    new_bw_lower_bnd_min, new_bw_lower_bnd_max = gen_random_range(bw_lower_bnd_min, new_bw_upper_bnd_max, True)
+    while new_bw_lower_bnd_min > new_bw_upper_bnd_min:
+        print('while', new_bw_lower_bnd_min, new_bw_upper_bnd_min)
+        new_bw_lower_bnd_min, new_bw_lower_bnd_max = gen_random_range(bw_lower_bnd_min, new_bw_upper_bnd_max, True)
+
     delay_min, delay_max = udr_large['delay']
     new_delay_min, new_delay_max = gen_random_range(delay_min, delay_max)
     loss_min, loss_max = udr_large['loss']
     new_loss_min, new_loss_max = gen_random_range(loss_min, loss_max)
     queue_min, queue_max = udr_large['queue']
-    new_queue_min, new_queue_max = gen_random_range(queue_min, queue_max, True)
+    new_queue_min, new_queue_max = gen_random_range(queue_min, queue_max)
     T_s_min, T_s_max = udr_large['T_s']
     new_T_s_min, new_T_s_max = gen_random_range(T_s_min, T_s_max)
 
     udr_mid = copy.deepcopy(udr_large)
-    udr_mid['bandwidth'][0] = new_bw_min
-    udr_mid['bandwidth'][1] = new_bw_max
+    udr_mid['bandwidth_lower_bound'][0] = new_bw_lower_bnd_min
+    udr_mid['bandwidth_lower_bound'][1] = new_bw_lower_bnd_max
+    udr_mid['bandwidth_upper_bound'][0] = new_bw_upper_bnd_min
+    udr_mid['bandwidth_upper_bound'][1] = new_bw_upper_bnd_max
     udr_mid['delay'][0] = new_delay_min
     udr_mid['delay'][1] = new_delay_max
     udr_mid['loss'][0] = new_loss_min
@@ -58,24 +63,31 @@ for i in range(10, 110, 10):
     udr_mid['T_s'][0] = new_T_s_min
     udr_mid['T_s'][1] = new_T_s_max
 
-    write_json_file('/tank/zxxia/PCC-RL/config/train/udr_7_dims_0826/udr_mid_seed_{}.json'.format(i), [udr_mid])
+    write_json_file('/tank/zxxia/PCC-RL/config/train/udr_7_dims_0827/udr_mid_seed_{}.json'.format(i), [udr_mid])
 
 
     set_seed(i)
-    bw_min, bw_max = udr_large['bandwidth']
-    new_bw_min, new_bw_max = gen_random_range(bw_min, bw_max, True, 1/9)
+    bw_upper_bnd_min, bw_upper_bnd_max = udr_large['bandwidth_upper_bound']
+    new_bw_upper_bnd_min, new_bw_upper_bnd_max = gen_random_range(bw_upper_bnd_min, bw_upper_bnd_max, True, 1/9)
+    bw_lower_bnd_min, bw_lower_bnd_max = udr_large['bandwidth_lower_bound']
+    new_bw_lower_bnd_min, new_bw_lower_bnd_max = gen_random_range(bw_lower_bnd_min, new_bw_upper_bnd_max, True, 1/9)
+    while new_bw_lower_bnd_min > new_bw_upper_bnd_min:
+        new_bw_lower_bnd_min, new_bw_lower_bnd_max = gen_random_range(bw_lower_bnd_min, new_bw_upper_bnd_max, True, 1/9)
+
     delay_min, delay_max = udr_large['delay']
     new_delay_min, new_delay_max = gen_random_range(delay_min, delay_max, False, 1/9)
     loss_min, loss_max = udr_large['loss']
     new_loss_min, new_loss_max = gen_random_range(loss_min, loss_max, False, 1/9)
     queue_min, queue_max = udr_large['queue']
-    new_queue_min, new_queue_max = gen_random_range(queue_min, queue_max, True, 1/9)
+    new_queue_min, new_queue_max = gen_random_range(queue_min, queue_max, False, 1/9)
     T_s_min, T_s_max = udr_large['T_s']
     new_T_s_min, new_T_s_max = gen_random_range(T_s_min, T_s_max, False, 1/9)
 
     udr_small = copy.deepcopy(udr_large)
-    udr_small['bandwidth'][0] = new_bw_min
-    udr_small['bandwidth'][1] = new_bw_max
+    udr_small['bandwidth_lower_bound'][0] = new_bw_lower_bnd_min
+    udr_small['bandwidth_lower_bound'][1] = new_bw_lower_bnd_max
+    udr_small['bandwidth_upper_bound'][0] = new_bw_upper_bnd_min
+    udr_small['bandwidth_upper_bound'][1] = new_bw_upper_bnd_max
     udr_small['delay'][0] = new_delay_min
     udr_small['delay'][1] = new_delay_max
     udr_small['loss'][0] = new_loss_min
@@ -85,4 +97,4 @@ for i in range(10, 110, 10):
     udr_small['T_s'][0] = new_T_s_min
     udr_small['T_s'][1] = new_T_s_max
 
-    write_json_file('/tank/zxxia/PCC-RL/config/train/udr_7_dims_0826/udr_small_seed_{}.json'.format(i), [udr_small])
+    write_json_file('/tank/zxxia/PCC-RL/config/train/udr_7_dims_0827/udr_small_seed_{}.json'.format(i), [udr_small])

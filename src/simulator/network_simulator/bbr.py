@@ -5,7 +5,6 @@ import random
 from enum import Enum
 from typing import Tuple
 
-import ipdb
 import numpy as np
 
 from common.utils import pcc_aurora_reward

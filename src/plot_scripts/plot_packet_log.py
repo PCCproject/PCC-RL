@@ -66,6 +66,8 @@ class PacketLog():
                 pkt_byte = int(line[3])
                 if first_ts is None:
                     first_ts = ts
+                # if ts - first_ts < 2:
+                #     continue
                 if pkt_type == 'acked':
                     rtt = float(line[4]) * 1000
                     queue_delay = float(line[5]) * 1000

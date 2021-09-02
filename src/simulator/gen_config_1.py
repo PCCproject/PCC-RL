@@ -22,15 +22,36 @@ QUEUE = 10
 DURATION = 30
 LOSS = 0
 
-for bw in np.linspace(np.log10(0.6), np.log10(6), 10):
-    DELAY = 50
-    QUEUE = 10
-    bandwidth_range = [10**bw, 10**bw]
-    bw = round(10**bw, 2)
-    delay_range = [DELAY, DELAY]
+# for bw in np.linspace(np.log10(0.6), np.log10(6), 10):
+#     DELAY = 50
+#     QUEUE = 10
+#     bandwidth_range = [10**bw, 10**bw]
+#     bw = round(10**bw, 2)
+#     delay_range = [DELAY, DELAY]
+#     d_bw = 0
+#     d_delay = 0
+#     T_s = 1
+#     duration = DURATION
+#     loss_rate = LOSS
+#     queue_size = QUEUE
+#     for i in range(n_traces):
+#         timestamps, bandwidths, delays = generate_bw_delay_series(
+#             T_s, duration, bandwidth_range[0], bandwidth_range[1],
+#             delay_range[0], delay_range[1])
+#         ret_trace = Trace(timestamps, bandwidths,
+#                           delays, loss_rate, queue_size)
+#         os.makedirs(os.path.join(save_dir, "rand_bandwidth", str(round(bw, 2))), exist_ok=True)
+#         ret_trace.dump(os.path.join(save_dir, "rand_bandwidth",
+#                                     str(round(bw, 2)), 'trace{:04d}.json'.format(i)))
+
+
+for delay in range(10, 110, 10):
+    # bandwidth_range = [0.1, 2]
+    bandwidth_range = [1, 6]
+    delay_range = [delay, delay]
     d_bw = 0
     d_delay = 0
-    T_s = 1
+    T_s = 4
     duration = DURATION
     loss_rate = LOSS
     queue_size = QUEUE
@@ -40,29 +61,9 @@ for bw in np.linspace(np.log10(0.6), np.log10(6), 10):
             delay_range[0], delay_range[1])
         ret_trace = Trace(timestamps, bandwidths,
                           delays, loss_rate, queue_size)
-        os.makedirs(os.path.join(save_dir, "rand_bandwidth", str(round(bw, 2))), exist_ok=True)
-        ret_trace.dump(os.path.join(save_dir, "rand_bandwidth",
-                                    str(round(bw, 2)), 'trace{:04d}.json'.format(i)))
-
-
-# for delay in range(10, 110, 10):
-#     bandwidth_range = [BW, BW]
-#     delay_range = [delay, delay]
-#     d_bw = 0
-#     d_delay = 0
-#     T_s = 0
-#     duration = DURATION
-#     loss_rate = LOSS
-#     queue_size = QUEUE
-#     for i in range(n_traces):
-#         timestamps, bandwidths, delays = generate_bw_delay_series(
-#             d_bw, d_delay, T_s, duration, bandwidth_range[0], bandwidth_range[1],
-#             delay_range[0], delay_range[1])
-#         ret_trace = Trace(timestamps, bandwidths,
-#                           delays, loss_rate, queue_size)
-#         os.makedirs(os.path.join(save_dir, "rand_delay", str(delay)), exist_ok=True)
-#         ret_trace.dump(os.path.join(save_dir, "rand_delay",
-#                                     str(round(delay, 2)), 'trace{:04d}.json'.format(i)))
+        os.makedirs(os.path.join(save_dir, "rand_delay", str(delay)), exist_ok=True)
+        ret_trace.dump(os.path.join(save_dir, "rand_delay",
+                                    str(round(delay, 2)), 'trace{:04d}.json'.format(i)))
 #
 #
 # for loss in np.arange(0, 0.11, 0.01):
