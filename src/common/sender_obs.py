@@ -199,8 +199,8 @@ def _mi_metric_conn_min_latency(mi):
             _conn_min_latencies[mi.sender_id] = latency
             return latency
         else:
-            # return 0.0
-            return 1e4
+            return 0.0
+            # return 1e4
 
 
 def _mi_metric_send_ratio(mi):
@@ -211,6 +211,13 @@ def _mi_metric_send_ratio(mi):
     # elif thpt == 0:
     #     return 2 #send_rate / 0.1
     return 1.0
+
+def _mi_metric_recv_ratio(mi):
+    thpt = mi.get("recv rate")
+    send_rate = mi.get("send rate")
+    if send_rate == 0:
+        return 1.0
+    return thpt / send_rate
 
 def _mi_metric_latency_ratio(mi):
     min_lat = mi.get("conn min latency")
@@ -232,7 +239,8 @@ SENDER_MI_METRICS = [
     SenderMonitorIntervalMetric("conn min latency", _mi_metric_conn_min_latency, 0.0, 100.0),
     SenderMonitorIntervalMetric("latency increase", _mi_metric_latency_increase, 0.0, 100.0),
     SenderMonitorIntervalMetric("latency ratio", _mi_metric_latency_ratio, 1.0, 10000.0),
-    SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0)
+    SenderMonitorIntervalMetric("send ratio", _mi_metric_send_ratio, 0.0, 1000.0),
+    SenderMonitorIntervalMetric("recv ratio", _mi_metric_recv_ratio, 0.0, 1000.0),
 ]
 
 
