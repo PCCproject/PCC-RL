@@ -107,9 +107,9 @@ venv.bak/
 results_*
 results
 data
-config
 figs
 src/simulator/aurora_tensorboard
 src/simulator/useless
 src/simulator_bkp
 src/simulator/tests
+.DS_Store

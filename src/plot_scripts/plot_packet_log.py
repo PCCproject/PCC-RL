@@ -1,12 +1,15 @@
 import argparse
 import csv
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-from common.utils import pcc_aurora_reward, read_json_file
+from common.utils import pcc_aurora_reward
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import Trace
 
 
@@ -55,12 +58,16 @@ class PacketLog():
         with open(packet_log_file, 'r') as f:
             reader = csv.reader(f)
             for line in reader:
+                if line[0] == 'timestamp':
+                    continue
                 ts = float(line[0])
                 pkt_id = int(line[1])
                 pkt_type = line[2]
                 pkt_byte = int(line[3])
                 if first_ts is None:
                     first_ts = ts
+                # if ts - first_ts < 2:
+                #     continue
                 if pkt_type == 'acked':
                     rtt = float(line[4]) * 1000
                     queue_delay = float(line[5]) * 1000
@@ -80,6 +87,8 @@ class PacketLog():
                     bin_id = cls.ts_to_bin_id(ts, first_ts, bin_size)
                     binwise_bytes_lost[bin_id] = binwise_bytes_lost.get(
                         bin_id, 0) + pkt_byte
+                elif pkt_type == 'arrived':
+                    pass
                 else:
                     raise RuntimeError(
                         "Unrecognized pkt_type {}!".format(pkt_type))
@@ -127,6 +136,8 @@ class PacketLog():
                 bin_id = cls.ts_to_bin_id(ts, first_ts, bin_size)
                 binwise_bytes_lost[bin_id] = binwise_bytes_lost.get(
                     bin_id, 0) + pkt_byte
+            elif pkt_type == 'arrived':
+                pass
             else:
                 raise RuntimeError(
                     "Unrecognized pkt_type {}!".format(pkt_type))
@@ -149,7 +160,7 @@ class PacketLog():
         for bin_id in sorted(self.binwise_bytes_acked):
             throughput_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             throughput.append(
-                self.binwise_bytes_acked[bin_id] * 8 / self.bin_size / 1e6)
+                self.binwise_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
         return throughput_ts, throughput
 
     def get_sending_rate(self) -> Tuple[List[float], List[float]]:
@@ -158,7 +169,7 @@ class PacketLog():
         for bin_id in sorted(self.binwise_bytes_sent):
             sending_rate_ts.append(self.bin_id_to_s(bin_id, self.bin_size))
             sending_rate.append(
-                self.binwise_bytes_sent[bin_id] * 8 / self.bin_size / 1e6)
+                self.binwise_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
         return sending_rate_ts, sending_rate
 
     def get_rtt(self) -> Tuple[List[float], List[float]]:
@@ -174,7 +185,7 @@ class PacketLog():
         if trace_file and trace_file.endswith('.json'):
             trace = Trace.load_from_file(trace_file)
         elif trace_file and trace_file.endswith('.log'):
-            trace = Trace.load_from_pantheon_file(trace_file, 50, 0, 50, 500)
+            trace = Trace.load_from_pantheon_file(trace_file, 0, 50, 500)
         elif trace is not None:
             pass
         else:
@@ -183,72 +194,98 @@ class PacketLog():
         _, rtt = self.get_rtt()
         loss = self.get_loss_rate()
         return pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths)* 1e6 / 8 / 1500)
+            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            np.mean(rtt) / 1e3, loss,
+            np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            np.mean(trace.delays) * 2 / 1e3)
 
+
+def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
+    fig, axes = plt.subplots(2, 1, figsize=(6, 8))
+    sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
+    throughput_ts, throughput = pkt_log.get_throughput()
+    rtt_ts, rtt = pkt_log.get_rtt()
+    queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
+    loss = pkt_log.get_loss_rate()
+    # print(throughput[:10])
+    axes[0].plot(throughput_ts, throughput, "-o", ms=2,  # drawstyle='steps-post',
+                 label='throughput, avg {:.3f}Mbps'.format(np.mean(throughput)))
+    axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2,  # drawstyle='steps-post',
+                 label='sending rate, avg {:.3f}Mbps'.format(np.mean(sending_rate)))
+    if trace is not None:
+        axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
+                     label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
+        queue_size = trace.queue_size
+    else:
+        queue_size = "N/A"
+        # axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
+        #              label='bandwidth, avg {:.3f}Mbps'.format(6))
+    axes[0].legend()
+    axes[0].set_xlabel("Time(s)")
+    axes[0].set_ylabel("Rate(Mbps)")
+    axes[0].set_xlim(0, )
+    axes[0].set_ylim(0, )
+    reward = pcc_aurora_reward(
+        np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+        np.mean(rtt) / 1e3, loss)
+    if trace is not None:
+        normalized_reward = pcc_aurora_reward(
+            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            np.mean(rtt) / 1e3, loss,
+            np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE /BYTES_PER_PACKET)
+    else:
+        reward = pcc_aurora_reward(
+            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            np.mean(rtt) / 1e3, loss)
+        normalized_reward = reward
+    axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
+        cc, reward, normalized_reward))
+
+    axes[1].plot(rtt_ts, rtt, ms=2,
+                 label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
+    # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
+    if trace is not None:
+        axes[1].plot(rtt_ts, np.ones_like(rtt) * 2*min(trace.delays), c='C2',
+                     label="trace minRTT {:.3f}ms".format(2*min(trace.delays)))
+    axes[1].legend()
+    axes[1].set_xlabel("Time(s)")
+    axes[1].set_ylabel("Latency(ms)")
+    axes[1].set_title('{} loss rate={:.3f}, queue={:.3f}'.format(
+        cc, loss, queue_size))
+    axes[1].set_xlim(0, )
+    axes[1].set_ylim(0, )
+
+    plt.tight_layout()
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'binwise_{}_plot.png'.format(cc)))
+    plt.close()
 
 def main():
     args = parse_args()
+    if args.trace_file and args.trace_file.endswith('.json'):
+        trace = Trace.load_from_file(args.trace_file)
+    elif args.trace_file and args.trace_file.endswith('.log'):
+        trace = Trace.load_from_pantheon_file(
+            args.trace_file, 0, 50, 500)
+    else:
+        trace = None
 
     for log_idx, log_file in enumerate(args.log_file):
+        if not os.path.exists(log_file):
+            continue
         pkt_log = PacketLog.from_log_file(log_file, 500)
         cc = os.path.splitext(os.path.basename(log_file))[0].split('_')[0]
+        plot(trace, pkt_log, args.save_dir, cc)
 
-        fig, axes = plt.subplots(2, 1, figsize=(6, 8))
-        sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
-        throughput_ts, throughput = pkt_log.get_throughput()
-        rtt_ts, rtt = pkt_log.get_rtt()
-        queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
-        loss = pkt_log.get_loss_rate()
-        # print(throughput[:10])
-        axes[0].plot(throughput_ts, throughput, "-o", ms=2, # drawstyle='steps-post',
-                     label='throughput, avg {:.3f}Mbps'.format(np.mean(throughput)))
-        axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2, # drawstyle='steps-post',
-                     label='sending rate, avg {:.3f}Mbps'.format(np.mean(sending_rate)))
-        if args.trace_file and args.trace_file.endswith('.json'):
-            trace = Trace.load_from_file(args.trace_file)
-            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
-                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
-        elif args.trace_file and args.trace_file.endswith('.log'):
-            trace = Trace.load_from_pantheon_file(
-                args.trace_file, 50, 0, 50, 500)
-            # print(trace.timestamps)
-            # print(trace.bandwidths)
-            # import ipdb
-            # ipdb.set_trace()
-            axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2, # drawstyle='steps-post',
-                         label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
-        axes[0].legend()
-        axes[0].set_xlabel("Time(s)")
-        axes[0].set_ylabel("Rate(Mbps)")
-        reward = pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / 8 / 1500, np.mean(rtt) / 1e3, loss,
-            avg_bw=np.mean(trace.bandwidths) * 1e6 / 8 / 1500)
-        axes[0].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
-            cc, loss, reward))
 
-        axes[1].plot(
-            rtt_ts, rtt, label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
-        # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
-        axes[1].legend()
-        axes[1].set_xlabel("Time(s)")
-        axes[1].set_ylabel("Latency(ms)")
-        axes[1].set_title('{} loss rate = {:.3f}, reward = {:3f}'.format(
-            cc, loss, reward))
+        # if log_idx == 0:
+        #     print("{},{},{},{},{},".format(os.path.dirname(log_file),
+        #                                    np.mean(throughput), np.mean(rtt), loss, reward), end=',')
+        # else:
+        #     print("{},{},{},{},".format(np.mean(throughput),
+        #                                 np.mean(rtt), loss, reward), end=',')
 
-        if log_idx == 0:
-            print("{},{},{},{},{},".format(os.path.dirname(log_file),
-                np.mean(throughput), np.mean(rtt), loss, reward), end=',')
-        else:
-            print("{},{},{},{},".format(np.mean(throughput), np.mean(rtt), loss, reward), end=',')
-
-        plt.tight_layout()
-        if args.save_dir:
-            plt.savefig(os.path.join(args.save_dir,
-                                     'binwise_{}_plot.png'.format(cc)))
 
 
 if __name__ == '__main__':
     main()
-
-# plt.show()

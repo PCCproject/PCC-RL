@@ -7,11 +7,16 @@ import time
 import types
 from typing import List
 import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 from mpi4py.MPI import COMM_WORLD
+from mpi4py.futures import MPIPoolExecutor
 
 import gym
 import numpy as np
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 from stable_baselines import PPO1
 from stable_baselines.bench import Monitor
 from stable_baselines.common.callbacks import BaseCallback
@@ -19,19 +24,16 @@ from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
 from simulator import network
-from simulator.network import BYTES_PER_PACKET
+from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog
+from plot_scripts.plot_packet_log import PacketLog, plot
 from udt_plugins.testing.loaded_agent import LoadedModel
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
     tf.contrib._warning = None
 
-
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 set_tf_loglevel(logging.FATAL)
 
 
@@ -58,8 +60,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List = [],
-                 verbose=0, patience=10, steps_trained=0, config_file=None,
-                 tot_trace_cnt=100, update_training_traces_freq=5):
+                 verbose=0, steps_trained=0, config_file=None, tot_trace_cnt=100):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
@@ -70,21 +71,21 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.val_traces = val_traces
         self.config_file = config_file
         self.tot_trace_cnt=tot_trace_cnt
-        self.update_training_traces_freq = update_training_traces_freq
         if self.aurora.comm.Get_rank() == 0:
             self.val_log_writer = csv.writer(
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
                 delimiter='\t', lineterminator='\n')
             self.val_log_writer.writerow(
                 ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
-                 'throughput', 'latency', 'sending_rate', 'tot_t_used(min)'])
+                 'throughput', 'latency', 'sending_rate', 'tot_t_used(min)',
+                 'val_t_used(min)', 'train_t_used(min)'])
         else:
             self.val_log_writer = None
         self.best_val_reward = -np.inf
-        self.patience = patience
         self.val_times = 0
 
         self.t_start = time.time()
+        self.prev_t = time.time()
         self.steps_trained = steps_trained
 
     def _init_callback(self) -> None:
@@ -94,13 +95,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         if self.n_calls % self.check_freq == 0:
-            # self.val_times += 1
-            # if self.val_times % self.update_training_traces_freq == 0:
-            #     training_traces = generate_traces(
-            #         self.config_file, self.tot_trace_cnt, duration=30,
-            #         constant_bw=False)
-            #     self.model.env.traces = training_traces
-
             # Retrieve training reward
             # x, y = ts2xy(load_results(self.log_dir), 'timesteps')
             # if len(x) > 0:
@@ -119,20 +113,25 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             #             print("Saving new best model to {}".format(self.save_path))
             #         # self.model.save(self.save_path)
 
-            if self.aurora.comm.Get_rank() == 0:
+            if self.aurora.comm.Get_rank() == 0 and self.val_log_writer is not None:
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.save(
                         self.model.sess, os.path.join(
                             self.save_path, "model_step_{}.ckpt".format(
                                 self.n_calls)))
+                avg_tr_bw = []
+                avg_tr_min_rtt = []
+                avg_tr_loss = []
                 avg_rewards = []
                 avg_losses = []
                 avg_tputs = []
                 avg_delays = []
                 avg_send_rates = []
+                val_start_t = time.time()
                 for idx, val_trace in enumerate(self.val_traces):
-                    # print(np.mean(val_trace.bandwidths))
+                    avg_tr_bw.append(val_trace.avg_bw)
+                    avg_tr_min_rtt.append(val_trace.avg_bw)
                     ts_list, val_rewards, loss_list, tput_list, delay_list, \
                         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora.test(
                             val_trace, self.log_dir)
@@ -148,6 +147,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
                     # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
                     # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
+                cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
                         [float(self.n_calls), float(self.num_timesteps),
@@ -156,7 +156,9 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                          np.mean(np.array(avg_tputs)),
                          np.mean(np.array(avg_delays)),
                          np.mean(np.array(avg_send_rates)),
-                         (time.time() - self.t_start) / 60]))
+                         (cur_t - self.t_start) / 60,
+                         (cur_t - val_start_t) / 60, (val_start_t - self.prev_t) / 60]))
+                self.prev_t = cur_t
         return True
 
 
@@ -193,9 +195,10 @@ def save_model_to_serve(model, export_dir):
 
 
 class Aurora():
-    def __init__(self, seed, log_dir, timesteps_per_actorbatch,
-                 pretrained_model_path=None, gamma=0.99, tensorboard_log=None,
-                 delta_scale=1):
+    cc_name = 'aurora'
+    def __init__(self, seed: int, log_dir: str, timesteps_per_actorbatch: int,
+                 pretrained_model_path=None, gamma: float = 0.99,
+                 tensorboard_log=None, delta_scale=1):
         init_start = time.time()
         self.comm = COMM_WORLD
         self.delta_scale = delta_scale
@@ -204,7 +207,7 @@ class Aurora():
         self.pretrained_model_path = pretrained_model_path
         self.steps_trained = 0
         dummy_trace = generate_trace(
-            (10, 10), (2, 2), (50, 50), (0, 0), (100, 100))
+            (10, 10), (2, 2), (2, 2), (50, 50), (0, 0), (1, 1), (0, 0), (0, 0))
         env = gym.make('PccNs-v0', traces=[dummy_trace],
                        train_flag=True, delta_scale=self.delta_scale)
         # Load pretrained model
@@ -216,9 +219,10 @@ class Aurora():
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
-                                      timesteps_per_actorbatch/4),
-                                  optim_epochs=12,
-                                  gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
+                                      timesteps_per_actorbatch/12),
+                                  optim_epochs=12, gamma=gamma,
+                                  tensorboard_log=tensorboard_log,
+                                  n_cpu_tf_sess=1)
                 # print('create_ppo1,{}'.format(time.time() - model_create_start))
                 tf_restore_start = time.time()
                 with self.model.graph.as_default():
@@ -237,9 +241,9 @@ class Aurora():
             self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
-                              optim_batchsize=int(timesteps_per_actorbatch/4),
-                              optim_epochs=12,
-                              gamma=gamma, tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
+                              optim_batchsize=int(timesteps_per_actorbatch/12),
+                              optim_epochs=12, gamma=gamma,
+                              tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
     def train(self, config_file,
@@ -249,10 +253,10 @@ class Aurora():
         assert isinstance(self.model, PPO1)
 
         training_traces = generate_traces(config_file, tot_trace_cnt,
-                                          duration=30, constant_bw=False)
+                                          duration=30)
         # generate validation traces
         validation_traces = generate_traces(
-            config_file, 100, duration=30, constant_bw=False)
+            config_file, 20, duration=30)
         env = gym.make('PccNs-v0', traces=training_traces,
                        train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)
@@ -263,8 +267,7 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_traces=validation_traces,
-            config_file=config_file, tot_trace_cnt=tot_trace_cnt,
-            update_training_traces_freq=10)
+            config_file=config_file, tot_trace_cnt=tot_trace_cnt)
         self.model.learn(total_timesteps=total_timesteps,
                          tb_log_name=tb_log_name, callback=callback)
 
@@ -280,14 +283,52 @@ class Aurora():
             pkt_logs.append(pkt_log)
             results.append(result)
         return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
         # n_proc=mp.cpu_count()//2
         # arguments = [(self.pretrained_model_path, trace, save_dir, self.seed) for trace, save_dir in zip(traces, save_dirs)]
         # with mp.Pool(processes=n_proc) as pool:
-        #     results = pool.starmap(test_model, arguments)
-        #     print(results)
-        # rewards = [result[0] for result in results]
-        # pkt_logs = [result[1] for result in results]
-        # return rewards, pkt_logs
+        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #             send_rate_list, action_list, obs_list, mi_list, pkt_log  in pool.starmap(test_model, arguments):
+        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                           delay_list, loss_list, action_list, obs_list, mi_list))
+        #         pkt_logs.append(pkt_log)
+        #         results.append(result)
+        # return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
+        # with MPIPoolExecutor(max_workers=4) as executor:
+        #     iterable = ((trace, save_dir) for trace, save_dir in zip(traces, save_dirs))
+        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #         send_rate_list, action_list, obs_list, mi_list, pkt_log  in executor.starmap(self.test, iterable):
+        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                           delay_list, loss_list, action_list, obs_list, mi_list))
+        #         pkt_logs.append(pkt_log)
+        #         results.append(result)
+        # return results, pkt_logs
+
+        # results = []
+        # pkt_logs = []
+        # size = self.comm.Get_size()
+        # count = int(len(traces) / size)
+        # remainder = int(len(traces) % size)
+        # rank = self.comm.Get_rank()
+        # start = rank * count + min(rank, remainder)
+        # stop = (rank + 1) * count + min(rank + 1, remainder)
+        # for i in range(start, stop):
+        #     ts_list, reward_list, loss_list, tput_list, delay_list, \
+        #         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.test(
+        #             traces[i], save_dirs[i])
+        #     result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
+        #                       delay_list, loss_list, action_list, obs_list, mi_list))
+        #     pkt_logs.append(pkt_log)
+        #     results.append(result)
+        # results = self.comm.gather(results, root=0)
+        # pkt_logs = self.comm.gather(pkt_logs, root=0)
+        # # need to call reduce to retrieve all return values
+        # return results, pkt_logs
 
     def save_model(self):
         raise NotImplementedError
@@ -295,7 +336,7 @@ class Aurora():
     def load_model(self):
         raise NotImplementedError
 
-    def test(self, trace: Trace, save_dir: str):
+    def test(self, trace: Trace, save_dir: str, plot_flag=False):
         reward_list = []
         loss_list = []
         tput_list = []
@@ -305,10 +346,11 @@ class Aurora():
         action_list = []
         mi_list = []
         obs_list = []
+        os.makedirs(save_dir, exist_ok=True)
         with open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
             writer = csv.writer(f, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
-                             'recv_rate', 'latency',
+                             'recv_rate', 'max_recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
                              "bytes_acked", "bytes_lost", "MI",
                              "send_start_time",
@@ -318,11 +360,13 @@ class Aurora():
                              'latency_ratio', 'send_ratio',
                              'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto"])
+                             'ssthresh', "rto", "recv_ratio", "srtt"])
             env = gym.make(
                 'PccNs-v0', traces=[trace], delta_scale=self.delta_scale)
             env.seed(self.seed)
             obs = env.reset()
+            # print(obs)
+            # heuristic = my_heuristic.MyHeuristic()
             while True:
                 pred_start = time.time()
                 if isinstance(self.model, LoadedModel):
@@ -330,13 +374,27 @@ class Aurora():
                     action = self.model.act(obs)
                     action = action['act'][0]
                 else:
-                    action, _states = self.model.predict(
-                        obs, deterministic=True)
+                    if env.net.senders[0].got_data:
+                        action, _states = self.model.predict(
+                            obs, deterministic=True)
+                    else:
+                        action = np.array([0])
                 # print("pred,{}".format(time.time() - pred_start))
                 # print(env.senders[0].rate * 1500 * 8 / 1e6)
 
                 # get the new MI and stats collected in the MI
-                sender_mi = env.senders[0].get_run_data()
+                # sender_mi = env.senders[0].get_run_data()
+                sender_mi = env.senders[0].history.back() #get_run_data()
+                # if env.net.senders[0].got_data:
+                #     action = heuristic.step(obs, sender_mi)
+                #     # action = my_heuristic.stateless_step(env.senders[0].send_rate,
+                #     #         env.senders[0].avg_latency, env.senders[0].lat_diff, env.senders[0].start_stage,
+                #     #         env.senders[0].max_tput, env.senders[0].min_rtt, sender_mi.rtt_samples[-1])
+                #     # action = my_heuristic.stateless_step(*obs)
+                # else:
+                #     action = np.array([0])
+                # max_recv_rate = heuristic.max_tput
+                max_recv_rate = env.senders[0].max_tput
                 throughput = sender_mi.get("recv rate")  # bits/sec
                 send_rate = sender_mi.get("send rate")  # bits/sec
                 latency = sender_mi.get("avg latency")
@@ -345,13 +403,14 @@ class Aurora():
                 sent_latency_inflation = sender_mi.get('sent latency inflation')
                 latency_ratio = sender_mi.get('latency ratio')
                 send_ratio = sender_mi.get('send ratio')
+                recv_ratio = sender_mi.get('recv ratio')
                 reward = pcc_aurora_reward(
                     throughput / 8 / BYTES_PER_PACKET, latency, loss,
-                    np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
+                    np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
 
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].rate * 1500 * 8, 0),
-                    round(send_rate, 0), round(throughput, 0), latency, loss,
+                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * 8, 0),
+                    round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
                     sender_mi.send_start, sender_mi.send_end,
@@ -362,7 +421,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto])
+                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, env.senders[0].estRTT])
                 reward_list.append(reward)
                 loss_list.append(loss)
                 delay_list.append(latency * 1000)
@@ -380,14 +439,11 @@ class Aurora():
                     break
         with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
             pkt_logger = csv.writer(f, lineterminator='\n')
+            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
+                                 'bytes', 'cur_latency', 'queue_delay',
+                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
             pkt_logger.writerows(env.net.pkt_log)
+        if plot_flag:
+            pkt_log = PacketLog.from_log(env.net.pkt_log)
+            plot(trace, pkt_log, save_dir, "aurora")
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
-
-def test_model(model_path: str, trace: Trace, save_dir: str, seed: int):
-    model = Aurora(seed, "", 10, model_path)
-    pid = os.getpid()
-    # print(pid, 'create model')
-
-    # ret = model.test(trace, save_dir)
-    print(pid, 'return')
-    return ret

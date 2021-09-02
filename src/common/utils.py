@@ -57,15 +57,17 @@ def learnability_objective_function(throughput, delay):
     return score
 
 
-def pcc_aurora_reward(throughput, delay, loss, avg_bw):
+def pcc_aurora_reward(throughput, delay, loss, avg_bw=None, min_rtt=None):
     """PCC Aurora reward. Anchor point 0.6Mbps
     throughput: packets per second
     delay: second
     loss:
     avg_bw: packets per second
     """
-    return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
-    # return 10 * throughput - 1000 * delay - 2000 * loss
+    if avg_bw is not None:
+    # return 10 * 50 * throughput/avg_bw - 1000 * delay * 0.2 / min_rtt - 2000 * loss
+        return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
+    return 10 * throughput - 1000 * delay - 2000 * loss
 
 def compute_std_of_mean(data):
     return np.std(data) / np.sqrt(len(data))

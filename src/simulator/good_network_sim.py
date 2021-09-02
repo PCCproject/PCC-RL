@@ -183,6 +183,8 @@ class Network():
                 # if USE_LATENCY_NOISE:
                 # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                 # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
+                # link_latency += max(0, np.random.normal(0, 1) / 1000)
+                # link_latency += max(0, np.random.uniform(0, 5) / 1000)
                 link_latency += self.env.current_trace.get_delay_noise(
                     self.cur_time, self.links[0].get_bandwidth(self.cur_time)) / 1000
                 new_latency += link_latency
@@ -205,7 +207,7 @@ class Network():
         loss = sender_mi.get("loss ratio")
 
         reward = pcc_aurora_reward(throughput / 8 / BYTES_PER_PACKET, latency,
-                                   loss, np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET)
+                                   loss, np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(self.env.current_trace.delays) * 2/ 1e3)
         try:
             ssthresh = self.senders[0].ssthresh
         except:
