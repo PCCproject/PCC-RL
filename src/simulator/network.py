@@ -242,6 +242,8 @@ class Network():
                     self.cur_time)
                 extra_delays.append(
                     1 / self.links[0].get_bandwidth(self.cur_time))
+                # new_latency += 1 / self.links[0].get_bandwidth(self.cur_time)
+                # new_event_time += 1 / self.links[0].get_bandwidth(self.cur_time)
                 if not new_dropped:
                     sender.queue_delay_samples.append(new_event_queue_delay)
 
