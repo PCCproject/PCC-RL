@@ -78,7 +78,7 @@ def main():
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
 
     # Initialize model and agent policy
-    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir, 1800, #7200,
+    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir, 7200,
                     args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log,
                     delta_scale=args.delta_scale)

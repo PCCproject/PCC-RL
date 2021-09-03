@@ -94,7 +94,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.check_freq == 0:
+        if self.num_timesteps % self.check_freq == 0:
             # Retrieve training reward
             # x, y = ts2xy(load_results(self.log_dir), 'timesteps')
             # if len(x) > 0:
@@ -119,7 +119,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     saver.save(
                         self.model.sess, os.path.join(
                             self.save_path, "model_step_{}.ckpt".format(
-                                self.n_calls)))
+                                int(self.num_timesteps))))
                 avg_tr_bw = []
                 avg_tr_min_rtt = []
                 avg_tr_loss = []
