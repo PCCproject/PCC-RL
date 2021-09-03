@@ -2,7 +2,7 @@
 import heapq
 # import json
 # import os
-# import random
+import random
 # import sys
 # import time
 from typing import List
@@ -182,7 +182,9 @@ class Network:
                 # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                 # TODO: add delay noise of datalink
                 pkt.add_propagation_delay(link_prop_latency)
+                # pkt.add_propagation_delay(random.uniform(0.0, 0.005))
                 pkt.add_queue_delay(q_delay)
+                pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not self.links[pkt.next_hop].packet_enters_link(self.cur_time):
                     pkt.drop()
                 # extra_delays.append(

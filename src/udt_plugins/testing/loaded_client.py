@@ -48,8 +48,10 @@ def parse_args():
     parser.add_argument("--history-len", type=int, default=10,
                         help="Feature history length.")
     parser.add_argument("--input-features", type=str,
+                        # default=["sent latency inflation", "latency ratio",
+                        #          "send ratio"],
                         default=["sent latency inflation", "latency ratio",
-                                 "send ratio"], nargs=3, help="Feature type.")
+                                 "recv ratio"], nargs=3, help="Feature type.")
 
     args, unknown = parser.parse_known_args()
     return args
@@ -76,12 +78,15 @@ class PccGymDriver():
         self.log_writer = csv.writer(open(os.path.join(
             self.save_dir, 'aurora_emulation_log.csv'), 'w', 1),
             lineterminator='\n')
-        self.log_writer.writerow(['timestamp', "send_rate", 'recv_rate',
-                                  'latency', 'loss', 'reward', "action",
-                                  "bytes_sent", "bytes_acked", 'bytes_lost',
-                                  'send_start_time', "send_end_time",
-                                  'recv_start_time', 'recv_end_time',
-                                  'latency_increase', 'packet_size'])
+        self.log_writer.writerow(['timestamp', "target_send_rate", "send_rate",
+                                  'recv_rate', 'latency', 'loss', 'reward',
+                                  "action", "bytes_sent", "bytes_acked",
+                                  'bytes_lost', 'send_start_time',
+                                  "send_end_time", 'recv_start_time',
+                                  'recv_end_time', 'latency_increase',
+                                  "sent_latency_inflation", 'latency_ratio',
+                                  'send_ratio', 'recv_ratio', 'packet_size',
+                                  "min_rtt", 'rtt_samples'])
         self.got_data = False
 
         # self.agent = loaded_agent.LoadedModelAgent(args.model_path)
@@ -91,10 +96,6 @@ class PccGymDriver():
 
         PccGymDriver.flow_lookup[flow_id] = self
 
-        self.obsf = open('./obs.csv', 'w', 1)
-        self.obsf.write("ts\t\trate delta\t\tsending rate\t\t[bytes_sent, "
-                        "bytes_acked, bytes_lost, send_start, send_end, recv_start, "
-                        "recv_end, rtt_samples, packet_size]\n")
         self.t_start = time.time()
         # dummpy inference here to load model
         # _ = self.agent.act(self.history.as_array())
@@ -102,21 +103,6 @@ class PccGymDriver():
 
         self.mi_pushed = False
 
-        # self.actions = []
-        # self.sim_features = []
-        # with open('/home/zxxia/pantheon/env_2.000_5.000_0.000_10.000.csv', 'r') as f:
-        #     reader = csv.DictReader(f)
-        #     for row in reader:
-        #         self.actions.append(float(row['action']))
-        #         sim_feat = []
-        #         for k in range(10):
-        #             sim_feat.append(
-        #                 float(row['send_latency_ratio {}'.format(k)]))
-        #             sim_feat.append(float(row['latency_ratio {}'.format(k)]))
-        #             sim_feat.append(float(row['send_ratio {}'.format(k)]))
-        #
-        #         self.sim_features.append(np.array(sim_feat))
-        # print(self.actions, file=sys.stderr, flush=True)
         self.idx = 1
 
     def get_rate(self):
@@ -125,9 +111,10 @@ class PccGymDriver():
             # rate_delta = self.agent.act(self.sim_features[self.idx])
             t_start = time.time()
             rate_delta, _ = self.aurora.model.predict(self.history.as_array(), deterministic=True)
+
             rate_delta = rate_delta.item()
-            old_rate = self.rate
-            self.rate = apply_rate_delta(self.rate, rate_delta)
+            target_rate = self.rate
+            # self.rate = apply_rate_delta(self.rate, rate_delta)
             # print('get rate costs {:.4f}'.format(time.time() - t_start), old_rate, self.rate, rate_delta, self.history.as_array(), file=sys.stderr, flush=True)
             try:
                 mi = self.history.values[-1]
@@ -137,6 +124,10 @@ class PccGymDriver():
                 self.idx += 1
                 send_rate = mi.get("send rate")
                 recv_rate = mi.get("recv rate")
+                sent_lat_inf = mi.get("sent latency inflation")
+                latency_ratio = mi.get("latency ratio")
+                send_ratio = mi.get("send ratio")
+                recv_ratio = mi.get("recv ratio")
                 latency = mi.get("avg latency")
                 loss_rate = mi.get("loss ratio")
                 latency_increase = mi.get("latency increase")
@@ -144,61 +135,17 @@ class PccGymDriver():
                 reward = 10.0 * recv_rate / \
                     (8 * mi.packet_size) - 1e3 * latency - 2e3 * loss_rate
                 self.log_writer.writerow([
-                    mi.send_end, send_rate, recv_rate, latency,
-                    loss_rate, reward, rate_delta, mi.bytes_sent,
+                    mi.send_end, target_rate * 1e6, send_rate, recv_rate,
+                    latency, loss_rate, reward, rate_delta, mi.bytes_sent,
                     mi.bytes_acked, mi.bytes_lost, mi.send_start, mi.send_end,
-                    mi.recv_start, mi.recv_end, latency_increase,
-                    mi.packet_size, min_lat])
+                    mi.recv_start, mi.recv_end, latency_increase, sent_lat_inf,
+                    latency_ratio, send_ratio, recv_ratio, mi.packet_size,
+                    min_lat, mi.rtt_samples])
+                self.rate = apply_rate_delta(send_rate / 1e6, rate_delta)
             except Exception as e:
                 print(e, file=sys.stderr, flush=True)
         else:
             rate_delta = 0
-            pass
-            # print(self.rate, file=sys.stderr)
-            # , list(self.history.as_array())
-        # print(self.history.as_array(), file=sys.stderr, flush=True)
-        try:
-            input_array_line = "["
-            for val in self.history.as_array():
-                if val < 0:
-                    input_array_line += "{:.3f}".format(val) + ", "
-                else:
-                    input_array_line += "{:.4f}".format(val) + ", "
-            input_array_line = input_array_line[:-1] + "]"
-            sample = self.history.values[-1]
-            sample_vector = "[{}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, " \
-                "[rtt samples={}, rtt min={:.4}, mean_rtt={:.4}, " \
-                "latency inc={:.4f}, send dur={:.4f}, recv dur={:.4f}, "\
-                "send rate={:.4f}, recv rate={:.4f}], {}]".format(sample.mi_id, sample.bytes_sent, sample.bytes_acked,
-                                                                  sample.bytes_lost,
-                                                                  sample.send_start,
-                                                                  sample.send_end,
-                                                                  sample.recv_start,
-                                                                  sample.recv_end,
-                                                                  sample.rtt_samples,
-                                                                  float(
-                                                                      min(sample.rtt_samples)) if sample.rtt_samples else 0,
-                                                                  float(
-                                                                      np.mean(sample.rtt_samples)) if sample.rtt_samples else 0,
-                                                                  sample.get(
-                                                                      'latency increase'),
-                                                                  # np.mean(sample.rtt_samples[int(len(sample.rtt_samples)):]),
-                                                                  sample.get(
-                                                                      'send dur'),
-                                                                  sample.get(
-                                                                      'recv dur'),
-                                                                  float(sender_obs._mi_metric_send_rate(
-                                                                      sample)) / 1e6,
-                                                                  float(sender_obs._mi_metric_recv_rate(
-                                                                      sample)) / 1e6,
-                                                                  float(sample.packet_size))
-            # print(sample_vector, file=sys.stderr, flush=True)
-            #
-            # self.obsf.write("action={}, rate={}".format(rate_delta, self.rate))
-            self.obsf.write("{:.4f}\t\t\t{:.4f}\t\t\t{:.4f}\t\t\t{}\t\t\t{}\n".format(
-                time.time() - self.t_start, rate_delta, self.rate, sample_vector, input_array_line))
-        except Exception as e:
-            print(e, file=sys.stderr, flush=True)
         self.mi_pushed = False
         return self.rate * 1e6
 
@@ -229,11 +176,6 @@ class PccGymDriver():
     def give_sample(self, bytes_sent, bytes_acked, bytes_lost,
                     send_start_time, send_end_time, recv_start_time,
                     recv_end_time, rtt_samples, packet_size, utility):
-        self.obsf.write("bytes_sent={}, bytes_acked={}, bytes_lost={}, "
-                "send_start_time={}, send_end_time={}, recv_start_time={},"
-                "recv_end_time={}, rtt_samples={}, packet_size={}\n".format(bytes_sent, bytes_acked, bytes_lost,
-                    send_start_time, send_end_time, recv_start_time,
-                    recv_end_time, rtt_samples, packet_size))
         self.record_observation(
             sender_obs.SenderMonitorInterval(
                 self.id,

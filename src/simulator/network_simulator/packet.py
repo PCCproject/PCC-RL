@@ -16,14 +16,20 @@ class Packet:
         self.event_type = EVENT_TYPE_SEND
         self.next_hop = 0
         self.pkt_id = pkt_id
-        self.queue_delay = 0
-        self.propagation_delay = 0
+        self.queue_delay = 0.0
+        self.propagation_delay = 0.0
+        self.transmission_delay = 0.0
         self.pkt_size = BYTES_PER_PACKET # bytes
         self.real_ts = time.time()
 
     def drop(self) -> None:
         """Mark packet as dropped."""
         self.dropped = True
+
+    def add_transmission_delay(self, extra_delay: float) -> None:
+        """Add to the transmission delay and add to the timestamp too."""
+        self.transmission_delay += extra_delay
+        self.ts += extra_delay
 
     def add_propagation_delay(self, extra_delay: float) -> None:
         """Add to the propagation delay and add to the timestamp too."""
@@ -41,7 +47,7 @@ class Packet:
 
         Latency = propagation_delay + queue_delay
         """
-        return self.queue_delay + self.propagation_delay
+        return self.queue_delay + self.propagation_delay # + self.transmission_delay
 
     @property
     def rtt(self) -> float:

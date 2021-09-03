@@ -38,7 +38,7 @@ class UtilityManager:
     def calculate_utility(self, mi, event_time: float) -> float:
         # TODO: compute interval stats
         utility = 0.0
-        if self.utility_tag == "Vivace":
+        if self.utility_tag == "vivace":
             utility = self.calculate_utility_vivace(mi)
         else:
             raise RuntimeError

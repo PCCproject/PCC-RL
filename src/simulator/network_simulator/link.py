@@ -2,7 +2,7 @@ import math
 import random
 from typing import Tuple
 
-from simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import Trace
 
 
@@ -21,7 +21,7 @@ class Link():
         #                         (event_time - self.queue_delay_update_time) *
         #                         self.get_bandwidth(event_time))
         self.pkt_in_queue = max(0, self.pkt_in_queue -
-                                self.trace.get_avail_bits2send(self.queue_delay_update_time, event_time) / 8 / BYTES_PER_PACKET)
+                                self.trace.get_avail_bits2send(self.queue_delay_update_time, event_time) / BITS_PER_BYTE / BYTES_PER_PACKET)
         # print('old pkt_in_queue', pkt_in_queue_old, 'new pkt_in_queue', pkt_in_queue, 'pkt_in_queue before change', self.pkt_in_queue)
         # self.pkt_in_queue = pkt_in_queue_old
         self.queue_delay_update_time = event_time
@@ -29,7 +29,7 @@ class Link():
         #     self.pkt_in_queue) / self.get_bandwidth(event_time)
 
         # cur_queue_delay_old = self.pkt_in_queue / self.get_bandwidth(event_time) # cur_queue_delay is not accurate
-        cur_queue_delay = self.trace.get_sending_t_usage(self.pkt_in_queue * BYTES_PER_PACKET * 8, event_time)
+        cur_queue_delay = self.trace.get_sending_t_usage(self.pkt_in_queue * BYTES_PER_PACKET * BITS_PER_BYTE, event_time)
         return cur_queue_delay
 
     def get_cur_latency(self, event_time: float) -> Tuple[float, float]:
@@ -67,4 +67,4 @@ class Link():
         self.pkt_in_queue = 0
 
     def get_bandwidth(self, ts):
-        return self.trace.get_bandwidth(ts) * 1e6 / 8 / BYTES_PER_PACKET
+        return self.trace.get_bandwidth(ts) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET
