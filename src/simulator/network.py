@@ -677,8 +677,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.episodes_run += 1
         if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
             print('change traces', self.episodes_run)
-            self.traces = generate_traces(self.config_file, 10,
-                                          duration=30, constant_bw=False)
+            self.traces = generate_traces(self.config_file, 10, duration=30)
         # self.replay.reset()
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99

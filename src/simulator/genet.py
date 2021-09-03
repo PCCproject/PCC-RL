@@ -172,31 +172,35 @@ def black_box_function(bandwidth_lower_bound: float,
                        bandwidth_upper_bound: float, delay: float, queue: float,
                        loss: float, T_s: float, delay_noise: float,
                        heuristic, rl_method) -> float:
-    # queue = int(queue)
-    t_start = time.time()
-    trace = generate_trace(duration_range=(30, 30),
-                           bandwidth_lower_bound_range=(bandwidth_lower_bound, bandwidth_lower_bound),
-                           bandwidth_upper_bound_range=(bandwidth_upper_bound, bandwidth_upper_bound),
-                           delay_range=(delay, delay),
-                           loss_rate_range=(loss, loss),
-                           queue_size_range=(queue, queue),
-                           T_s_range=(T_s, T_s),
-                           delay_noise_range=(delay_noise, delay_noise),
-                           constant_bw=False)
-    # print("trace generation used {}s".format(time.time() - t_start))
     # t_start = time.time()
-    # heuristic_reward, _ = heuristic.test(trace)
-    heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
-        trace, rl_method.log_dir)
-    # print("heuristic used {}s".format(time.time() - t_start))
-    t_start = time.time()
-    _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(
-        trace, rl_method.log_dir)
-    # print("rl_method used {}s".format(time.time() - t_start))
-    rl_mi_level_reward = np.mean(reward_list)
+    heuristic_rewards = []
+    rl_method_rewards = []
+    for _ in range(10):
+        trace = generate_trace(duration_range=(30, 30),
+                               bandwidth_lower_bound_range=(bandwidth_lower_bound, bandwidth_lower_bound),
+                               bandwidth_upper_bound_range=(bandwidth_upper_bound, bandwidth_upper_bound),
+                               delay_range=(delay, delay),
+                               loss_rate_range=(loss, loss),
+                               queue_size_range=(queue, queue),
+                               T_s_range=(T_s, T_s),
+                               delay_noise_range=(delay_noise, delay_noise))
+        # print("trace generation used {}s".format(time.time() - t_start))
+        # t_start = time.time()
+        # heuristic_reward, _ = heuristic.test(trace)
+        heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
+            trace, rl_method.log_dir)
+        # print("heuristic used {}s".format(time.time() - t_start))
+        t_start = time.time()
+        _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(
+            trace, rl_method.log_dir)
+        # print("rl_method used {}s".format(time.time() - t_start))
+        rl_mi_level_reward = np.mean(reward_list)
 
-    rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
-    return heuristic_pkt_level_reward - rl_pkt_level_reward
+        rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
+        heuristic_rewards.append(heuristic_pkt_level_reward)
+        rl_method_rewards.append(rl_pkt_level_reward)
+    return np.mean(heuristic_rewards) - np.mean(rl_method_rewards)
+    # return heuristic_pkt_level_reward - rl_pkt_level_reward
     # return heuristic_mi_level_reward - rl_mi_level_reward
 
 
