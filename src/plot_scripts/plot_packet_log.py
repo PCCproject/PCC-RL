@@ -1,7 +1,7 @@
 import argparse
 import csv
 import os
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import matplotlib
 matplotlib.use('Agg')
@@ -29,8 +29,9 @@ def parse_args():
 class PacketLog():
     def __init__(self, pkt_sent_ts: List[float], pkt_acked_ts: List[float],
                  pkt_rtt: List[float], pkt_queue_delays: List[float],
-                 first_ts, binwise_bytes_sent, binwise_bytes_acked,
-                 binwise_bytes_lost, packet_log_file=None, ms_bin_size=500):
+                 first_ts, binwise_bytes_sent: Dict[int, int],
+                 binwise_bytes_acked: Dict[int, int],
+                 binwise_bytes_lost: Dict[int, int], packet_log_file=None, ms_bin_size: int = 500):
         self.pkt_log_file = packet_log_file
         self.pkt_sent_ts = pkt_sent_ts
         self.pkt_acked_ts = pkt_acked_ts
@@ -42,6 +43,10 @@ class PacketLog():
         self.binwise_bytes_sent = binwise_bytes_sent
         self.binwise_bytes_acked = binwise_bytes_acked
         self.binwise_bytes_lost = binwise_bytes_lost
+
+        self.avg_sending_rate = None
+        self.avg_throughput = None
+        self.avg_latency = None
 
     @classmethod
     def from_log_file(cls, packet_log_file, ms_bin_size=500):
@@ -186,18 +191,41 @@ class PacketLog():
             trace = Trace.load_from_file(trace_file)
         elif trace_file and trace_file.endswith('.log'):
             trace = Trace.load_from_pantheon_file(trace_file, 0, 50, 500)
-        elif trace is not None:
-            pass
-        else:
-            raise RuntimeError
-        _, throughput = self.get_throughput()
-        _, rtt = self.get_rtt()
         loss = self.get_loss_rate()
+        if trace is None:
+            # original reward
+            return pcc_aurora_reward(
+                self.get_avg_throughput() * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+                self.get_avg_latency() / 1e3, loss)
+        # normalized reward
         return pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(trace.delays) * 2 / 1e3)
+            self.get_avg_throughput() * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            self.get_avg_latency() / 1e3, loss,
+            trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+            trace.min_delay * 2 / 1e3)
+
+    def get_avg_sending_rate(self) -> float:
+        if self.avg_sending_rate is None:
+            total_duration = self.pkt_sent_ts[-1] - self.pkt_sent_ts[0]
+            bytes_sum = 0
+            for _, bytes_sent in self.binwise_bytes_sent.items():
+                bytes_sum += bytes_sent
+            self.avg_sending_rate = bytes_sum * BITS_PER_BYTE / 1e6 / total_duration
+        return self.avg_sending_rate
+
+    def get_avg_throughput(self) -> float:
+        if self.avg_throughput is None:
+            total_duration = self.pkt_acked_ts[-1] - self.pkt_acked_ts[0]
+            bytes_sum = 0
+            for _, bytes_acked in self.binwise_bytes_acked.items():
+                bytes_sum += bytes_acked
+            self.avg_throughput = bytes_sum * BITS_PER_BYTE / 1e6 / total_duration
+        return self.avg_throughput
+
+    def get_avg_latency(self) -> float:
+        if self.avg_latency is None:
+            self.avg_latency = np.mean(self.pkt_rtt)
+        return self.avg_latency
 
 
 def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
@@ -209,9 +237,9 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     loss = pkt_log.get_loss_rate()
     # print(throughput[:10])
     axes[0].plot(throughput_ts, throughput, "-o", ms=2,  # drawstyle='steps-post',
-                 label='throughput, avg {:.3f}Mbps'.format(np.mean(throughput)))
+                 label='throughput, avg {:.3f}Mbps'.format(pkt_log.get_avg_throughput()))
     axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2,  # drawstyle='steps-post',
-                 label='sending rate, avg {:.3f}Mbps'.format(np.mean(sending_rate)))
+                 label='sending rate, avg {:.3f}Mbps'.format(pkt_log.get_avg_sending_rate()))
     if trace is not None:
         axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                      label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
@@ -225,27 +253,18 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     axes[0].set_ylabel("Rate(Mbps)")
     axes[0].set_xlim(0, )
     axes[0].set_ylim(0, )
-    reward = pcc_aurora_reward(
-        np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-        np.mean(rtt) / 1e3, loss)
+    reward = pkt_log.get_reward("", None)
+    normalized_reward = reward
     if trace is not None:
-        normalized_reward = pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(rtt) / 1e3, loss,
-            np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE /BYTES_PER_PACKET)
-    else:
-        reward = pcc_aurora_reward(
-            np.mean(throughput) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(rtt) / 1e3, loss)
-        normalized_reward = reward
+        normalized_reward = pkt_log.get_reward("", trace)
     axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
         cc, reward, normalized_reward))
 
-    axes[1].plot(rtt_ts, rtt, ms=2,
-                 label='RTT, avg {:.3f}ms'.format(np.mean(rtt)))
+    axes[1].plot(rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(
+        pkt_log.get_avg_latency()))
     # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
     if trace is not None:
-        axes[1].plot(rtt_ts, np.ones_like(rtt) * 2*min(trace.delays), c='C2',
+        axes[1].plot(rtt_ts, np.ones_like(rtt) * 2 * min(trace.delays), c='C2',
                      label="trace minRTT {:.3f}ms".format(2*min(trace.delays)))
     axes[1].legend()
     axes[1].set_xlabel("Time(s)")
@@ -253,7 +272,7 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     axes[1].set_title('{} loss rate={:.3f}, queue={:.3f}'.format(
         cc, loss, queue_size))
     axes[1].set_xlim(0, )
-    axes[1].set_ylim(0, )
+    # axes[1].set_ylim(0, )
 
     plt.tight_layout()
     if save_dir:
