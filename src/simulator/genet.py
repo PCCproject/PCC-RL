@@ -157,7 +157,7 @@ class Genet:
             logger = JSONLogger(path=os.path.join(
                 self.save_dir, "bo_{}_logs.json".format(i)))
             optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
-            optimizer.maximize(init_points=13, n_iter=2, kappa=20, xi=0.1)
+            optimizer.maximize(init_points=10, n_iter=5, kappa=20, xi=0.1)
             best_param = optimizer.max
             print(best_param)
             self.rand_ranges.add_ranges([best_param['params']])
