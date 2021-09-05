@@ -55,11 +55,18 @@ class Trace():
 
     @property
     def avg_bw(self):
+        """Mean bandwidth in Mbps."""
         return np.mean(self.bandwidths)
 
     @property
     def min_delay(self):
+        """Min delay in ms."""
         return np.min(self.delays)
+
+    @property
+    def avg_delay(self):
+        """Mean delay in ms."""
+        return np.mean(self.delays)
 
     def get_next_ts(self):
         if self.idx + 1 < len(self.timestamps):
