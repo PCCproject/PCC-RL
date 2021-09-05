@@ -11,7 +11,7 @@ from bayes_opt.event import Events
 from common.utils import (pcc_aurora_reward, read_json_file, set_seed, write_json_file)
 from plot_scripts.plot_packet_log import PacketLog
 from simulator.aurora import Aurora
-from simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 # from simulator.cubic import Cubic
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
@@ -119,7 +119,7 @@ class Genet:
 
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, rl_method,
-                 seed: int = 42, use_optimal: bool = False):
+                 seed: int = 42):
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -138,7 +138,6 @@ class Genet:
         #     event=Events.OPTIMIZATION_STEP,
         #     subscriber=my_observer,
         #     callback=None)
-        self.use_optimal = use_optimal
 
     def train(self, rounds: int):
         """Genet trains rl_method.
@@ -152,7 +151,7 @@ class Genet:
                 queue, loss, T_s, delay_noise: self.black_box_function(
                     bandwidth_lower_bound, bandwidth_upper_bound, delay, queue,
                     loss, T_s, delay_noise, heuristic=self.heuristic,
-                    rl_method=self.rl_method, use_optimal=self.use_optimal),
+                    rl_method=self.rl_method),
                 pbounds=self.pbounds, random_state=self.seed+i)
             os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
                         exist_ok=True)
@@ -173,7 +172,7 @@ class Genet:
 def black_box_function(bandwidth_lower_bound: float,
                        bandwidth_upper_bound: float, delay: float, queue: float,
                        loss: float, T_s: float, delay_noise: float,
-                       heuristic, rl_method, use_optimal: bool = False) -> float:
+                       heuristic, rl_method) -> float:
     # t_start = time.time()
     heuristic_rewards = []
     rl_method_rewards = []
@@ -189,9 +188,9 @@ def black_box_function(bandwidth_lower_bound: float,
         # print("trace generation used {}s".format(time.time() - t_start))
         # t_start = time.time()
         # heuristic_reward, _ = heuristic.test(trace)
-        if use_optimal:
+        if not heuristic:
             heuristic_pkt_level_reward = pcc_aurora_reward(
-                trace.avg_bw * 1e6 / 8 / BYTES_PER_PACKET,
+                trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
                 trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw)
             heuristic_mi_level_reward = heuristic_pkt_level_reward
         else:

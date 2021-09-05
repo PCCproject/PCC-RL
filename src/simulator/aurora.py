@@ -94,7 +94,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
-        if self.num_timesteps % self.check_freq == 0:
+        if self.n_calls % self.check_freq == 0:
             # Retrieve training reward
             # x, y = ts2xy(load_results(self.log_dir), 'timesteps')
             # if len(x) > 0:

@@ -270,7 +270,7 @@ def generate_trace(duration_range: Tuple[float, float],
 
     queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
     bdp = bandwidth_upper_bound_range[1] / BYTES_PER_PACKET / 8 * 1e6 * delay_range[1] * 2 / 1000
-    queue_size = int(bdp * queue_size)
+    queue_size = max(2, int(bdp * queue_size))
     # queue_size = int(np.exp(np.random.uniform(
     #     np.log(queue_size_range[0]),
     #     np.log(queue_size_range[1]+1), 1)))
@@ -578,8 +578,9 @@ def generate_bw_delay_series(T_s: float, duration: float,
     bandwidths = []
     delays = []
     round_digit = 5
+    min_bw_lower_bnd = round(min_bw_lower_bnd, round_digit)
     bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_upper_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
-    assert min_bw_lower_bnd <= bw_upper_bnd
+    assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(min_bw_lower_bnd, bw_upper_bnd)
     bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(max_bw_lower_bnd, bw_upper_bnd)), 1))), round_digit)
     bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
     delay_val = round(float(np.random.uniform(
@@ -621,7 +622,6 @@ def generate_trace_from_config_file(config_file: str, duration: int = 30) -> Tra
 
     for i, weight_cumsum in zip(indices_sorted, weight_cumsums):
         if rand_num <= float(weight_cumsum):
-            print(rand_num)
             env_config = config[i]
             bw_lower_bnd_min, bw_lower_bnd_max = env_config['bandwidth_lower_bound']
             bw_upper_bnd_min, bw_upper_bnd_max = env_config['bandwidth_upper_bound']

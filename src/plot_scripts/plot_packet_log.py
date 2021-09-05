@@ -205,6 +205,8 @@ class PacketLog():
             trace.min_delay * 2 / 1e3)
 
     def get_avg_sending_rate(self) -> float:
+        if not self.pkt_sent_ts:
+            return 0.0
         if self.avg_sending_rate is None:
             total_duration = self.pkt_sent_ts[-1] - self.pkt_sent_ts[0]
             bytes_sum = 0
@@ -214,6 +216,8 @@ class PacketLog():
         return self.avg_sending_rate
 
     def get_avg_throughput(self) -> float:
+        if not self.pkt_acked_ts:
+            return 0.0
         if self.avg_throughput is None:
             total_duration = self.pkt_acked_ts[-1] - self.pkt_acked_ts[0]
             bytes_sum = 0
