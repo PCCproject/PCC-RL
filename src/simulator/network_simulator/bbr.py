@@ -9,6 +9,7 @@ import numpy as np
 
 from common.utils import pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
+from plot_scripts.plot_time_series import plot as plot_mi_level_time_series
 from simulator.network_simulator.constants import (BITS_PER_BYTE,
                                                    BYTES_PER_PACKET, TCP_INIT_CWND)
 from simulator.network_simulator.link import Link
@@ -36,6 +37,7 @@ class BBRPacket(packet.Packet):
         self.delivered_time = 0.0
         self.first_sent_time = 0.0
         self.is_app_limited = False
+        self.in_fast_recovery_mode = False
 
     def debug_print(self):
         print("Event {}: ts={}, type={}, dropped={}, cur_latency: {}, "
@@ -82,18 +84,17 @@ class RateSample:
 class BBRBtlBwFilter:
     def __init__(self, btlbw_filter_len: int):
         self.btlbw_filter_len = btlbw_filter_len
-        self.cache = []
+        self.cache = {}
 
     def update(self, delivery_rate: float, round_count: int) -> None:
-        # TODO: need to figure out how to use the round count
-        self.cache.append(delivery_rate)
+        self.cache[round_count] = max(self.cache.get(round_count, 0), delivery_rate)
         if len(self.cache) > self.btlbw_filter_len:
-            self.cache.pop(0)
+            self.cache.pop(min(self.cache))
 
     def get_btlbw(self) -> float:
         if not self.cache:
             return 0
-        return max(self.cache)
+        return max(self.cache.values())
 
 
 class ConnectionState:
@@ -394,7 +395,7 @@ class BBRSender(Sender):
         self.cwnd_gain = 1
 
     def handle_probe_rtt(self):
-        # Ignore low rate samples during ProbeRTT: */
+        # Ignore low rate samples during ProbeRTT:
         packets_in_flight = self.bytes_in_flight / BYTES_PER_PACKET
         self.app_limited = False  # assume always have available data to send from app
         # instead of (BW.delivered + packets_in_flight) ? : 1
@@ -445,6 +446,7 @@ class BBRSender(Sender):
         pkt.delivered_time = self.conn_state.delivered_time
         pkt.delivered = self.conn_state.delivered
         pkt.is_app_limited = False  # (self.app_limited != 0)
+        pkt.in_fast_recovery_mode = self.in_fast_recovery_mode
 
     # Upon receiving ACK, fill in delivery rate sample rs.
     def generate_rate_sample(self, pkt: BBRPacket):
@@ -473,21 +475,18 @@ class BBRSender(Sender):
         # is under-estimated (up to an RTT). However, continuously
         # measuring the delivery rate during loss recovery is crucial
         # for connections suffer heavy or prolonged losses.
-        #
 
-        # TODO: uncomment this
-        # if self.rs.interval <  MinRTT(tp):
-        #     self.rs.interval = -1
-        #     return False  # no reliable sample
-
-        if self.rs.interval != 0:
+        if self.rs.interval < self.rtprop:
+            self.rs.interval = -1
+            return False  # no reliable sample
+        if self.rs.interval != 0 and not pkt.in_fast_recovery_mode:
             self.rs.delivery_rate = self.rs.delivered / self.rs.interval
             # if self.rs.delivery_rate * 8 / 1e6 > 1.2:
             # print("C.delivered:", self.conn_state.delivered, "rs.prior_delivered:", self.rs.prior_delivered, "rs.delivered:", self.rs.delivered, "rs.interval:", self.rs.interval, "rs.delivery_rate:", self.rs.delivery_rate * 8 / 1e6)
 
-        return True  # we filled in rs with a rate sample */
+        return True  # we filled in rs with a rate sample
 
-    # Update rs when packet is SACKed or ACKed. */
+    # Update rs when packet is SACKed or ACKed.
     def update_rate_sample(self, pkt: BBRPacket):
         # comment out because we don't need this in the simulator.
         # if pkt.delivered_time == 0:
@@ -679,7 +678,7 @@ class BBR:
 
             reward = pcc_aurora_reward(
                 throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
-                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+                trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
             rewards.append(reward)
             try:
                 ssthresh = senders[0].ssthresh
@@ -716,4 +715,5 @@ class BBR:
             pkt_level_reward = pkt_log.get_reward("", trace)
             if plot_flag:
                 plot(trace, pkt_log, save_dir, self.cc_name)
+                plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
         return np.mean(rewards), pkt_level_reward
