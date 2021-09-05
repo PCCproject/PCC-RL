@@ -26,6 +26,7 @@ class Trace():
         delays: trace one-way delays in ms.
         loss_rate: uplink random packet loss rate.
         queue: queue in packets.
+        delay_noise: maximum noise added to a packet in ms.
     """
 
     def __init__(self, timestamps: Union[List[float], List[int]],
@@ -60,12 +61,12 @@ class Trace():
 
     @property
     def min_delay(self):
-        """Min delay in ms."""
+        """Min one-way delay in ms."""
         return np.min(self.delays)
 
     @property
     def avg_delay(self):
-        """Mean delay in ms."""
+        """Mean one-way delay in ms."""
         return np.mean(self.delays)
 
     def get_next_ts(self):

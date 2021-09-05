@@ -235,6 +235,13 @@ class Network():
                 #     self.cur_time, self.links[0].get_bandwidth(self.cur_time)) / 1000
                 # link_latency += max(0, np.random.normal(0, 1) / 1000)
                 # link_latency += max(0, np.random.uniform(0, 5) / 1000)
+                rand = random.uniform(0, 1)
+                if rand > 0.9:
+                    noise = random.uniform(0, sender.path[next_hop].trace.delay_noise) / 1000
+                else:
+                    noise = 0
+                new_latency += noise
+                new_event_time += noise
                 # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                 new_latency += link_latency
                 new_event_time += link_latency

@@ -180,9 +180,10 @@ class Network:
                 # link_latency += self.env.current_trace.get_delay_noise(
                 #     self.cur_time, self.links[pkt.next_hop].get_bandwidth(self.cur_time)) / 1000
                 # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
-                # TODO: add delay noise of datalink
+                rand = random.uniform(0, 1)
                 pkt.add_propagation_delay(link_prop_latency)
-                # pkt.add_propagation_delay(random.uniform(0.0, 0.005))
+                if rand > 0.9:
+                    pkt.add_propagation_delay(random.uniform(0.0, self.links[pkt.next_hop].trace.delay_noise))
                 pkt.add_queue_delay(q_delay)
                 pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not self.links[pkt.next_hop].packet_enters_link(self.cur_time):
