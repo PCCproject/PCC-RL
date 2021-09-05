@@ -183,7 +183,8 @@ class Network:
                 rand = random.uniform(0, 1)
                 pkt.add_propagation_delay(link_prop_latency)
                 if rand > 0.9:
-                    pkt.add_propagation_delay(random.uniform(0.0, self.links[pkt.next_hop].trace.delay_noise))
+                    noise = random.uniform(0.0, self.links[pkt.next_hop].trace.delay_noise) / 1000
+                    pkt.add_propagation_delay(noise)
                 pkt.add_queue_delay(q_delay)
                 pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not self.links[pkt.next_hop].packet_enters_link(self.cur_time):
