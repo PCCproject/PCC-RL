@@ -192,7 +192,7 @@ def black_box_function(bandwidth_lower_bound: float,
         if use_optimal:
             heuristic_pkt_level_reward = pcc_aurora_reward(
                 trace.avg_bw * 1e6 / 8 / BYTES_PER_PACKET,
-                trace.avg_delay / 1000, trace.loss_rate, trace.avg_bw)
+                trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw)
             heuristic_mi_level_reward = heuristic_pkt_level_reward
         else:
             heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
