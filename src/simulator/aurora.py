@@ -133,7 +133,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     avg_tr_bw.append(val_trace.avg_bw)
                     avg_tr_min_rtt.append(val_trace.avg_bw)
                     ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora.test(
+                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
                             val_trace, self.log_dir)
                     # pktlog = PacketLog.from_log(pkt_log)
                     avg_rewards.append(np.mean(np.array(val_rewards)))
@@ -276,7 +276,7 @@ class Aurora():
         pkt_logs = []
         for trace, save_dir in zip(traces, save_dirs):
             ts_list, reward_list, loss_list, tput_list, delay_list, \
-                send_rate_list, action_list, obs_list, mi_list, pkt_log = self.test(
+                send_rate_list, action_list, obs_list, mi_list, pkt_log = self._test(
                     trace, save_dir)
             result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
                               delay_list, loss_list, action_list, obs_list, mi_list))
@@ -336,7 +336,7 @@ class Aurora():
     def load_model(self):
         raise NotImplementedError
 
-    def test(self, trace: Trace, save_dir: str, plot_flag=False):
+    def _test(self, trace: Trace, save_dir: str, plot_flag=False):
         reward_list = []
         loss_list = []
         tput_list = []
@@ -447,3 +447,8 @@ class Aurora():
             pkt_log = PacketLog.from_log(env.net.pkt_log)
             plot(trace, pkt_log, save_dir, "aurora")
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
+
+    def test(self, trace: Trace, save_dir: str, plot_flag=False):
+        _, reward_list, _, _, _, _, _, _, _, pkt_log = self._test(trace, save_dir, plot_flag)
+        pkt_log = PacketLog.from_log(pkt_log)
+        return np.mean(reward_list), pkt_log.get_reward("", trace)
