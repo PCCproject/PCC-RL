@@ -32,9 +32,11 @@ class Link():
         cur_queue_delay = self.trace.get_sending_t_usage(self.pkt_in_queue * BYTES_PER_PACKET * BITS_PER_BYTE, event_time)
         return cur_queue_delay
 
+    def get_cur_propagation_latency(self, event_time: float) -> float:
+        return self.trace.get_delay(event_time) / 1000.0
+
     def get_cur_latency(self, event_time: float) -> Tuple[float, float]:
         q_delay = self.get_cur_queue_delay(event_time)
-        # print('queue delay: ', q_delay)
         return self.trace.get_delay(event_time) / 1000.0, q_delay
 
     def packet_enters_link(self, event_time: float) -> bool:
