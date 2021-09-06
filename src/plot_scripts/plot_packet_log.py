@@ -248,8 +248,10 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
         axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                      label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
         queue_size = trace.queue_size
+        trace_random_loss = trace.loss_rate
     else:
         queue_size = "N/A"
+        trace_random_loss = "N/A"
         # axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
         #              label='bandwidth, avg {:.3f}Mbps'.format(6))
     axes[0].legend()
@@ -273,8 +275,8 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     axes[1].legend()
     axes[1].set_xlabel("Time(s)")
     axes[1].set_ylabel("Latency(ms)")
-    axes[1].set_title('{} loss rate={:.3f}, queue={:.3f}'.format(
-        cc, loss, queue_size))
+    axes[1].set_title('{} loss rate={:.3f}, random loss={:.3f}, queue={:.3f}'.format(
+        cc, loss, trace_random_loss, queue_size))
     axes[1].set_xlim(0, )
     # axes[1].set_ylim(0, )
 
