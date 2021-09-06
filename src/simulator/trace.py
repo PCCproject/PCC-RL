@@ -571,18 +571,19 @@ def main():
 
 
 def generate_bw_delay_series(T_s: float, duration: float,
-                             min_bw_lower_bnd: float, max_bw_lower_bnd: float,
-                             min_bw_upper_bnd: float, max_bw_upper_bnd: float,
+                             min_bw_lower_bnd: float, min_bw_upper_bnd: float,
+                             max_bw_lower_bnd: float, max_bw_upper_bnd: float,
                              min_delay: float, max_delay: float):
     timestamps = []
     bandwidths = []
     delays = []
     round_digit = 5
     min_bw_lower_bnd = round(min_bw_lower_bnd, round_digit)
-    bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_upper_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
+    bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(max_bw_lower_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
     assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(min_bw_lower_bnd, bw_upper_bnd)
-    bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(max_bw_lower_bnd, bw_upper_bnd)), 1))), round_digit)
-    bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
+    bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(min_bw_upper_bnd, bw_upper_bnd)), 1))), round_digit)
+    # bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
+    bw_val = round(float(np.random.uniform(bw_lower_bnd, bw_upper_bnd, 1)), round_digit)
     delay_val = round(float(np.random.uniform(
         min_delay, max_delay, 1)), round_digit)
     ts = 0

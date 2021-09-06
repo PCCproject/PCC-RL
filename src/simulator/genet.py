@@ -186,8 +186,7 @@ def black_box_function(bandwidth_lower_bound: float,
                                T_s_range=(T_s, T_s),
                                delay_noise_range=(delay_noise, delay_noise))
         # print("trace generation used {}s".format(time.time() - t_start))
-        # t_start = time.time()
-        # heuristic_reward, _ = heuristic.test(trace)
+        t_start = time.time()
         if not heuristic:
             heuristic_pkt_level_reward = pcc_aurora_reward(
                 trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
@@ -196,14 +195,12 @@ def black_box_function(bandwidth_lower_bound: float,
         else:
             heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
             trace, rl_method.log_dir)
-        # print("heuristic used {}s".format(time.time() - t_start))
+        print("heuristic used {}s".format(time.time() - t_start))
         t_start = time.time()
-        _, reward_list, _, _, _, _, _, _, _, rl_pkt_log = rl_method.test(
+        rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(
             trace, rl_method.log_dir)
-        # print("rl_method used {}s".format(time.time() - t_start))
-        rl_mi_level_reward = np.mean(reward_list)
+        print("rl_method used {}s".format(time.time() - t_start))
 
-        rl_pkt_level_reward = PacketLog.from_log(rl_pkt_log).get_reward("", trace)
         heuristic_rewards.append(heuristic_pkt_level_reward)
         rl_method_rewards.append(rl_pkt_level_reward)
     return np.mean(heuristic_rewards) - np.mean(rl_method_rewards)
