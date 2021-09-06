@@ -136,14 +136,13 @@ class Network:
                     #          sender.pacing_rate * BYTES_PER_PACKET,
                     #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
                     #          sender.cwnd, sender.rto])
-                    link_prop_latency, q_delay = self.links[pkt.next_hop].get_cur_latency(
+                    link_prop_latency = self.links[pkt.next_hop].get_cur_propagation_latency(
                         self.cur_time)
                     # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                     # if USE_LATENCY_NOISE:
                     # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                     # TODO: add delay noise of acklink
                     pkt.add_propagation_delay(link_prop_latency)
-                    pkt.add_queue_delay(q_delay)
                     pkt.next_hop += 1
                     push_new_event = True
             elif pkt.event_type == EVENT_TYPE_SEND:  # in datalink
