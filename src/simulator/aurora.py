@@ -28,6 +28,7 @@ from simulator.constants import BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
+from plot_scripts.plot_time_series import plot as plot_simulation_log
 from udt_plugins.testing.loaded_agent import LoadedModel
 
 
@@ -446,6 +447,7 @@ class Aurora():
         if plot_flag:
             pkt_log = PacketLog.from_log(env.net.pkt_log)
             plot(trace, pkt_log, save_dir, "aurora")
+            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
 
     def test(self, trace: Trace, save_dir: str, plot_flag=False):

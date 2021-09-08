@@ -49,7 +49,7 @@ class PacketLog():
         self.avg_latency = None
 
     @classmethod
-    def from_log_file(cls, packet_log_file, ms_bin_size=500):
+    def from_log_file(cls, packet_log_file: str, ms_bin_size: int = 500):
         pkt_sent_ts = []
         pkt_acked_ts = []
         pkt_rtt = []
@@ -103,7 +103,7 @@ class PacketLog():
                    ms_bin_size=ms_bin_size)
 
     @classmethod
-    def from_log(cls, pkt_log, ms_bin_size=500):
+    def from_log(cls, pkt_log, ms_bin_size: int = 500):
         pkt_sent_ts = []
         pkt_acked_ts = []
         pkt_rtt = []
@@ -186,7 +186,7 @@ class PacketLog():
     def get_loss_rate(self) -> float:
         return 1 - len(self.pkt_acked_ts) / len(self.pkt_sent_ts)
 
-    def get_reward(self, trace_file, trace=None) -> float:
+    def get_reward(self, trace_file: str, trace=None) -> float:
         if trace_file and trace_file.endswith('.json'):
             trace = Trace.load_from_file(trace_file)
         elif trace_file and trace_file.endswith('.log'):
@@ -249,9 +249,11 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
                      label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
         queue_size = trace.queue_size
         trace_random_loss = trace.loss_rate
+        delay_noise = trace.delay_noise
     else:
         queue_size = "N/A"
         trace_random_loss = "N/A"
+        delay_noise = "N/A"
         # axes[0].plot(np.arange(30), np.ones_like(np.arange(30)) * 6, "-o", ms=2,  # drawstyle='steps-post',
         #              label='bandwidth, avg {:.3f}Mbps'.format(6))
     axes[0].legend()
@@ -270,13 +272,13 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
         pkt_log.get_avg_latency()))
     # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
     if trace is not None:
-        axes[1].plot(rtt_ts, np.ones_like(rtt) * 2 * min(trace.delays), c='C2',
+        axes[1].plot(rtt_ts, np.ones_like(rtt) * 2 * trace.min_delay, c='C2',
                      label="trace minRTT {:.3f}ms".format(2*min(trace.delays)))
     axes[1].legend()
     axes[1].set_xlabel("Time(s)")
     axes[1].set_ylabel("Latency(ms)")
-    axes[1].set_title('{} loss rate={:.3f}, random loss={:.3f}, queue={:.3f}'.format(
-        cc, loss, trace_random_loss, queue_size))
+    axes[1].set_title('{} loss={:.3f}, rand loss={:.3f}, queue={}, lat_noise={:.3f}'.format(
+        cc, loss, trace_random_loss, queue_size, delay_noise))
     axes[1].set_xlim(0, )
     # axes[1].set_ylim(0, )
 
