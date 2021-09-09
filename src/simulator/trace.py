@@ -229,6 +229,32 @@ class Trace():
         # tr = Trace(timestamps, bandwidths, [delay], loss, queue, offset=offset)
         return tr
 
+    def convert_to_mahimahi_format(self):
+        """
+        timestamps: s
+        bandwidths: Mbps
+        """
+        ms_series = []
+        assert len(self.timestamps) == len(self.bandwidths)
+        ms_t = 0
+        for ts, next_ts, bw in zip(self.timestamps[0:-1], self.timestamps[1:], self.bandwidths[0:-1]):
+            pkt_per_ms = bw * 1e6 / 8 / BYTES_PER_PACKET / 1000
+
+            ms_cnt = 0
+            pkt_cnt = 0
+            while True:
+                ms_cnt += 1
+                ms_t += 1
+                to_send = np.floor((ms_cnt * pkt_per_ms) - pkt_cnt)
+                for _ in range(int(to_send)):
+                    ms_series.append(ms_t)
+
+                pkt_cnt += to_send
+
+                if ms_cnt >= (next_ts - ts) * 1000:
+                    break
+        return ms_series
+
 
 def generate_trace(duration_range: Tuple[float, float],
                    bandwidth_lower_bound_range: Tuple[float, float],
