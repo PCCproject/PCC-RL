@@ -54,8 +54,6 @@ def parse_args():
                         help="tensorboard log direcotry.")
     parser.add_argument("--delta-scale", type=float, default=1,
                         help="delta scale.")
-    parser.add_argument('--time-variant-bw', action='store_true',
-                        help='Generate time variant bandwidth if specified.')
 
     return parser.parse_args()
 

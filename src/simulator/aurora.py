@@ -80,6 +80,10 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
                  'throughput', 'latency', 'sending_rate', 'tot_t_used(min)',
                  'val_t_used(min)', 'train_t_used(min)'])
+
+            os.makedirs(os.path.join(log_dir, "validation_traces"), exist_ok=True)
+            for i, tr in enumerate(self.val_traces):
+                tr.dump(os.path.join(log_dir, "validation_traces", "trace_{}.json".format(i)))
         else:
             self.val_log_writer = None
         self.best_val_reward = -np.inf
