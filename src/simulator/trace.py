@@ -294,9 +294,6 @@ def generate_trace(duration_range: Tuple[float, float],
     loss_rate = float(np.random.uniform(
         loss_rate_range[0], loss_rate_range[1], 1))
 
-    queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
-    bdp = bandwidth_upper_bound_range[1] / BYTES_PER_PACKET / 8 * 1e6 * delay_range[1] * 2 / 1000
-    queue_size = max(2, int(bdp * queue_size))
     # queue_size = int(np.exp(np.random.uniform(
     #     np.log(queue_size_range[0]),
     #     np.log(queue_size_range[1]+1), 1)))
@@ -333,6 +330,10 @@ def generate_trace(duration_range: Tuple[float, float],
         T_s, duration, bandwidth_lower_bound_range[0], bandwidth_lower_bound_range[1],
         bandwidth_upper_bound_range[0], bandwidth_upper_bound_range[1],
         delay_range[0], delay_range[1])
+
+    queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
+    bdp = np.max(bandwidths) / BYTES_PER_PACKET / 8 * 1e6 * np.max(delays) * 2 / 1000
+    queue_size = max(2, int(bdp * queue_size))
 
     ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size, delay_noise)
     return ret_trace
