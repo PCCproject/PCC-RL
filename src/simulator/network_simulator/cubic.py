@@ -1,6 +1,7 @@
 import csv
 import os
-from typing import Tuple
+import multiprocessing as mp
+from typing import List, Tuple
 
 import numpy as np
 
@@ -284,3 +285,11 @@ class Cubic:
                 plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(
                 self.cc_name)), save_dir)
         return np.mean(rewards), pkt_level_reward
+
+    def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
+                       plot_flag: bool = False):
+        arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
+            traces, save_dirs)]
+        n_proc = mp.cpu_count() // 2
+        with mp.Pool(processes=n_proc) as pool:
+            return pool.starmap(self.test, arguments)
