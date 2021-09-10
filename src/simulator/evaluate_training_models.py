@@ -1,9 +1,12 @@
 """Evaluate all training models and rule-based methods on a set of real traces.
 Used to generate Figure 12.
 """
+import argparse
 import glob
+import sys
 import os
 import multiprocessing as mp
+import time
 
 from tqdm import tqdm
 
@@ -24,6 +27,7 @@ UDR_ROOT = '../../results_0826/udr_7'
 UDR3_ROOT = '/Users/zxxia/Project/PCC-RL/models/udr_2/udr_large/seed_20'
 # GENET_MODEL_PATH = "test/bo_3/model_step_72000.ckpt"
 GENET_MODEL_PATH = "../../models/udr_large_lossless/seed_20/model_step_2124000.ckpt"
+GENET_MODEL_PATH = "../../models/udr_large_lossless/seed_20/model_step_2124000.ckpt"
 # GENET_MODEL_PATH = "test/bo_3/model_step_72000.ckpt"
 # GENET_MODEL_PATH = "../../models/bo_10_model_step_36000/bo_10_model_step_36000.ckpt"
 
@@ -33,37 +37,49 @@ GENET_ROOT = "../../results_0826/genet_bbr_exp_3"
 GENET_ROOT = "../../results_0826/genet_cubic_exp_3"
 
 RESULT_ROOT = "../../results_0826"
-TRACE_ROOT = "../../data/cellular/2019-09-17T22-29-AWS-California-1-to-Stanford-cellular-3-runs"
+RESULT_ROOT = "../../results_0910"
+TRACE_ROOT = "/data2/zxxia/PCC-RL/data/cellular/2019-09-17T22-29-AWS-California-1-to-Stanford-cellular-3-runs"
 # TRACE_ROOT = "../../data/cellular/2018-12-11T00-27-AWS-Brazil-2-to-Colombia-cellular-3-runs-3-flows"
 EXP_NAME = "train_perf2"
 EXP_NAME = "train_perf2_noisy"
-EXP_NAME = "train_perf3"
+EXP_NAME = "test_3_genet"
 
 TARGET_CCS = ["bbr", "cubic", "vegas", "indigo", "ledbat", "quic"]
-TARGET_CCS = ["bbr"] #, "cubic", "vegas", "indigo", "ledbat", "quic"]
+# TARGET_CCS = ["bbr"] #, "cubic", "vegas", "indigo", "ledbat", "quic"]
 
 
-def run_genet_model(root, traces, save_dirs, seed):
-    for bo in range(9):
-        # for step in [14400, 50400,7200,  72000, 21600, 28800]:
-        for step in [14400, 36000]:
-            step = int(step)
-            print('step', step)
-            model_path=os.path.join(
-                root, "bo_{}".format(bo), 'model_step_{}.ckpt'.format(step))
-            if not os.path.exists(model_path + ".meta"):
-                print(model_path)
-                continue
-            genet = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
-                timesteps_per_actorbatch=10)
-            test_cc_on_traces(genet, traces, [os.path.join(
-                save_dir, "genet_cubic", "bo_{}".format(bo),
-                "step_{}".format(step)) for save_dir in save_dirs])
-            # test_cc_on_traces(genet, traces, [os.path.join(
-            #     save_dir, "genet_bbr", "bo_{}".format(bo),
-            #     "step_{}".format(step)) for save_dir in save_dirs])
+# def run_genet_model(root, traces, save_dirs, seed):
+#     for bo in range(9):
+#         for step in [14400, 50400,7200,  72000, 21600, 28800]:
+#             step = int(step)
+#             print('step', step)
+#             model_path=os.path.join(
+#                 root, "bo_{}".format(bo), 'model_step_{}.ckpt'.format(step))
+#             if not os.path.exists(model_path + ".meta"):
+#                 print(model_path)
+#                 continue
+#             genet = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
+#                 timesteps_per_actorbatch=10)
+#             # test_cc_on_traces(genet, traces, [os.path.join(
+#             #     save_dir, "genet_cubic", "bo_{}".format(bo),
+#             #     "step_{}".format(step)) for save_dir in save_dirs])
+#             test_cc_on_traces(genet, traces, [os.path.join(
+#                 save_dir, "genet_bbr", "bo_{}".format(bo),
+#                 "step_{}".format(step)) for save_dir in save_dirs])
+def parse_args():
+    """Parse arguments from the command line."""
+    parser = argparse.ArgumentParser("Aurora Testing in simulator.")
+    parser.add_argument('--save-dir', type=str, default="",
+                        help="direcotry to testing results.")
+    parser.add_argument('--model-path', type=str, required=True,
+                        help="path to Aurora model.")
+    parser.add_argument('--seed', type=int, default=42, help='seed')
+    parser.add_argument('--nproc', type=int, help='proc cnt')
 
-def run_udr_model(root, traces, save_dirs, udr_name, seed):
+    args, unknown = parser.parse_known_args()
+    return args
+
+def run_udr_model(root, traces, save_dirs, udr_name, seed, nproc):
     # print(len(np.arange(7200, 2e5, 7200 * 2)))
     for step in np.arange(7200, 4e5, 7200 * 2):
         step = int(step)
@@ -76,33 +92,44 @@ def run_udr_model(root, traces, save_dirs, udr_name, seed):
             timesteps_per_actorbatch=10)
         test_cc_on_traces(udr, traces, [os.path.join(
             save_dir, udr_name, 'seed_{}'.format(seed),
-            "step_{}".format(step)) for save_dir in save_dirs])
+            "step_{}".format(step)) for save_dir in save_dirs], nproc)
 
-def test_cc_on_traces(cc, traces, save_dirs):
+def test_cc_on_traces(cc, traces, save_dirs, nproc):
     print("Testing {} on real traces...".format(cc.cc_name))
+    arguments = []
     for trace, save_dir in tqdm(zip(traces, save_dirs), total=len(traces)):
         os.makedirs(save_dir, exist_ok=True)
-        cc.test(trace, save_dir, plot_flag=True)
+        arguments.append((trace, save_dir, True))
+    n_proc = nproc
+    with mp.Pool(processes=n_proc) as pool:
+        pool.starmap(cc.test, arguments)
 
 def main():
+    args= parse_args()
+    nproc = args.nproc
     traces = []
     save_dirs = []
     for cc in TARGET_CCS:
         print("Loading real traces collected by {}...".format(cc))
         for trace_file in tqdm(sorted(glob.glob(os.path.join(
                 TRACE_ROOT, "{}_datalink_run[1-3].log".format(cc))))):
-            traces.append(Trace.load_from_pantheon_file(trace_file, 0.0, 50))
-            save_dirs.append(os.path.join(
-                RESULT_ROOT, EXP_NAME, os.path.basename(TRACE_ROOT),
-                os.path.splitext(os.path.basename(trace_file))[0]))
+            traces.append(Trace.load_from_pantheon_file(trace_file, 0.0, 50, 5))
+            save_dir = os.path.join(RESULT_ROOT, EXP_NAME, os.path.basename(TRACE_ROOT),
+                os.path.splitext(os.path.basename(trace_file))[0])
+            os.makedirs(save_dir, exist_ok=True)
+            save_dirs.append(save_dir)
+            print(save_dir)
 
     # bbr = BBR(True)
-    # test_cc_on_traces(
-    #     bbr, traces, [os.path.join(save_dir, bbr.cc_name) for save_dir in save_dirs])
+    # t_start = time.time()
+    # bbr.test_on_traces(traces, [os.path.join(save_dir, bbr.cc_name) for save_dir in save_dirs], True)
+    # print('bbr', time.time() - t_start)
+    #
     # cubic = Cubic(True)
-    # test_cc_on_traces(
-    #     cubic, traces, [os.path.join(save_dir, cubic.cc_name) for save_dir in save_dirs])
-
+    # t_start = time.time()
+    # cubic.test_on_traces(traces, [os.path.join(save_dir, cubic.cc_name) for save_dir in save_dirs], True)
+    # print('cubic', time.time() - t_start)
+    #
 
     cnt = 0
     # for step in np.arange(7200, 2e5, 14400):
@@ -142,7 +169,7 @@ def main():
     # with mp.Pool(processes=n_proc) as pool:
     #     pool.starmap(run_udr_model, arguments)
 
-    run_genet_model(GENET_ROOT, traces, save_dirs, seed=20)
+    run_genet_model(args.model_path, traces, save_dirs, args.seed, nproc)
 
 
 

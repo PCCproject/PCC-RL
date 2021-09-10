@@ -1,4 +1,6 @@
 import argparse
+import csv
+import json
 import os
 import time
 from typing import Callable, Dict, List, Set, Union
@@ -7,12 +9,11 @@ import numpy as np
 from bayes_opt import BayesianOptimization
 from bayes_opt.logger import JSONLogger
 from bayes_opt.event import Events
+from mpi4py.MPI import COMM_WORLD
 
 from common.utils import (pcc_aurora_reward, read_json_file, set_seed, write_json_file)
-from plot_scripts.plot_packet_log import PacketLog
 from simulator.aurora import Aurora
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
-# from simulator.cubic import Cubic
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
 from simulator.trace import generate_trace
@@ -194,25 +195,46 @@ def black_box_function(bandwidth_lower_bound: float,
             heuristic_mi_level_reward = heuristic_pkt_level_reward
         else:
             heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
-            trace, rl_method.log_dir)
-        print("heuristic used {}s".format(time.time() - t_start))
+            trace, "")
+        # print("heuristic used {}s".format(time.time() - t_start))
         t_start = time.time()
         rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(
             trace, rl_method.log_dir)
-        print("rl_method used {}s".format(time.time() - t_start))
+        # print("rl_method used {}s".format(time.time() - t_start))
 
-        heuristic_rewards.append(heuristic_pkt_level_reward)
-        rl_method_rewards.append(rl_pkt_level_reward)
+        heuristic_rewards.append(heuristic_mi_level_reward)
+        rl_method_rewards.append(rl_mi_level_reward)
+        # heuristic_rewards.append(heuristic_pkt_level_reward)
+        # rl_method_rewards.append(rl_pkt_level_reward)
     return np.mean(heuristic_rewards) - np.mean(rl_method_rewards)
     # return heuristic_pkt_level_reward - rl_pkt_level_reward
     # return heuristic_mi_level_reward - rl_mi_level_reward
+
+def read_bo_log(file):
+    log = []
+    with open(file, 'r') as f:
+        for line in f:
+            log.append(json.loads(line))
+    return log
+
+def to_csv(config_file):
+    bo_log = read_json_file(config_file)
+    csv_file = os.path.join(
+            os.path.dirname(config_file),
+            os.path.splitext(os.path.basename(config_file))[0] + ".csv")
+    with open(csv_file, 'w') as f:
+        writer = csv.DictWriter(
+                f, ['bandwidth_lower_bound', 'bandwidth_upper_bound', 'delay',
+                    'queue', 'loss', 'T_s', "delay_noise", 'duration', 'weight'])
+        writer.writeheader()
+        for config in bo_log:
+            writer.writerow(config)
 
 
 def main():
     args = parse_args()
     set_seed(args.seed)
 
-    # cubic = Cubic(args.save_dir, args.seed)
     if args.heuristic == 'bbr':
         heuristic = BBR(True)
     elif args.heuristic == 'cubic':
@@ -221,9 +243,10 @@ def main():
         heuristic = None
     else:
         raise ValueError
+    nprocs = COMM_WORLD.Get_size()
     aurora = Aurora(seed=args.seed, log_dir=args.save_dir,
                     pretrained_model_path=args.model_path,
-                    timesteps_per_actorbatch=7200, delta_scale=1)
+                    timesteps_per_actorbatch=int(7200/nprocs), delta_scale=1)
     genet = Genet(args.config_file, args.save_dir, black_box_function,
                   heuristic, aurora)
     genet.train(args.bo_rounds)

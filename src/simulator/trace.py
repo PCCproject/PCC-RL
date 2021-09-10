@@ -180,7 +180,7 @@ class Trace():
 
     @staticmethod
     def load_from_pantheon_file(uplink_filename: str, loss: float, queue: int,
-                                ms_per_bin: int = 500):
+                                ms_per_bin: int = 500, front_offset: int = 0):
         flow = Flow(uplink_filename, ms_per_bin)
         downlink_filename = uplink_filename.replace('datalink', 'acklink')
         if downlink_filename and os.path.exists(downlink_filename):
@@ -190,43 +190,17 @@ class Trace():
         delay = (np.min(flow.one_way_delay) + np.min(downlink.one_way_delay)) / 2
         timestamps = []
         bandwidths = []
-        # offset = 17.514990
-        # offset = 9
-        # for ts, bw in zip(flow.throughput_timestamps, flow.throughput):
-        #     if ts > offset:
-        #         timestamps.append(ts - offset)
-        #         bandwidths.append(bw)
-        # end_ts = timestamps[-1]
-        # for ts, bw in zip(flow.throughput_timestamps, flow.throughput):
-        #     if ts + end_ts > (26):
-        #         break
-        #     timestamps.append(ts + end_ts)
-        #     bandwidths.append(bw)
+        for ts, bw in zip(flow.throughput_timestamps, flow.throughput):
+            if ts >= front_offset:
+                timestamps.append(ts - front_offset)
+                bandwidths.append(bw)
 
         # added to shift the trace 5 seconds
         # timestamps = [ts  - 5 for ts in flow.throughput_timestamps if ts >= 5]
         # tputs  = [tput for ts, tput in zip(flow.throughput_timestamps, flow.throughput) if ts >= 5]
         # tr = Trace(timestamps, tputs, [delay], loss, queue)
 
-        tr = Trace(flow.throughput_timestamps, flow.throughput, [delay], loss, queue)
-        # flow = Flow('/tank/zxxia/PCC-RL/src/simulator/emu_traces/aurora_datalink_run1.log')
-        # tr = Trace(flow.link_capacity_timestamps, flow.link_capacity, [delay], loss, queue)
-        # timestamps = []
-        # bandwidths = []
-        # # offset = 17.514990
-        # offset = flow.sending_rate_timestamps[0]
-        # for ts, bw in zip(flow.link_capacity_timestamps, flow.link_capacity):
-        #     if ts >= offset:
-        #         timestamps.append(ts - offset)
-        #         bandwidths.append(bw)
-        # end_ts = timestamps[-1]
-        # for ts, bw in zip(flow.link_capacity_timestamps, flow.link_capacity):
-        #     if ts + end_ts > (30 - offset):
-        #         break
-        #     timestamps.append(ts + end_ts)
-        #     bandwidths.append(bw)
-        #
-        # tr = Trace(timestamps, bandwidths, [delay], loss, queue, offset=offset)
+        tr = Trace(timestamps, bandwidths, [delay], loss, queue)
         return tr
 
     def convert_to_mahimahi_format(self):
