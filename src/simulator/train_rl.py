@@ -19,25 +19,6 @@ def parse_args():
     parser.add_argument('--save-dir', type=str, required=True,
                         help="direcotry to save the model.")
     # parser.add_argument('--gamma', type=float, default=0.99, help='gamma.')
-    parser.add_argument("--delay", type=float,  nargs=2, default=[
-                        0.05, 0.05], help="delay range. Unit: millisecond. "
-                        "This range will not be used if configuration file is "
-                        "provided.")
-    parser.add_argument("--bandwidth", type=float, nargs=2, default=[2, 2],
-                        help="Bandwidth range. Unit: Mbps. This range will "
-                        "not be used if configuration file is provided.")
-    parser.add_argument("--loss", type=float, nargs=2, default=[0, 0],
-                        help="Loss range. This range will not be used if "
-                        "configuration file is provided.")
-    parser.add_argument("--queue", type=float, nargs=2, default=[100, 100],
-                        help="Queue size range. Unit: packet. This range will "
-                        "not be used if configuration file is provided.")
-
-    parser.add_argument("--val-delay", type=float, nargs="+", default=[])
-    parser.add_argument("--val-bandwidth", type=float,
-                        nargs="+", default=[])
-    parser.add_argument("--val-loss", type=float, nargs="+", default=[])
-    parser.add_argument("--val-queue", type=float, nargs="+", default=[])
 
     parser.add_argument('--seed', type=int, default=20, help='seed')
     parser.add_argument("--total-timesteps", type=int, default=100,
@@ -52,10 +33,6 @@ def parse_args():
                         help='trace duration. Unit: second.')
     parser.add_argument("--tensorboard-log", type=str, default=None,
                         help="tensorboard log direcotry.")
-    parser.add_argument("--delta-scale", type=float, default=1,
-                        help="delta scale.")
-    parser.add_argument('--time-variant-bw', action='store_true',
-                        help='Generate time variant bandwidth if specified.')
 
     return parser.parse_args()
 
@@ -76,12 +53,12 @@ def main():
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
+    nprocs = COMM_WORLD.Get_size()
 
     # Initialize model and agent policy
-    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir, 7200,
-                    args.pretrained_model_path,
-                    tensorboard_log=args.tensorboard_log,
-                    delta_scale=args.delta_scale)
+    aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir,
+                    int(7200/ nprocs), args.pretrained_model_path,
+                    tensorboard_log=args.tensorboard_log)
     # training_traces, validation_traces,
     aurora.train(args.randomization_range_file,
                  args.total_timesteps, tot_trace_cnt= args.total_trace_count,

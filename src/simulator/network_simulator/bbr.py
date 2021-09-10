@@ -1,9 +1,10 @@
 import csv
 import math
+import multiprocessing as mp
 import os
 import random
 from enum import Enum
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -732,3 +733,11 @@ class BBR:
                                  'rs_delivery_rate'])
                 writer.writerows(senders[0].bbr_log)
         return np.mean(rewards), pkt_level_reward
+
+    def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
+                       plot_flag: bool = False):
+        arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
+            traces, save_dirs)]
+        n_proc = mp.cpu_count() // 2
+        with mp.Pool(processes=n_proc) as pool:
+            return pool.starmap(self.test, arguments)
