@@ -28,13 +28,16 @@ GENET_MODEL_PATH = "../../models/udr_large_lossless/seed_20/model_step_2124000.c
 # GENET_MODEL_PATH = "../../models/bo_10_model_step_36000/bo_10_model_step_36000.ckpt"
 
 GENET_ROOT = "../../results_0826/genet_cubic_exp_2"
-GENET_ROOT = "../../results_0826/genet_bbr_exp_1"
+GENET_ROOT = "../../results_0826/genet_bbr_exp_1" # good
+GENET_ROOT = "../../results_0826/genet_bbr_exp_3"
+GENET_ROOT = "../../results_0826/genet_cubic_exp_3"
 
 RESULT_ROOT = "../../results_0826"
 TRACE_ROOT = "../../data/cellular/2019-09-17T22-29-AWS-California-1-to-Stanford-cellular-3-runs"
 # TRACE_ROOT = "../../data/cellular/2018-12-11T00-27-AWS-Brazil-2-to-Colombia-cellular-3-runs-3-flows"
 EXP_NAME = "train_perf2"
 EXP_NAME = "train_perf2_noisy"
+EXP_NAME = "train_perf3"
 
 TARGET_CCS = ["bbr", "cubic", "vegas", "indigo", "ledbat", "quic"]
 TARGET_CCS = ["bbr"] #, "cubic", "vegas", "indigo", "ledbat", "quic"]
@@ -42,7 +45,8 @@ TARGET_CCS = ["bbr"] #, "cubic", "vegas", "indigo", "ledbat", "quic"]
 
 def run_genet_model(root, traces, save_dirs, seed):
     for bo in range(9):
-        for step in [14400, 50400,7200,  72000, 21600, 28800]:
+        # for step in [14400, 50400,7200,  72000, 21600, 28800]:
+        for step in [14400, 36000]:
             step = int(step)
             print('step', step)
             model_path=os.path.join(
@@ -52,12 +56,12 @@ def run_genet_model(root, traces, save_dirs, seed):
                 continue
             genet = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
                 timesteps_per_actorbatch=10)
-            # test_cc_on_traces(genet, traces, [os.path.join(
-            #     save_dir, "genet_cubic", "bo_{}".format(bo),
-            #     "step_{}".format(step)) for save_dir in save_dirs])
             test_cc_on_traces(genet, traces, [os.path.join(
-                save_dir, "genet_bbr", "bo_{}".format(bo),
+                save_dir, "genet_cubic", "bo_{}".format(bo),
                 "step_{}".format(step)) for save_dir in save_dirs])
+            # test_cc_on_traces(genet, traces, [os.path.join(
+            #     save_dir, "genet_bbr", "bo_{}".format(bo),
+            #     "step_{}".format(step)) for save_dir in save_dirs])
 
 def run_udr_model(root, traces, save_dirs, udr_name, seed):
     # print(len(np.arange(7200, 2e5, 7200 * 2)))
@@ -124,7 +128,7 @@ def main():
     #     # test_cc_on_traces(udr3, traces, [os.path.join(
     #     #     save_dir, "udr3", "step_{}".format(step)) for save_dir in save_dirs])
     #     cnt += 1
-    n_proc = mp.cpu_count() // 2
+    # n_proc = mp.cpu_count() // 2
     # arguments = [(os.path.join(UDR_ROOT, 'udr_large'.format(
     #     seed), "seed_{}".format(seed)), traces, save_dirs, 'udr3', seed) for seed in range(10, 60, 10)]
     # with mp.Pool(processes=n_proc) as pool:
@@ -133,12 +137,12 @@ def main():
     #     seed), "seed_{}".format(seed)), traces, save_dirs, 'udr1', seed) for seed in range(10, 60, 10)]
     # with mp.Pool(processes=n_proc) as pool:
     #     pool.starmap(run_udr_model, arguments)
-    arguments = [(os.path.join(UDR_ROOT, 'udr_mid', "seed_{}".format(seed)),
-        traces, save_dirs, 'udr2', seed) for seed in range(10, 60, 10)]
-    with mp.Pool(processes=n_proc) as pool:
-        pool.starmap(run_udr_model, arguments)
+    # arguments = [(os.path.join(UDR_ROOT, 'udr_mid', "seed_{}".format(seed)),
+    #     traces, save_dirs, 'udr2', seed) for seed in range(10, 60, 10)]
+    # with mp.Pool(processes=n_proc) as pool:
+    #     pool.starmap(run_udr_model, arguments)
 
-    # run_genet_model(GENET_ROOT, traces, save_dirs, seed=20)
+    run_genet_model(GENET_ROOT, traces, save_dirs, seed=20)
 
 
 
