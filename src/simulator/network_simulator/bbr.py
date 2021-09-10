@@ -75,6 +75,7 @@ class RateSample:
         self.prior_in_flight = 0
         # number of packets marked lost upon ACK
         self.losses = 0
+        self.pkt_in_fast_recovery_mode = False
 
     def debug_print(self):
         print("delivery_rate: {}, \nis_app_limited: {}, \ninterval: {},\n delivered: {},\n prior_delivered: {}".format(
@@ -144,10 +145,10 @@ class ConnectionState:
 
 
 class BBRMode(Enum):
-    BBR_STARTUP = "BBR_STARTUP"  # ramp up sending rate rapidly to fill pipe
-    BBR_DRAIN = "BBR_DRAIN"  # drain any queue created during startup
-    BBR_PROBE_BW = "BBR_PROBE_BW"  # discover, share bw: pace around estimated bw
-    BBR_PROBE_RTT = "BBR_PROBE_RTT"  # cut inflight to min to probe min_rtt
+    BBR_STARTUP = 0 #"BBR_STARTUP"  # ramp up sending rate rapidly to fill pipe
+    BBR_DRAIN = 1 #"BBR_DRAIN"  # drain any queue created during startup
+    BBR_PROBE_BW = 2 #"BBR_PROBE_BW"  # discover, share bw: pace around estimated bw
+    BBR_PROBE_RTT = 3 #"BBR_PROBE_RTT"  # cut inflight to min to probe min_rtt
 
 
 class BBRSender(Sender):
@@ -178,6 +179,7 @@ class BBRSender(Sender):
         self.in_fast_recovery_mode = False
 
         self.init()
+        self.bbr_log = []
 
     def init(self):
         # init_windowed_max_filter(filter=BBR.BtlBwFilter, value=0, time=0)
@@ -446,7 +448,7 @@ class BBRSender(Sender):
         pkt.delivered_time = self.conn_state.delivered_time
         pkt.delivered = self.conn_state.delivered
         pkt.is_app_limited = False  # (self.app_limited != 0)
-        pkt.in_fast_recovery_mode = self.in_fast_recovery_mode
+        # pkt.in_fast_recovery_mode = self.in_fast_recovery_mode
 
     # Upon receiving ACK, fill in delivery rate sample rs.
     def generate_rate_sample(self, pkt: BBRPacket):
@@ -479,6 +481,7 @@ class BBRSender(Sender):
         if self.rs.interval < self.rtprop:
             self.rs.interval = -1
             return False  # no reliable sample
+        self.rs.pkt_in_fast_recovery_mode = pkt.in_fast_recovery_mode
         if self.rs.interval != 0 and not pkt.in_fast_recovery_mode:
             self.rs.delivery_rate = self.rs.delivered / self.rs.interval
             # if self.rs.delivery_rate * 8 / 1e6 > 1.2:
@@ -526,6 +529,11 @@ class BBRSender(Sender):
         #     estimated_bdp = self.btlbw * self.rtprop / BYTES_PER_PACKET
         #     cwnd_gain = self.cwnd_gain
         # if self.bytes_in_flight >= cwnd_gain * estimated_bdp * BYTES_PER_PACKET:
+        self.bbr_log.append([self.get_cur_time(), self.pacing_gain, self.pacing_rate * BITS_PER_BYTE / 1e6,
+        self.cwnd_gain, self.cwnd, self.target_cwnd, self.prior_cwnd, self.btlbw * BITS_PER_BYTE / 1e6,
+        self.rtprop, self.full_bw * BITS_PER_BYTE / 1e6, self.state.value,
+        self.bytes_in_flight / 1500, int(self.in_fast_recovery_mode),
+        self.rs.delivery_rate * BITS_PER_BYTE / 1e6, int(self.rs.pkt_in_fast_recovery_mode)])
         if self.bytes_in_flight >= self.cwnd * BYTES_PER_PACKET:
             # wait for ack or timeout
             return False
@@ -716,4 +724,11 @@ class BBR:
             if plot_flag:
                 plot(trace, pkt_log, save_dir, self.cc_name)
                 plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
+            with open(os.path.join(save_dir, "bbr_log.csv"), 'w', 1) as f:
+                writer = csv.writer(f, lineterminator='\n')
+                writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
+                                 'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
+                                 "full_bw", 'state', "packets_in_flight", "in_fast_recovery_mode",
+                                 'rs_delivery_rate'])
+                writer.writerows(senders[0].bbr_log)
         return np.mean(rewards), pkt_level_reward
