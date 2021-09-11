@@ -287,9 +287,9 @@ class Cubic:
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
-                       plot_flag: bool = False):
+                       plot_flag: bool = False, n_proc: int = 1):
         arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
             traces, save_dirs)]
-        n_proc = mp.cpu_count() // 2
+        n_proc = n_proc
         with mp.Pool(processes=n_proc) as pool:
             return pool.starmap(self.test, arguments)
