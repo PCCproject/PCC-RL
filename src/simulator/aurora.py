@@ -1,6 +1,5 @@
 import csv
 import logging
-import multiprocessing as mp
 import os
 import shutil
 import time
@@ -47,6 +46,17 @@ class MyMlpPolicy(FeedForwardPolicy):
                                               {"pi": [32, 16], "vf": [32, 16]}],
                                           feature_extraction="mlp", **_kwargs)
 
+def val_on_trace(model_path, trace, save_dir):
+    aurora = Aurora(20, "", 10, pretrained_model_path=model_path)
+    result = aurora._test(trace, save_dir, plot_flag=False)
+    print('finish test_on_trace')
+    return result
+
+
+def val_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str]):
+    arguments = [(model_path, trace, save_dir) for trace, save_dir in zip(traces, save_dirs)]
+    with MPIPoolExecutor(max_workers=COMM_WORLD.Get_size()) as executor:
+        return executor.starmap(val_on_trace, arguments)
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -61,7 +71,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List = [],
-                 verbose=0, steps_trained=0, config_file=None, tot_trace_cnt=100):
+                 verbose=0, steps_trained=0, config_file=None, validation_flag=False):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
@@ -71,7 +81,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.best_mean_reward = -np.inf
         self.val_traces = val_traces
         self.config_file = config_file
-        self.tot_trace_cnt=tot_trace_cnt
+        self.validation_flag = validation_flag
         if self.aurora.comm.Get_rank() == 0:
             self.val_log_writer = csv.writer(
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
@@ -119,12 +129,12 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             #         # self.model.save(self.save_path)
 
             if self.aurora.comm.Get_rank() == 0 and self.val_log_writer is not None:
+                model_path_to_save = os.path.join(self.save_path, "model_step_{}.ckpt".format(int(self.num_timesteps)))
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
-                    saver.save(
-                        self.model.sess, os.path.join(
-                            self.save_path, "model_step_{}.ckpt".format(
-                                int(self.num_timesteps))))
+                    saver.save(self.model.sess, model_path_to_save)
+                if not self.validation_flag:
+                    return True
                 avg_tr_bw = []
                 avg_tr_min_rtt = []
                 avg_tr_loss = []
@@ -134,24 +144,35 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 avg_delays = []
                 avg_send_rates = []
                 val_start_t = time.time()
-                for idx, val_trace in enumerate(self.val_traces):
-                    avg_tr_bw.append(val_trace.avg_bw)
-                    avg_tr_min_rtt.append(val_trace.avg_bw)
-                    ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
-                            val_trace, self.log_dir)
-                    # pktlog = PacketLog.from_log(pkt_log)
+
+                save_dirs = [os.path.join(self.log_dir, "validation_traces", "trace_{}".format(i)) for i in range(len(self.val_traces))]
+                for ts_list, val_rewards, loss_list, tput_list, delay_list, \
+                        send_rate_list, action_list, obs_list, mi_list, pkt_log in val_on_traces(model_path_to_save, self.val_traces, save_dirs):
                     avg_rewards.append(np.mean(np.array(val_rewards)))
                     avg_losses.append(np.mean(np.array(loss_list)))
                     avg_tputs.append(float(np.mean(np.array(tput_list))))
                     avg_delays.append(np.mean(np.array(delay_list)))
                     avg_send_rates.append(
                         float(np.mean(np.array(send_rate_list))))
-                    # avg_rewards.append(pktlog.get_reward())
-                    # avg_losses.append(pktlog.get_loss_rate())
-                    # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
-                    # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
-                    # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
+
+                # for idx, val_trace in enumerate(self.val_traces):
+                #     avg_tr_bw.append(val_trace.avg_bw)
+                #     avg_tr_min_rtt.append(val_trace.avg_bw)
+                #     ts_list, val_rewards, loss_list, tput_list, delay_list, \
+                #         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
+                #             val_trace, self.log_dir)
+                #     # pktlog = PacketLog.from_log(pkt_log)
+                #     avg_rewards.append(np.mean(np.array(val_rewards)))
+                #     avg_losses.append(np.mean(np.array(loss_list)))
+                #     avg_tputs.append(float(np.mean(np.array(tput_list))))
+                #     avg_delays.append(np.mean(np.array(delay_list)))
+                #     avg_send_rates.append(
+                #         float(np.mean(np.array(send_rate_list))))
+                #     # avg_rewards.append(pktlog.get_reward())
+                #     # avg_losses.append(pktlog.get_loss_rate())
+                #     # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
+                #     # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
+                #     # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
                 cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
@@ -254,7 +275,7 @@ class Aurora():
     def train(self, config_file,
             # training_traces, validation_traces,
             total_timesteps, tot_trace_cnt,
-              tb_log_name=""):
+              tb_log_name="", validaiton_flag=False):
         assert isinstance(self.model, PPO1)
 
         training_traces = generate_traces(config_file, tot_trace_cnt,
@@ -272,7 +293,7 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_traces=validation_traces,
-            config_file=config_file, tot_trace_cnt=tot_trace_cnt)
+            config_file=config_file)
         self.model.learn(total_timesteps=total_timesteps,
                          tb_log_name=tb_log_name, callback=callback)
 
@@ -289,54 +310,11 @@ class Aurora():
             results.append(result)
         return results, pkt_logs
 
-        # results = []
-        # pkt_logs = []
-        # n_proc=mp.cpu_count()//2
-        # arguments = [(self.pretrained_model_path, trace, save_dir, self.seed) for trace, save_dir in zip(traces, save_dirs)]
-        # with mp.Pool(processes=n_proc) as pool:
-        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
-        #             send_rate_list, action_list, obs_list, mi_list, pkt_log  in pool.starmap(test_model, arguments):
-        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
-        #                           delay_list, loss_list, action_list, obs_list, mi_list))
-        #         pkt_logs.append(pkt_log)
-        #         results.append(result)
-        # return results, pkt_logs
-
-        # results = []
-        # pkt_logs = []
-        # with MPIPoolExecutor(max_workers=4) as executor:
-        #     iterable = ((trace, save_dir) for trace, save_dir in zip(traces, save_dirs))
-        #     for ts_list, reward_list, loss_list, tput_list, delay_list, \
-        #         send_rate_list, action_list, obs_list, mi_list, pkt_log  in executor.starmap(self.test, iterable):
-        #         result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
-        #                           delay_list, loss_list, action_list, obs_list, mi_list))
-        #         pkt_logs.append(pkt_log)
-        #         results.append(result)
-        # return results, pkt_logs
-
-        # results = []
-        # pkt_logs = []
-        # size = self.comm.Get_size()
-        # count = int(len(traces) / size)
-        # remainder = int(len(traces) % size)
-        # rank = self.comm.Get_rank()
-        # start = rank * count + min(rank, remainder)
-        # stop = (rank + 1) * count + min(rank + 1, remainder)
-        # for i in range(start, stop):
-        #     ts_list, reward_list, loss_list, tput_list, delay_list, \
-        #         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.test(
-        #             traces[i], save_dirs[i])
-        #     result = list(zip(ts_list, reward_list, send_rate_list, tput_list,
-        #                       delay_list, loss_list, action_list, obs_list, mi_list))
-        #     pkt_logs.append(pkt_log)
-        #     results.append(result)
-        # results = self.comm.gather(results, root=0)
-        # pkt_logs = self.comm.gather(pkt_logs, root=0)
-        # # need to call reduce to retrieve all return values
-        # return results, pkt_logs
-
-    def save_model(self):
-        raise NotImplementedError
+    def save_model(self, save_path):
+        with self.model.graph.as_default():
+            saver = tf.train.Saver()
+            saver.save(self.model.sess, os.path.join(save_path, "tmp_model.ckpt"))
+        return os.path.join(save_path, "tmp_model.ckpt")
 
     def load_model(self):
         raise NotImplementedError
@@ -458,3 +436,13 @@ class Aurora():
         _, reward_list, _, _, _, _, _, _, _, pkt_log = self._test(trace, save_dir, plot_flag)
         pkt_log = PacketLog.from_log(pkt_log)
         return np.mean(reward_list), pkt_log.get_reward("", trace)
+
+def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int):
+    rl = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
+                timesteps_per_actorbatch=10)
+    return rl.test(trace, save_dir, False)
+
+def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str], nproc: int, seed: int):
+    arguments = [(model_path, trace, save_dir, seed) for trace, save_dir in zip(traces, save_dirs)]
+    with MPIPoolExecutor(max_workers=nproc) as executor:
+        return  executor.starmap(test_on_trace, arguments)

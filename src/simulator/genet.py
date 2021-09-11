@@ -12,7 +12,7 @@ from bayes_opt.event import Events
 from mpi4py.MPI import COMM_WORLD
 
 from common.utils import (pcc_aurora_reward, read_json_file, set_seed, write_json_file)
-from simulator.aurora import Aurora
+from simulator.aurora import Aurora, test_on_traces
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
@@ -147,68 +147,79 @@ class Genet:
 
         """
         for i in range(rounds):
-            optimizer = BayesianOptimization(
-                f=lambda bandwidth_lower_bound, bandwidth_upper_bound, delay,
-                queue, loss, T_s, delay_noise: self.black_box_function(
-                    bandwidth_lower_bound, bandwidth_upper_bound, delay, queue,
-                    loss, T_s, delay_noise, heuristic=self.heuristic,
-                    rl_method=self.rl_method),
-                pbounds=self.pbounds, random_state=self.seed+i)
-            os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
-                        exist_ok=True)
-            logger = JSONLogger(path=os.path.join(
-                self.save_dir, "bo_{}_logs.json".format(i)))
-            optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
-            optimizer.maximize(init_points=10, n_iter=5, kappa=20, xi=0.1)
-            best_param = optimizer.max
-            print(best_param)
-            self.rand_ranges.add_ranges([best_param['params']])
-            self.cur_config_file = os.path.join(
-                self.save_dir, "bo_"+str(i) + ".json")
-            self.rand_ranges.dump(self.cur_config_file)
-            self.rl_method.log_dir = os.path.join(self.save_dir, "bo_{}".format(i))
+            if COMM_WORLD.Get_rank() == 0:
+                optimizer = BayesianOptimization(
+                    f=lambda bandwidth_lower_bound, bandwidth_upper_bound, delay,
+                    queue, loss, T_s, delay_noise: self.black_box_function(
+                        bandwidth_lower_bound, bandwidth_upper_bound, delay, queue,
+                        loss, T_s, delay_noise, heuristic=self.heuristic,
+                        rl_method=self.rl_method),
+                    pbounds=self.pbounds, random_state=self.seed+i)
+                os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
+                            exist_ok=True)
+                logger = JSONLogger(path=os.path.join(
+                    self.save_dir, "bo_{}_logs.json".format(i)))
+                optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
+                optimizer.maximize(init_points=10, n_iter=5, kappa=20, xi=0.1)
+                best_param = optimizer.max
+                print(best_param)
+                self.rand_ranges.add_ranges([best_param['params']])
+                self.cur_config_file = os.path.join(
+                    self.save_dir, "bo_"+str(i) + ".json")
+                self.rand_ranges.dump(self.cur_config_file)
+                self.rl_method.log_dir = os.path.join(self.save_dir, "bo_{}".format(i))
+                data = self.cur_config_file
+                # for i in range(1, COMM_WORLD.Get_size()):
+                #     COMM_WORLD.send(self.cur_config_file, dest=i, tag=11)
+            else:
+                data = None # self.cur_config_file = COMM_WORLD.recv(source=0, tag=11)
+            self.cur_config_file = COMM_WORLD.bcast(data, root=0)
+            print(COMM_WORLD.Get_rank(), self.cur_config_file)
             self.rl_method.train(self.cur_config_file, 7.2e4, 100)
-
 
 def black_box_function(bandwidth_lower_bound: float,
                        bandwidth_upper_bound: float, delay: float, queue: float,
-                       loss: float, T_s: float, delay_noise: float,
-                       heuristic, rl_method) -> float:
-    # t_start = time.time()
-    heuristic_rewards = []
-    rl_method_rewards = []
-    for _ in range(10):
-        trace = generate_trace(duration_range=(30, 30),
-                               bandwidth_lower_bound_range=(bandwidth_lower_bound, bandwidth_lower_bound),
-                               bandwidth_upper_bound_range=(bandwidth_upper_bound, bandwidth_upper_bound),
-                               delay_range=(delay, delay),
-                               loss_rate_range=(loss, loss),
-                               queue_size_range=(queue, queue),
-                               T_s_range=(T_s, T_s),
-                               delay_noise_range=(delay_noise, delay_noise))
-        # print("trace generation used {}s".format(time.time() - t_start))
-        t_start = time.time()
+                       loss: float, T_s: float, delay_noise: float, heuristic, rl_method) -> float:
+    if COMM_WORLD.Get_rank() == 0:
+        model_path = rl_method.save_model(rl_method.log_dir)
+        heuristic_rewards = []
+        rl_method_rewards = []
+        traces = [generate_trace(
+            duration_range=(30, 30),
+            bandwidth_lower_bound_range=(bandwidth_lower_bound, bandwidth_lower_bound),
+            bandwidth_upper_bound_range=(bandwidth_upper_bound, bandwidth_upper_bound),
+            delay_range=(delay, delay),
+            loss_rate_range=(loss, loss),
+            queue_size_range=(queue, queue),
+            T_s_range=(T_s, T_s),
+            delay_noise_range=(delay_noise, delay_noise)) for _ in range(10)]
+            # print("trace generation used {}s".format(time.time() - t_start))
         if not heuristic:
-            heuristic_pkt_level_reward = pcc_aurora_reward(
+            for trace in traces:
+                heuristic_rewards.append(pcc_aurora_reward(
                 trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-                trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw)
-            heuristic_mi_level_reward = heuristic_pkt_level_reward
+                trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw))
         else:
-            heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(
-            trace, "")
-        # print("heuristic used {}s".format(time.time() - t_start))
-        t_start = time.time()
-        rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(
-            trace, rl_method.log_dir)
-        # print("rl_method used {}s".format(time.time() - t_start))
+            t_start = time.time()
+            # heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(trace, "")
+            hret = heuristic.test_on_traces(traces, [""]* len(traces) , False, COMM_WORLD.Get_size())
+            for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
+                heuristic_rewards.append(heuristic_mi_level_reward)
+            print("heuristic used {}s".format(time.time() - t_start))
+            t_start = time.time()
+            rl_ret = test_on_traces(model_path, traces, [rl_method.log_dir] * len(traces), COMM_WORLD.Get_size(), 20)
+            # for trace in traces:
+            #     rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(trace, rl_method.log_dir)
+            #     rl_method_rewards.append(rl_mi_level_reward)
+            for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
+                rl_method_rewards.append(rl_mi_level_reward)
+            print("rl used {}s".format(time.time() - t_start))
+            print(rl_method_rewards)
+            # rl_method_rewards.append(rl_pkt_level_reward)
+        gap = float(np.mean(heuristic_rewards) - np.mean(rl_method_rewards))
+        return gap
+    raise RuntimeError("Should not reach here.")
 
-        heuristic_rewards.append(heuristic_mi_level_reward)
-        rl_method_rewards.append(rl_mi_level_reward)
-        # heuristic_rewards.append(heuristic_pkt_level_reward)
-        # rl_method_rewards.append(rl_pkt_level_reward)
-    return np.mean(heuristic_rewards) - np.mean(rl_method_rewards)
-    # return heuristic_pkt_level_reward - rl_pkt_level_reward
-    # return heuristic_mi_level_reward - rl_mi_level_reward
 
 def read_bo_log(file):
     log = []
@@ -233,7 +244,7 @@ def to_csv(config_file):
 
 def main():
     args = parse_args()
-    set_seed(args.seed)
+    set_seed(args.seed + COMM_WORLD.Get_rank())
 
     if args.heuristic == 'bbr':
         heuristic = BBR(True)
