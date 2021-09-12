@@ -445,4 +445,5 @@ def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int):
 def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str], nproc: int, seed: int):
     arguments = [(model_path, trace, save_dir, seed) for trace, save_dir in zip(traces, save_dirs)]
     with MPIPoolExecutor(max_workers=nproc) as executor:
-        return  executor.starmap(test_on_trace, arguments)
+        results = executor.starmap(test_on_trace, arguments)
+    return results

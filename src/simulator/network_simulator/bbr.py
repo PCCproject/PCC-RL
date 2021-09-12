@@ -662,8 +662,8 @@ class BBR:
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
         if save_dir:
-            writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), 'w', 1), lineterminator='\n')
+            f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), 'w', 1)
+            writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
                                  'loss', 'reward', "action", "bytes_sent",
                                  "bytes_acked", "bytes_lost", "send_start_time",
@@ -673,6 +673,7 @@ class BBR:
                                  'packet_in_queue', 'queue_size', 'cwnd',
                                  'ssthresh', "rto", "packets_in_flight"])
         else:
+            f_sim_log = None
             writer = None
 
         while True:
@@ -710,6 +711,8 @@ class BBR:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
+        if f_sim_log:
+            f_sim_log.close()
         pkt_level_reward = 0
         if self.record_pkt_log and save_dir:
             with open(os.path.join(
