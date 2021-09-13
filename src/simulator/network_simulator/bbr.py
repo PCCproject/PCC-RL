@@ -662,6 +662,7 @@ class BBR:
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
         if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
             f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), 'w', 1)
             writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
