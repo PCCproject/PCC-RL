@@ -732,10 +732,10 @@ class BBR:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
-            pkt_log = PacketLog.from_log(net.pkt_log)
             # pkt_level_reward = pkt_log.get_reward("", trace)
-            if plot_flag:
-                plot(trace, pkt_log, save_dir, self.cc_name)
+        if self.record_pkt_log and plot_flag:
+            pkt_log = PacketLog.from_log(net.pkt_log)
+            plot(trace, pkt_log, save_dir, self.cc_name)
             # with open(os.path.join(save_dir, "bbr_log.csv"), 'w', 1) as f:
             #     writer = csv.writer(f, lineterminator='\n')
             #     writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
