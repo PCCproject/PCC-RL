@@ -224,8 +224,9 @@ class Aurora():
     cc_name = 'aurora'
     def __init__(self, seed: int, log_dir: str, timesteps_per_actorbatch: int,
                  pretrained_model_path=None, gamma: float = 0.99,
-                 tensorboard_log=None, delta_scale=1):
+                 tensorboard_log=None, delta_scale=1, record_pkt_log: bool = False):
         init_start = time.time()
+        self.record_pkt_log = record_pkt_log
         self.comm = COMM_WORLD
         self.delta_scale = delta_scale
         self.seed = seed
@@ -345,7 +346,7 @@ class Aurora():
                              'packet_in_queue', 'queue_size', 'cwnd',
                              'ssthresh', "rto", "recv_ratio", "srtt"])
             env = gym.make(
-                'PccNs-v0', traces=[trace], delta_scale=self.delta_scale)
+                'PccNs-v0', traces=[trace], delta_scale=self.delta_scale, record_pkt_log=self.record_pkt_log)
             env.seed(self.seed)
             obs = env.reset()
             # print(obs)
@@ -420,22 +421,30 @@ class Aurora():
 
                 if dones:
                     break
-        with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
-            pkt_logger = csv.writer(f, lineterminator='\n')
-            pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
-                                 'bytes', 'cur_latency', 'queue_delay',
-                                 'packet_in_queue', 'sending_rate', 'bandwidth'])
-            pkt_logger.writerows(env.net.pkt_log)
+        if self.record_pkt_log:
+            with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
+                pkt_logger = csv.writer(f, lineterminator='\n')
+                pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
+                                     'bytes', 'cur_latency', 'queue_delay',
+                                     'packet_in_queue', 'sending_rate', 'bandwidth'])
+                pkt_logger.writerows(env.net.pkt_log)
+            if plot_flag:
+                pkt_log = PacketLog.from_log(env.net.pkt_log)
+                plot(trace, pkt_log, save_dir, "aurora")
         if plot_flag:
-            pkt_log = PacketLog.from_log(env.net.pkt_log)
-            plot(trace, pkt_log, save_dir, "aurora")
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
-        return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, env.net.pkt_log
+
+        tput = env.senders[0].tot_acked / (env.senders[0].last_ack_ts - env.senders[0].first_ack_ts)
+        avg_lat = env.senders[0].cur_avg_latency
+        loss = 1 - env.senders[0].tot_acked / env.senders[0].tot_sent
+        pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
+            avg_bw=trace.avg_bw * 1e6 / 8 / BYTES_PER_PACKET)
+
+        return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, pkt_level_reward
 
     def test(self, trace: Trace, save_dir: str, plot_flag=False):
-        _, reward_list, _, _, _, _, _, _, _, pkt_log = self._test(trace, save_dir, plot_flag)
-        pkt_log = PacketLog.from_log(pkt_log)
-        return np.mean(reward_list), pkt_log.get_reward("", trace)
+        _, reward_list, _, _, _, _, _, _, _, pkt_level_reward = self._test(trace, save_dir, plot_flag)
+        return np.mean(reward_list), pkt_level_reward
 
 def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int):
     rl = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
