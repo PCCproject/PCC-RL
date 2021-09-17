@@ -330,9 +330,10 @@ class Aurora():
         action_list = []
         mi_list = []
         obs_list = []
-        os.makedirs(save_dir, exist_ok=True)
-        with open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1) as f:
-            writer = csv.writer(f, lineterminator='\n')
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            f_sim_log = open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1)
+            writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
                              'recv_rate', 'max_recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
@@ -345,53 +346,55 @@ class Aurora():
                              'bandwidth', "queue_delay",
                              'packet_in_queue', 'queue_size', 'cwnd',
                              'ssthresh', "rto", "recv_ratio", "srtt"])
-            env = gym.make(
-                'PccNs-v0', traces=[trace], delta_scale=self.delta_scale, record_pkt_log=self.record_pkt_log)
-            env.seed(self.seed)
-            obs = env.reset()
-            # print(obs)
-            # heuristic = my_heuristic.MyHeuristic()
-            while True:
-                pred_start = time.time()
-                if isinstance(self.model, LoadedModel):
-                    obs = obs.reshape(1, -1)
-                    action = self.model.act(obs)
-                    action = action['act'][0]
+        else:
+            f_sim_log = None
+            writer = None
+        env = gym.make(
+            'PccNs-v0', traces=[trace], delta_scale=self.delta_scale, record_pkt_log=self.record_pkt_log)
+        env.seed(self.seed)
+        obs = env.reset()
+        pred_cost = 0
+        step_cost = 0
+        while True:
+            pred_start = time.time()
+            if isinstance(self.model, LoadedModel):
+                obs = obs.reshape(1, -1)
+                action = self.model.act(obs)
+                action = action['act'][0]
+            else:
+                if env.net.senders[0].got_data:
+                    action, _states = self.model.predict(
+                        obs, deterministic=True)
                 else:
-                    if env.net.senders[0].got_data:
-                        action, _states = self.model.predict(
-                            obs, deterministic=True)
-                    else:
-                        action = np.array([0])
-                # print("pred,{}".format(time.time() - pred_start))
-                # print(env.senders[0].rate * 1500 * 8 / 1e6)
+                    action = np.array([0])
+            pred_cost += time.time() - pred_start
 
-                # get the new MI and stats collected in the MI
-                # sender_mi = env.senders[0].get_run_data()
-                sender_mi = env.senders[0].history.back() #get_run_data()
-                # if env.net.senders[0].got_data:
-                #     action = heuristic.step(obs, sender_mi)
-                #     # action = my_heuristic.stateless_step(env.senders[0].send_rate,
-                #     #         env.senders[0].avg_latency, env.senders[0].lat_diff, env.senders[0].start_stage,
-                #     #         env.senders[0].max_tput, env.senders[0].min_rtt, sender_mi.rtt_samples[-1])
-                #     # action = my_heuristic.stateless_step(*obs)
-                # else:
-                #     action = np.array([0])
-                # max_recv_rate = heuristic.max_tput
-                max_recv_rate = env.senders[0].max_tput
-                throughput = sender_mi.get("recv rate")  # bits/sec
-                send_rate = sender_mi.get("send rate")  # bits/sec
-                latency = sender_mi.get("avg latency")
-                loss = sender_mi.get("loss ratio")
-                avg_queue_delay = sender_mi.get('avg queue delay')
-                sent_latency_inflation = sender_mi.get('sent latency inflation')
-                latency_ratio = sender_mi.get('latency ratio')
-                send_ratio = sender_mi.get('send ratio')
-                recv_ratio = sender_mi.get('recv ratio')
-                reward = pcc_aurora_reward(
-                    throughput / 8 / BYTES_PER_PACKET, latency, loss,
-                    np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
-
+            # get the new MI and stats collected in the MI
+            # sender_mi = env.senders[0].get_run_data()
+            sender_mi = env.senders[0].history.back() #get_run_data()
+            # if env.net.senders[0].got_data:
+            #     action = heuristic.step(obs, sender_mi)
+            #     # action = my_heuristic.stateless_step(env.senders[0].send_rate,
+            #     #         env.senders[0].avg_latency, env.senders[0].lat_diff, env.senders[0].start_stage,
+            #     #         env.senders[0].max_tput, env.senders[0].min_rtt, sender_mi.rtt_samples[-1])
+            #     # action = my_heuristic.stateless_step(*obs)
+            # else:
+            #     action = np.array([0])
+            # max_recv_rate = heuristic.max_tput
+            max_recv_rate = env.senders[0].max_tput
+            throughput = sender_mi.get("recv rate")  # bits/sec
+            send_rate = sender_mi.get("send rate")  # bits/sec
+            latency = sender_mi.get("avg latency")
+            loss = sender_mi.get("loss ratio")
+            avg_queue_delay = sender_mi.get('avg queue delay')
+            sent_latency_inflation = sender_mi.get('sent latency inflation')
+            latency_ratio = sender_mi.get('latency ratio')
+            send_ratio = sender_mi.get('send ratio')
+            recv_ratio = sender_mi.get('recv ratio')
+            reward = pcc_aurora_reward(
+                throughput / 8 / BYTES_PER_PACKET, latency, loss,
+                np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
+            if save_dir and writer:
                 writer.writerow([
                     env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * 8, 0),
                     round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
@@ -406,32 +409,32 @@ class Aurora():
                         env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
                     env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, env.senders[0].estRTT])
-                reward_list.append(reward)
-                loss_list.append(loss)
-                delay_list.append(latency * 1000)
-                tput_list.append(throughput / 1e6)
-                send_rate_list.append(send_rate / 1e6)
-                ts_list.append(env.net.get_cur_time())
-                action_list.append(action.item())
-                mi_list.append(sender_mi.send_end - sender_mi.send_start)
-                obs_list.append(obs.tolist())
-                step_start = time.time()
-                obs, rewards, dones, info = env.step(action)
-                # print("step,{}".format(time.time() - step_start))
+            reward_list.append(reward)
+            loss_list.append(loss)
+            delay_list.append(latency * 1000)
+            tput_list.append(throughput / 1e6)
+            send_rate_list.append(send_rate / 1e6)
+            ts_list.append(env.net.get_cur_time())
+            action_list.append(action.item())
+            mi_list.append(sender_mi.send_end - sender_mi.send_start)
+            obs_list.append(obs.tolist())
+            obs, rewards, dones, info = env.step(action)
 
-                if dones:
-                    break
-        if self.record_pkt_log:
+            if dones:
+                break
+        if f_sim_log:
+            f_sim_log.close()
+        if self.record_pkt_log and save_dir:
             with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
                 pkt_logger = csv.writer(f, lineterminator='\n')
                 pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
                                      'bytes', 'cur_latency', 'queue_delay',
                                      'packet_in_queue', 'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(env.net.pkt_log)
-            if plot_flag:
-                pkt_log = PacketLog.from_log(env.net.pkt_log)
-                plot(trace, pkt_log, save_dir, "aurora")
-        if plot_flag:
+        if self.record_pkt_log and plot_flag:
+            pkt_log = PacketLog.from_log(env.net.pkt_log)
+            plot(trace, pkt_log, save_dir, "aurora")
+        if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
 
         tput = env.senders[0].tot_acked / (env.senders[0].last_ack_ts - env.senders[0].first_ack_ts)

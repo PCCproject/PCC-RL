@@ -15,8 +15,11 @@ class Link():
         self.queue_delay_update_time = 0.0
         self.queue_size = self.trace.get_queue_size()
         self.pkt_in_queue = 0
+        self.cur_queue_delay = None
 
     def get_cur_queue_delay(self, event_time: float) -> float:
+        if self.cur_queue_delay and self.queue_delay_update_time == event_time:
+            return self.cur_queue_delay
         # pkt_in_queue_old = max(0, self.pkt_in_queue -
         #                         (event_time - self.queue_delay_update_time) *
         #                         self.get_bandwidth(event_time))
@@ -29,8 +32,8 @@ class Link():
         #     self.pkt_in_queue) / self.get_bandwidth(event_time)
 
         # cur_queue_delay_old = self.pkt_in_queue / self.get_bandwidth(event_time) # cur_queue_delay is not accurate
-        cur_queue_delay = self.trace.get_sending_t_usage(self.pkt_in_queue * BYTES_PER_PACKET * BITS_PER_BYTE, event_time)
-        return cur_queue_delay
+        self.cur_queue_delay = self.trace.get_sending_t_usage(self.pkt_in_queue * BYTES_PER_PACKET * BITS_PER_BYTE, event_time)
+        return self.cur_queue_delay
 
     def get_cur_propagation_latency(self, event_time: float) -> float:
         return self.trace.get_delay(event_time) / 1000.0

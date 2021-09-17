@@ -31,7 +31,7 @@ from common.utils import pcc_aurora_reward
 from simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
                                  EVENT_TYPE_SEND, MAX_RATE, MI_RTT_PROPORTION,
                                  MIN_RATE, REWARD_SCALE)
-from simulator.link import Link
+from simulator.network_simulator.link import Link
 from simulator.trace import generate_traces
 
 LATENCY_PENALTY = 1.0
@@ -90,8 +90,8 @@ class Network():
         start_time = self.cur_time
         end_time = min(self.cur_time + dur,
                        self.env.current_trace.timestamps[-1])
-        debug_print('MI from {} to {}, dur {}'.format(
-            self.cur_time, end_time, dur))
+        # debug_print('MI from {} to {}, dur {}'.format(
+        #     self.cur_time, end_time, dur))
         for sender in self.senders:
             sender.reset_obs()
         # set_obs_start = False
@@ -118,17 +118,17 @@ class Network():
             new_dropped = dropped
             new_event_queue_delay = event_queue_delay
             push_new_event = False
-            debug_print("Got %d event %s, to link %d, latency %f at time %f, "
-                        "next_hop %d, dropped %s, event_q length %f, "
-                        "sender rate %f, duration: %f, queue_size: %f, "
-                        "rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, "
-                        "pkt in flight %d, wait time %d" % (
-                            event_id, event_type, next_hop, cur_latency,
-                            event_time, next_hop, dropped, len(self.q),
-                            sender.rate, dur, self.links[0].queue_size,
-                            rto, sender.cwnd, sender.ssthresh, sender.rto,
-                            int(sender.bytes_in_flight/BYTES_PER_PACKET),
-                            sender.pkt_loss_wait_time))
+            # debug_print("Got %d event %s, to link %d, latency %f at time %f, "
+            #             "next_hop %d, dropped %s, event_q length %f, "
+            #             "sender rate %f, duration: %f, queue_size: %f, "
+            #             "rto: %f, cwnd: %f, ssthresh: %f, sender rto %f, "
+            #             "pkt in flight %d, wait time %d" % (
+            #                 event_id, event_type, next_hop, cur_latency,
+            #                 event_time, next_hop, dropped, len(self.q),
+            #                 sender.rate, dur, self.links[0].queue_size,
+            #                 rto, sender.cwnd, sender.ssthresh, sender.rto,
+            #                 int(sender.bytes_in_flight/BYTES_PER_PACKET),
+            #                 sender.pkt_loss_wait_time))
             if event_type == EVENT_TYPE_ACK:
                 if next_hop == len(sender.path):
                     # if cur_latency > 1.0:
@@ -149,7 +149,7 @@ class Network():
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     else:
                         sender.on_packet_acked(cur_latency)
-                        debug_print('Ack packet at {}'.format(self.cur_time))
+                        # debug_print('Ack packet at {}'.format(self.cur_time))
                         # log packet acked
                         if self.env.record_pkt_log:
                             self.pkt_log.append(
@@ -168,9 +168,9 @@ class Network():
                     #          sender.rate * BYTES_PER_PACKET * 8,
                     #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
                     new_next_hop = next_hop + 1
-                    new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
-                        self.cur_time)
-                    link_latency = sender.path[next_hop].get_cur_latency(
+                    # new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
+                    #     self.cur_time)
+                    link_latency = sender.path[next_hop].get_cur_propagation_latency(
                         self.cur_time)
                     # link_latency *= self.env.current_trace.get_delay_noise_replay(self.cur_time)
                     # if USE_LATENCY_NOISE:
@@ -204,10 +204,9 @@ class Network():
                     new_event_type = EVENT_TYPE_ACK
                 new_next_hop = next_hop + 1
 
-                new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
+                prop_delay, new_event_queue_delay = sender.path[next_hop].get_cur_latency(
                     self.cur_time)
-                link_latency = sender.path[next_hop].get_cur_latency(
-                    self.cur_time)
+                link_latency = prop_delay + new_event_queue_delay
                 # if USE_LATENCY_NOISE:
                 # link_latency *= random.uniform(1.0, MAX_LATENCY_NOISE)
                 # link_latency += self.env.current_trace.get_delay_noise(
@@ -244,8 +243,8 @@ class Network():
         throughput = sender_mi.get("recv rate")  # bits/sec
         latency = sender_mi.get("avg latency")  # second
         loss = sender_mi.get("loss ratio")
-        debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
-            throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
+        # debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
+        #     throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
         reward = pcc_aurora_reward(
             throughput / 8 / BYTES_PER_PACKET, latency, loss,
             np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET,
@@ -259,28 +258,28 @@ class Network():
             # assert self.env.run_dur >= 0.03
             # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
 
-        self.senders[0].avg_latency = sender_mi.get("avg latency")  # second
-        self.senders[0].recv_rate = round(sender_mi.get("recv rate"), 3)  # bits/sec
-        self.senders[0].send_rate = round(sender_mi.get("send rate"), 3)  # bits/sec
-        self.senders[0].lat_diff = sender_mi.rtt_samples[-1] - sender_mi.rtt_samples[0]
-        self.senders[0].latest_rtt = sender_mi.rtt_samples[-1]
-        self.recv_rate_cache.append(self.senders[0].recv_rate)
-        if len(self.recv_rate_cache) > 6:
-            self.recv_rate_cache = self.recv_rate_cache[1:]
-        self.senders[0].max_tput = max(self.recv_rate_cache)
-
-        if self.senders[0].lat_diff == 0 and self.senders[0].start_stage:  # no latency change
-            pass
-            # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
-        elif self.senders[0].lat_diff == 0 and not self.senders[0].start_stage:  # no latency change
-            pass
-            # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
-        elif self.senders[0].lat_diff > 0:  # latency increase
-            self.senders[0].start_stage = False
-            # self.senders[0].max_tput = self.senders[0].recv_rate # , self.max_tput)
-        else:  # latency decrease
-            self.senders[0].start_stage = False
-            # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
+        # self.senders[0].avg_latency = sender_mi.get("avg latency")  # second
+        # self.senders[0].recv_rate = round(sender_mi.get("recv rate"), 3)  # bits/sec
+        # self.senders[0].send_rate = round(sender_mi.get("send rate"), 3)  # bits/sec
+        # self.senders[0].lat_diff = sender_mi.rtt_samples[-1] - sender_mi.rtt_samples[0]
+        # self.senders[0].latest_rtt = sender_mi.rtt_samples[-1]
+        # self.recv_rate_cache.append(self.senders[0].recv_rate)
+        # if len(self.recv_rate_cache) > 6:
+        #     self.recv_rate_cache = self.recv_rate_cache[1:]
+        # self.senders[0].max_tput = max(self.recv_rate_cache)
+        #
+        # if self.senders[0].lat_diff == 0 and self.senders[0].start_stage:  # no latency change
+        #     pass
+        #     # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
+        # elif self.senders[0].lat_diff == 0 and not self.senders[0].start_stage:  # no latency change
+        #     pass
+        #     # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
+        # elif self.senders[0].lat_diff > 0:  # latency increase
+        #     self.senders[0].start_stage = False
+        #     # self.senders[0].max_tput = self.senders[0].recv_rate # , self.max_tput)
+        # else:  # latency decrease
+        #     self.senders[0].start_stage = False
+        #     # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
         return reward * REWARD_SCALE
 
 

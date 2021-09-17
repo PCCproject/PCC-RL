@@ -252,11 +252,11 @@ def main():
     set_seed(args.seed + COMM_WORLD.Get_rank())
 
     if args.heuristic == 'bbr':
-        heuristic = BBR(True)
+        heuristic = BBR(False)
     elif args.heuristic == 'bbr_old':
-        heuristic = BBR_old(True)
+        heuristic = BBR_old(False)
     elif args.heuristic == 'cubic':
-        heuristic = Cubic(True)
+        heuristic = Cubic(False)
     elif args.heuristic == 'optimal':
         heuristic = None
     else:
