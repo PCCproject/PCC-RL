@@ -16,6 +16,7 @@ from simulator.aurora import Aurora, test_on_traces
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
+from simulator.network_simulator.bbr_old import BBR_old
 from simulator.trace import generate_trace
 
 MODEL_PATH = ""
@@ -34,7 +35,7 @@ def parse_args():
                         help="Rounds of BO.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
     parser.add_argument('--heuristic', type=str, default="cubic",
-                        choices=('bbr', 'cubic', 'optimal'),
+                        choices=('bbr', 'bbr_old', 'cubic', 'optimal'),
                         help='Congestion control rule based method.')
 
     return parser.parse_args()
@@ -205,7 +206,8 @@ def black_box_function(bandwidth_lower_bound: float,
             # heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(trace, "")
             hret = heuristic.test_on_traces(traces, [""]* len(traces) , False, COMM_WORLD.Get_size())
             for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
-                heuristic_rewards.append(heuristic_mi_level_reward)
+                # heuristic_rewards.append(heuristic_mi_level_reward)
+                heuristic_rewards.append(heuristic_pkt_level_reward)
             print("heuristic used {}s".format(time.time() - t_start))
             t_start = time.time()
             # commented code buggy: run out of file descriptor.
@@ -214,7 +216,8 @@ def black_box_function(bandwidth_lower_bound: float,
             #     rl_method_rewards.append(rl_mi_level_reward)
             for trace in traces:
                 rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(trace, rl_method.log_dir)
-                rl_method_rewards.append(rl_mi_level_reward)
+                # rl_method_rewards.append(rl_mi_level_reward)
+                rl_method_rewards.append(rl_pkt_level_reward)
             print("rl used {}s".format(time.time() - t_start))
             # print(rl_method_rewards)
             # rl_method_rewards.append(rl_pkt_level_reward)
@@ -250,6 +253,8 @@ def main():
 
     if args.heuristic == 'bbr':
         heuristic = BBR(True)
+    elif args.heuristic == 'bbr_old':
+        heuristic = BBR_old(True)
     elif args.heuristic == 'cubic':
         heuristic = Cubic(True)
     elif args.heuristic == 'optimal':
