@@ -30,6 +30,14 @@ class Sender:
         self.rtt_samples = []
         self.queue_delay_samples = []
 
+        # variables to track accross the connection session
+        self.tot_sent = 0 # no. of packets
+        self.tot_acked = 0 # no. of packets
+        self.tot_lost = 0 # no. of packets
+        self.cur_avg_latency = 0.0
+        self.first_ack_ts = None
+        self.last_ack_ts = None
+
         self.pacing_rate = 0  # bytes/s
         self.bytes_in_flight = 0  # bytes
         self.net = None
@@ -54,9 +62,15 @@ class Sender:
         self.event_count += 1
         self.sent += 1
         self.bytes_in_flight += pkt.pkt_size
+        self.tot_sent += 1
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         self.acked += 1
+        self.cur_avg_latency = (self.cur_avg_latency * self.tot_acked + pkt.rtt) / (self.tot_acked + 1)
+        self.tot_acked += 1
+        if self.first_ack_ts is None:
+            self.first_ack_ts = pkt.ts
+        self.last_ack_ts = pkt.ts
         assert self.bytes_in_flight >= pkt.pkt_size
         self.bytes_in_flight -= pkt.pkt_size
         if self.srtt is None and self.rttvar is None:
@@ -78,6 +92,7 @@ class Sender:
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
+        self.tot_lost += 1
         assert self.bytes_in_flight >= pkt.pkt_size
         self.bytes_in_flight -= pkt.pkt_size
 
@@ -137,6 +152,12 @@ class Sender:
         self.srtt = None
         self.rttvar = None
         self.rto = 3  # retransmission timeout (seconds)
+        self.tot_sent = 0 # no. of packets
+        self.tot_acked = 0 # no. of packets
+        self.tot_lost = 0 # no. of packets
+        self.cur_avg_latency = 0.0
+        self.first_ack_ts = None
+        self.last_ack_ts = None
         self.reset_obs()
 
     def timeout(self):

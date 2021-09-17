@@ -272,7 +272,12 @@ class Cubic:
                 break
         if f_sim_log:
             f_sim_log.close()
-        pkt_level_reward = 0
+        assert senders[0].last_ack_ts and senders[0].first_ack_ts
+        tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
+        avg_lat = senders[0].cur_avg_latency
+        loss = 1 - senders[0].tot_acked / senders[0].tot_sent
+        pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
+            avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
         if self.record_pkt_log and save_dir:
             with open(os.path.join(
                 save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
