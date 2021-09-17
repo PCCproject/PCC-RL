@@ -180,7 +180,7 @@ class BBRSender(Sender):
         self.in_fast_recovery_mode = False
 
         self.init()
-        self.bbr_log = []
+        # self.bbr_log = []
 
     def init(self):
         # init_windowed_max_filter(filter=BBR.BtlBwFilter, value=0, time=0)
@@ -529,12 +529,15 @@ class BBRSender(Sender):
         # else:
         #     estimated_bdp = self.btlbw * self.rtprop / BYTES_PER_PACKET
         #     cwnd_gain = self.cwnd_gain
+
+        # for debug purpose
+        # self.bbr_log.append([self.get_cur_time(), self.pacing_gain, self.pacing_rate * BITS_PER_BYTE / 1e6,
+        # self.cwnd_gain, self.cwnd, self.target_cwnd, self.prior_cwnd, self.btlbw * BITS_PER_BYTE / 1e6,
+        # self.rtprop, self.full_bw * BITS_PER_BYTE / 1e6, self.state.value,
+        # self.bytes_in_flight / 1500, int(self.in_fast_recovery_mode),
+        # self.rs.delivery_rate * BITS_PER_BYTE / 1e6, int(self.rs.pkt_in_fast_recovery_mode)])
+
         # if self.bytes_in_flight >= cwnd_gain * estimated_bdp * BYTES_PER_PACKET:
-        self.bbr_log.append([self.get_cur_time(), self.pacing_gain, self.pacing_rate * BITS_PER_BYTE / 1e6,
-        self.cwnd_gain, self.cwnd, self.target_cwnd, self.prior_cwnd, self.btlbw * BITS_PER_BYTE / 1e6,
-        self.rtprop, self.full_bw * BITS_PER_BYTE / 1e6, self.state.value,
-        self.bytes_in_flight / 1500, int(self.in_fast_recovery_mode),
-        self.rs.delivery_rate * BITS_PER_BYTE / 1e6, int(self.rs.pkt_in_fast_recovery_mode)])
         if self.bytes_in_flight >= self.cwnd * BYTES_PER_PACKET:
             # wait for ack or timeout
             return False
@@ -730,17 +733,18 @@ class BBR:
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
             pkt_log = PacketLog.from_log(net.pkt_log)
-            pkt_level_reward = pkt_log.get_reward("", trace)
+            # pkt_level_reward = pkt_log.get_reward("", trace)
             if plot_flag:
                 plot(trace, pkt_log, save_dir, self.cc_name)
-                plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
-            with open(os.path.join(save_dir, "bbr_log.csv"), 'w', 1) as f:
-                writer = csv.writer(f, lineterminator='\n')
-                writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
-                                 'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
-                                 "full_bw", 'state', "packets_in_flight", "in_fast_recovery_mode",
-                                 'rs_delivery_rate'])
-                writer.writerows(senders[0].bbr_log)
+            # with open(os.path.join(save_dir, "bbr_log.csv"), 'w', 1) as f:
+            #     writer = csv.writer(f, lineterminator='\n')
+            #     writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
+            #                      'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
+            #                      "full_bw", 'state', "packets_in_flight", "in_fast_recovery_mode",
+            #                      'rs_delivery_rate'])
+            #     writer.writerows(senders[0].bbr_log)
+        if plot_flag and save_dir:
+            plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],

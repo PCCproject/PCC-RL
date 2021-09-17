@@ -288,11 +288,11 @@ class Cubic:
                                      'sending_rate', 'bandwidth', 'cwnd'])
                 pkt_logger.writerows(net.pkt_log)
             pkt_log = PacketLog.from_log(net.pkt_log)
-            pkt_level_reward = pkt_log.get_reward("", trace)
+            # pkt_level_reward = pkt_log.get_reward("", trace)
             if plot_flag:
                 plot(trace, pkt_log, save_dir, self.cc_name)
-                plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), save_dir)
+        if plot_flag and save_dir:
+            plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
