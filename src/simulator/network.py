@@ -49,27 +49,6 @@ def debug_print(msg):
         print(msg, file=sys.stderr, flush=True)
 
 
-class EmuReplay:
-    def __init__(self, ):
-        df = pd.read_csv('aurora_emulation_log.csv')
-        self.ts = df['timestamp'].tolist()
-        self.send_rate = df['send_rate'].tolist()
-        self.idx = 0
-
-    def get_ts(self):
-        if self.idx > len(self.ts):
-            self.idx = len(self.ts) - 1
-        ts = self.ts[self.idx]
-        self.idx += 1
-        return ts
-
-    def get_rate(self):
-        return self.send_rate[self.idx] / 8 / BYTES_PER_PACKET
-
-    def reset(self):
-        self.idx = 0
-
-
 class Network():
 
     def __init__(self, senders, links, env):
@@ -543,7 +522,6 @@ class SimulatedNetworkEnv(gym.Env):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
-        # self.replay = EmuReplay()
         self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
@@ -637,36 +615,13 @@ class SimulatedNetworkEnv(gym.Env):
             sender.print_debug()
 
     def create_new_links_and_senders(self):
-        # self.replay.reset()
         self.links = [Link(self.current_trace), Link(self.current_trace)]
-        if not self.train_flag:
-
-            self.senders = [Sender(  # self.replay.get_rate(),
-                # 2500000 / 8 /BYTES_PER_PACKET / 0.048,
-                # 12000000 / 8 /BYTES_PER_PACKET / 0.048,
-                10 / (self.current_trace.get_delay(0) *2/1000),
-                # 100,
-                [self.links[0], self.links[1]], 0,
-                self.features,
-                history_len=self.history_len,
-                delta_scale=self.delta_scale)]
-        else:
-            # self.senders = [Sender(random.uniform(0.3, 1.5) * bw,
-            #                        [self.links[0], self.links[1]], 0,
-            #                        self.features,
-            #                        history_len=self.history_len)]
-            # self.senders = [Sender(random.uniform(10/bw, 1.5) * bw,
-            #                        [self.links[0], self.links[1]], 0,
-            #                        self.features,
-            #                        history_len=self.history_len,
-            #                        delta_scale=self.delta_scale)]
-            self.senders = [Sender(
-                # 100,
-                10 / (self.current_trace.get_delay(0) *2/1000),
-                                   [self.links[0], self.links[1]], 0,
-                                   self.features,
-                                   history_len=self.history_len,
-                                   delta_scale=self.delta_scale)]
+        self.senders = [Sender(
+            10 / (self.current_trace.get_delay(0) *2/1000),
+                               [self.links[0], self.links[1]], 0,
+                               self.features,
+                               history_len=self.history_len,
+                               delta_scale=self.delta_scale)]
         # self.run_dur = 3 * lat
         # self.run_dur = 1 * lat
         if not self.senders[0].rtt_samples:
@@ -674,7 +629,6 @@ class SimulatedNetworkEnv(gym.Env):
             # self.run_dur = 5 / self.senders[0].rate
             self.run_dur = 0.01
             # self.run_dur = self.current_trace.get_delay(0) * 2 / 1000
-            # self.run_dur = self.replay.get_ts() -  0
 
     def reset(self):
         self.steps_taken = 0
@@ -686,7 +640,6 @@ class SimulatedNetworkEnv(gym.Env):
         self.episodes_run += 1
         if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
             self.traces = generate_traces(self.config_file, 10, duration=30)
-        # self.replay.reset()
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
