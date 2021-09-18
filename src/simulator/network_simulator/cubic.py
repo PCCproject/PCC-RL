@@ -273,11 +273,25 @@ class Cubic:
         if f_sim_log:
             f_sim_log.close()
         assert senders[0].last_ack_ts and senders[0].first_ack_ts
+        avg_sending_rate = senders[0].tot_sent / (senders[0].last_sent_ts - senders[0].first_sent_ts)
         tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
         avg_lat = senders[0].cur_avg_latency
         loss = 1 - senders[0].tot_acked / senders[0].tot_sent
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        if save_dir:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
+                summary_writer = csv.writer(f, lineterminator='\n')
+                summary_writer.writerow([
+                    'trace_average_bandwidth', 'trace_average_latency',
+                    'average_sending_rate', 'average_throughput',
+                    'average_latency', 'loss_rate', 'mi_level_reward',
+                    'pkt_level_reward'])
+                summary_writer.writerow(
+                    [trace.avg_bw, trace.avg_delay,
+                     avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                     tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
+                     loss, np.mean(rewards), pkt_level_reward])
         if self.record_pkt_log and save_dir:
             with open(os.path.join(
                 save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:

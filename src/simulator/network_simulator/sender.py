@@ -37,6 +37,8 @@ class Sender:
         self.cur_avg_latency = 0.0
         self.first_ack_ts = None
         self.last_ack_ts = None
+        self.first_sent_ts = None
+        self.last_sent_ts = None
 
         self.pacing_rate = 0  # bytes/s
         self.bytes_in_flight = 0  # bytes
@@ -63,6 +65,9 @@ class Sender:
         self.sent += 1
         self.bytes_in_flight += pkt.pkt_size
         self.tot_sent += 1
+        if self.first_sent_ts is None:
+            self.first_sent_ts = pkt.ts
+        self.last_sent_ts = pkt.ts
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         self.acked += 1
