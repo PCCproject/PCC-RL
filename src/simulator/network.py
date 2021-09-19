@@ -335,6 +335,8 @@ class Sender():
         self.cur_avg_latency = 0.0
         self.first_ack_ts = None
         self.last_ack_ts = None
+        self.first_sent_ts = None
+        self.last_sent_ts = None
 
     _next_id = 1
 
@@ -370,9 +372,13 @@ class Sender():
         self.net = net
 
     def on_packet_sent(self):
+        assert self.net
         self.sent += 1
         self.bytes_in_flight += BYTES_PER_PACKET
         self.tot_sent += 1
+        if self.first_sent_ts is None:
+            self.first_sent_ts = self.net.get_cur_time()
+        self.last_sent_ts = self.net.get_cur_time()
 
     def on_packet_acked(self, rtt):
         assert self.net

@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import re
+from typing import Union
 
 import numpy as np
 
@@ -57,7 +58,8 @@ def learnability_objective_function(throughput, delay):
     return score
 
 
-def pcc_aurora_reward(throughput, delay, loss, avg_bw=None, min_rtt=None):
+def pcc_aurora_reward(throughput: float, delay: float, loss: float,
+                      avg_bw=Union[float, None], min_rtt=Union[float, None]) -> float:
     """PCC Aurora reward. Anchor point 0.6Mbps
     throughput: packets per second
     delay: second

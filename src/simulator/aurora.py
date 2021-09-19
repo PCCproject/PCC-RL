@@ -1,10 +1,11 @@
 import csv
 import logging
+import multiprocessing as mp
 import os
 import shutil
 import time
 import types
-from typing import List
+from typing import List, Tuple
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -23,7 +24,7 @@ from stable_baselines.common.policies import FeedForwardPolicy
 from stable_baselines.results_plotter import load_results, ts2xy
 
 from simulator import network
-from simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
@@ -392,11 +393,11 @@ class Aurora():
             send_ratio = sender_mi.get('send ratio')
             recv_ratio = sender_mi.get('recv ratio')
             reward = pcc_aurora_reward(
-                throughput / 8 / BYTES_PER_PACKET, latency, loss,
-                np.mean(trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
+                throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
+                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
             if save_dir and writer:
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * 8, 0),
+                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
                     round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
@@ -406,7 +407,7 @@ class Aurora():
                     sender_mi.get('conn min latency'), sent_latency_inflation,
                     latency_ratio, send_ratio,
                     env.links[0].get_bandwidth(
-                        env.net.get_cur_time()) * BYTES_PER_PACKET * 8,
+                        env.net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
                     env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, env.senders[0].estRTT])
             reward_list.append(reward)
@@ -436,26 +437,40 @@ class Aurora():
             plot(trace, pkt_log, save_dir, "aurora")
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
-
+        avg_sending_rate = env.senders[0].tot_sent / (env.senders[0].last_sent_ts - env.senders[0].first_sent_ts)
         tput = env.senders[0].tot_acked / (env.senders[0].last_ack_ts - env.senders[0].first_ack_ts)
         avg_lat = env.senders[0].cur_avg_latency
         loss = 1 - env.senders[0].tot_acked / env.senders[0].tot_sent
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
-            avg_bw=trace.avg_bw * 1e6 / 8 / BYTES_PER_PACKET)
+            avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        if save_dir:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
+                summary_writer = csv.writer(f, lineterminator='\n')
+                summary_writer.writerow([
+                    'trace_average_bandwidth', 'trace_average_latency',
+                    'average_sending_rate', 'average_throughput',
+                    'average_latency', 'loss_rate', 'mi_level_reward',
+                    'pkt_level_reward'])
+                summary_writer.writerow(
+                    [trace.avg_bw, trace.avg_delay,
+                     avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                     tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
+                     loss, np.mean(reward_list), pkt_level_reward])
 
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, pkt_level_reward
 
-    def test(self, trace: Trace, save_dir: str, plot_flag=False):
+    def test(self, trace: Trace, save_dir: str, plot_flag=False) -> Tuple[float, float]:
         _, reward_list, _, _, _, _, _, _, _, pkt_level_reward = self._test(trace, save_dir, plot_flag)
         return np.mean(reward_list), pkt_level_reward
 
-def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int):
+def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int, record_pkt_log: bool = False):
     rl = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
-                timesteps_per_actorbatch=10)
+                timesteps_per_actorbatch=10, record_pkt_log=record_pkt_log)
     return rl.test(trace, save_dir, False)
 
-def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str], nproc: int, seed: int):
-    arguments = [(model_path, trace, save_dir, seed) for trace, save_dir in zip(traces, save_dirs)]
-    with MPIPoolExecutor(max_workers=nproc) as executor:
-        results = executor.starmap(test_on_trace, arguments)
+def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str], nproc: int, seed: int, record_pkt_log: bool):
+    arguments = [(model_path, trace, save_dir, seed, record_pkt_log) for trace, save_dir in zip(traces, save_dirs)]
+    # with mp.get_context("spawn").Pool(processes=nproc) as pool:
+    with mp.Pool(processes=nproc) as pool:
+        results = pool.starmap(test_on_trace, arguments)
     return results
