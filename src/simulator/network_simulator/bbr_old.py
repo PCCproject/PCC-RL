@@ -1,4 +1,3 @@
-
 import csv
 import math
 import multiprocessing as mp
@@ -8,6 +7,7 @@ from enum import Enum
 from typing import List, Tuple
 
 import numpy as np
+import tqdm
 
 from common.utils import pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
@@ -397,7 +397,7 @@ class BBRSender(Sender):
         self.cwnd_gain = 1
 
     def handle_probe_rtt(self):
-        # Ignore low rate samples during ProbeRTT: */
+        # Ignore low rate samples during ProbeRTT:
         packets_in_flight = self.bytes_in_flight / BYTES_PER_PACKET
         self.app_limited = False  # assume always have available data to send from app
         # instead of (BW.delivered + packets_in_flight) ? : 1
@@ -488,9 +488,9 @@ class BBRSender(Sender):
             # if self.rs.delivery_rate * 8 / 1e6 > 1.2:
             # print("C.delivered:", self.conn_state.delivered, "rs.prior_delivered:", self.rs.prior_delivered, "rs.delivered:", self.rs.delivered, "rs.interval:", self.rs.interval, "rs.delivery_rate:", self.rs.delivery_rate * 8 / 1e6)
 
-        return True  # we filled in rs with a rate sample */
+        return True  # we filled in rs with a rate sample
 
-    # Update rs when packet is SACKed or ACKed. */
+    # Update rs when packet is SACKed or ACKed.
     def update_rate_sample(self, pkt: BBRPacket):
         # comment out because we don't need this in the simulator.
         # if pkt.delivered_time == 0:
@@ -658,8 +658,8 @@ class BBR_old:
         run_dur = start_rtt
         if save_dir:
             os.makedirs(save_dir, exist_ok=True)
-            writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), 'w', 1), lineterminator='\n')
+            f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), 'w', 1)
+            writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
                                  'loss', 'reward', "action", "bytes_sent",
                                  "bytes_acked", "bytes_lost", "send_start_time",
@@ -669,6 +669,7 @@ class BBR_old:
                                  'packet_in_queue', 'queue_size', 'cwnd',
                                  'ssthresh', "rto", "packets_in_flight"])
         else:
+            f_sim_log = None
             writer = None
 
         while True:
@@ -683,7 +684,7 @@ class BBR_old:
 
             reward = pcc_aurora_reward(
                 throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
-                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+                trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
             rewards.append(reward)
             try:
                 ssthresh = senders[0].ssthresh
@@ -716,18 +717,38 @@ class BBR_old:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
+        if f_sim_log:
+            f_sim_log.close()
+        assert senders[0].last_ack_ts is not None and senders[0].first_ack_ts is not None
+        assert senders[0].last_sent_ts is not None and senders[0].first_sent_ts is not None
+        avg_sending_rate = senders[0].tot_sent / (senders[0].last_sent_ts - senders[0].first_sent_ts)
+        tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
+        avg_lat = senders[0].cur_avg_latency
+        loss = 1 - senders[0].tot_acked / senders[0].tot_sent
+        pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
+            avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        if save_dir:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
+                summary_writer = csv.writer(f, lineterminator='\n')
+                summary_writer.writerow([
+                    'trace_average_bandwidth', 'trace_average_latency',
+                    'average_sending_rate', 'average_throughput',
+                    'average_latency', 'loss_rate', 'mi_level_reward',
+                    'pkt_level_reward'])
+                summary_writer.writerow(
+                    [trace.avg_bw, trace.avg_delay,
+                     avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                     tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
+                     loss, np.mean(rewards), pkt_level_reward])
             pkt_log = PacketLog.from_log(net.pkt_log)
-            pkt_level_reward = pkt_log.get_reward("", trace)
-            if plot_flag:
-                plot(trace, pkt_log, save_dir, self.cc_name)
-                plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
+            plot(trace, pkt_log, save_dir, self.cc_name)
+        if plot_flag and save_dir:
+            plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
         return np.mean(rewards), pkt_level_reward
-
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
                        plot_flag: bool = False, n_proc: int = 1):
         arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
             traces, save_dirs)]
-        n_proc = n_proc
         with mp.Pool(processes=n_proc) as pool:
-            return pool.starmap(self.test, arguments)
+            return pool.starmap(self.test, tqdm.tqdm(arguments, total=len(arguments)))

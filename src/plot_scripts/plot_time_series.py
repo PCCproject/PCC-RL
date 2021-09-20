@@ -123,7 +123,8 @@ def plot(trace, log_file, save_dir: str):
     # axes[5].set_xlim(0, )
     plt.tight_layout()
     if save_dir is not None:
-        plt.savefig(os.path.join(save_dir, "{}_time_series.png".format(cc)))
+        plt.savefig(os.path.join(save_dir, "{}_time_series.jpg".format(cc)))
+    plt.close()
 
     # if log_idx == 0:
     #     print("{},{},{},{},{},".format(os.path.dirname(log_file), df['recv_rate'].mean()/1e6,
