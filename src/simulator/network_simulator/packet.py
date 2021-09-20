@@ -1,7 +1,6 @@
 import time
 
-from simulator.constants import BYTES_PER_PACKET
-from simulator.network_simulator.constants import EVENT_TYPE_SEND
+from simulator.network_simulator.constants import BYTES_PER_PACKET, EVENT_TYPE_SEND
 from simulator.network_simulator import sender
 
 

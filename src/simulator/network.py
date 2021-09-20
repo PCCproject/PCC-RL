@@ -21,14 +21,13 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 
 import gym
 import numpy as np
-import pandas as pd
 from gym import spaces
 from gym.envs.registration import register
 from gym.utils import seeding
 
 from common import sender_obs
 from common.utils import pcc_aurora_reward
-from simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
+from simulator.network_simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
                                  EVENT_TYPE_SEND, MAX_RATE, MI_RTT_PROPORTION,
                                  MIN_RATE, REWARD_SCALE)
 from simulator.network_simulator.link import Link

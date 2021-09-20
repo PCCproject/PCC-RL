@@ -8,7 +8,7 @@ from typing import List, Tuple, Union
 
 import numpy as np
 from common.utils import read_json_file, set_seed, write_json_file
-from simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BYTES_PER_PACKET
 from simulator.pantheon_trace_parser.flow import Flow
 
 
