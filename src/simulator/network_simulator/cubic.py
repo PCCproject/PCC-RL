@@ -4,6 +4,7 @@ import multiprocessing as mp
 from typing import List, Tuple
 
 import numpy as np
+import tqdm
 
 from common.utils import pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
@@ -314,6 +315,5 @@ class Cubic:
                        plot_flag: bool = False, n_proc: int = 1):
         arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
             traces, save_dirs)]
-        n_proc = n_proc
         with mp.Pool(processes=n_proc) as pool:
-            return pool.starmap(self.test, arguments)
+            return pool.starmap(self.test, tqdm.tqdm(arguments, total=len(arguments)))

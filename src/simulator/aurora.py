@@ -15,13 +15,14 @@ from mpi4py.futures import MPIPoolExecutor
 import gym
 import numpy as np
 import tensorflow as tf
+import tqdm
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 from stable_baselines import PPO1
-from stable_baselines.bench import Monitor
+# from stable_baselines.bench import Monitor
 from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
-from stable_baselines.results_plotter import load_results, ts2xy
+# from stable_baselines.results_plotter import load_results, ts2xy
 
 from simulator import network
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
@@ -321,7 +322,7 @@ class Aurora():
     def load_model(self):
         raise NotImplementedError
 
-    def _test(self, trace: Trace, save_dir: str, plot_flag=False):
+    def _test(self, trace: Trace, save_dir: str, plot_flag: bool = False):
         reward_list = []
         loss_list = []
         tput_list = []
@@ -394,7 +395,8 @@ class Aurora():
             recv_ratio = sender_mi.get('recv ratio')
             reward = pcc_aurora_reward(
                 throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
-                np.mean(trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, np.mean(trace.delays) * 2/ 1e3)
+                trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+                trace.avg_delay * 2/ 1e3)
             if save_dir and writer:
                 writer.writerow([
                     env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
@@ -437,6 +439,9 @@ class Aurora():
             plot(trace, pkt_log, save_dir, "aurora")
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
+
+        assert env.senders[0].last_ack_ts is not None and env.senders[0].first_ack_ts is not None
+        assert env.senders[0].last_sent_ts is not None and env.senders[0].first_sent_ts is not None
         avg_sending_rate = env.senders[0].tot_sent / (env.senders[0].last_sent_ts - env.senders[0].first_sent_ts)
         tput = env.senders[0].tot_acked / (env.senders[0].last_ack_ts - env.senders[0].first_ack_ts)
         avg_lat = env.senders[0].cur_avg_latency
@@ -459,18 +464,21 @@ class Aurora():
 
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, pkt_level_reward
 
-    def test(self, trace: Trace, save_dir: str, plot_flag=False) -> Tuple[float, float]:
+    def test(self, trace: Trace, save_dir: str, plot_flag: bool = False) -> Tuple[float, float]:
         _, reward_list, _, _, _, _, _, _, _, pkt_level_reward = self._test(trace, save_dir, plot_flag)
         return np.mean(reward_list), pkt_level_reward
 
-def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int, record_pkt_log: bool = False):
+def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int,
+                  record_pkt_log: bool = False, plot_flag: bool = False):
     rl = Aurora(seed=seed, log_dir="", pretrained_model_path=model_path,
                 timesteps_per_actorbatch=10, record_pkt_log=record_pkt_log)
-    return rl.test(trace, save_dir, False)
+    return rl.test(trace, save_dir, plot_flag)
 
-def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str], nproc: int, seed: int, record_pkt_log: bool):
-    arguments = [(model_path, trace, save_dir, seed, record_pkt_log) for trace, save_dir in zip(traces, save_dirs)]
+def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str],
+                   nproc: int, seed: int, record_pkt_log: bool, plot_flag: bool):
+    arguments = [(model_path, trace, save_dir, seed, record_pkt_log, plot_flag)
+                 for trace, save_dir in zip(traces, save_dirs)]
     # with mp.get_context("spawn").Pool(processes=nproc) as pool:
     with mp.Pool(processes=nproc) as pool:
-        results = pool.starmap(test_on_trace, arguments)
+        results = pool.starmap(test_on_trace, tqdm.tqdm(arguments, total=len(arguments)))
     return results
