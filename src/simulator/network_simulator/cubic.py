@@ -272,7 +272,8 @@ class Cubic:
                 break
         if f_sim_log:
             f_sim_log.close()
-        assert senders[0].last_ack_ts and senders[0].first_ack_ts
+        assert senders[0].last_ack_ts is not None and senders[0].first_ack_ts is not None
+        assert senders[0].last_sent_ts is not None and senders[0].first_sent_ts is not None
         avg_sending_rate = senders[0].tot_sent / (senders[0].last_sent_ts - senders[0].first_sent_ts)
         tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
         avg_lat = senders[0].cur_avg_latency

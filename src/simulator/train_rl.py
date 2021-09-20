@@ -37,19 +37,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def check_args(args):
-    """Check arg validity."""
-    assert args.delay[0] <= args.delay[1]
-    assert args.bandwidth[0] <= args.bandwidth[1]
-    assert args.loss[0] <= args.loss[1]
-    assert args.queue[0] <= args.queue[1]
-    assert args.pretrained_model_path is None or args.pretrained_model_path.endswith(
-        ".ckpt")
-
-
 def main():
     args = parse_args()
-    check_args(args)
+    assert args.pretrained_model_path is None or args.pretrained_model_path.endswith(
+        ".ckpt")
     log_dir = args.save_dir
     os.makedirs(log_dir, exist_ok=True)
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)

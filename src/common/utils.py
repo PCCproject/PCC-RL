@@ -59,7 +59,7 @@ def learnability_objective_function(throughput, delay):
 
 
 def pcc_aurora_reward(throughput: float, delay: float, loss: float,
-                      avg_bw=Union[float, None], min_rtt=Union[float, None]) -> float:
+                      avg_bw: Union[float, None] = None, min_rtt: Union[float, None] = None) -> float:
     """PCC Aurora reward. Anchor point 0.6Mbps
     throughput: packets per second
     delay: second
