@@ -761,7 +761,7 @@ class BBR:
             #                      'rs_delivery_rate'])
             #     writer.writerows(senders[0].bbr_log)
         if plot_flag and save_dir:
-            plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir)
+            plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],

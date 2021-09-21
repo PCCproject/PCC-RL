@@ -30,8 +30,8 @@ def parse_args():
     return args
 
 
-def plot(trace, log_file, save_dir: str):
-    cc = os.path.basename(log_file).split('_')[0]
+def plot(trace: Trace, log_file: str, save_dir: str, cc: str):
+    # cc = os.path.basename(log_file).split('_')[0]
     df = pd.read_csv(log_file)
     fig, axes = plt.subplots(6, 1, figsize=(12, 10))
     axes[0].set_title(cc)

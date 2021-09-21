@@ -438,7 +438,7 @@ class Aurora():
             pkt_log = PacketLog.from_log(env.net.pkt_log)
             plot(trace, pkt_log, save_dir, "aurora")
         if plot_flag and save_dir:
-            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir)
+            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
 
         assert env.senders[0].last_ack_ts is not None and env.senders[0].first_ack_ts is not None
         assert env.senders[0].last_sent_ts is not None and env.senders[0].first_sent_ts is not None
