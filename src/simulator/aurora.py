@@ -5,7 +5,7 @@ import os
 import shutil
 import time
 import types
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -72,13 +72,12 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     :param verbose: (int)
     """
 
-    def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List = [],
-                 verbose=0, steps_trained=0, config_file=None, validation_flag=False):
+    def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List[Trace] = [],
+                 verbose=0, steps_trained=0, config_file: Union[str, None] =None, validation_flag: bool = False):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
         self.log_dir = log_dir
-        # self.save_path = os.path.join(log_dir, 'saved_models')
         self.save_path = log_dir
         self.best_mean_reward = -np.inf
         self.val_traces = val_traces
@@ -147,34 +146,34 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 avg_send_rates = []
                 val_start_t = time.time()
 
-                save_dirs = [os.path.join(self.log_dir, "validation_traces", "trace_{}".format(i)) for i in range(len(self.val_traces))]
-                for ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                        send_rate_list, action_list, obs_list, mi_list, pkt_log in val_on_traces(model_path_to_save, self.val_traces, save_dirs):
-                    avg_rewards.append(np.mean(np.array(val_rewards)))
-                    avg_losses.append(np.mean(np.array(loss_list)))
-                    avg_tputs.append(float(np.mean(np.array(tput_list))))
-                    avg_delays.append(np.mean(np.array(delay_list)))
-                    avg_send_rates.append(
-                        float(np.mean(np.array(send_rate_list))))
-
-                # for idx, val_trace in enumerate(self.val_traces):
-                #     avg_tr_bw.append(val_trace.avg_bw)
-                #     avg_tr_min_rtt.append(val_trace.avg_bw)
-                #     ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                #         send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
-                #             val_trace, self.log_dir)
-                #     # pktlog = PacketLog.from_log(pkt_log)
+                # save_dirs = [os.path.join(self.log_dir, "validation_traces", "trace_{}".format(i)) for i in range(len(self.val_traces))]
+                # for ts_list, val_rewards, loss_list, tput_list, delay_list, \
+                #         send_rate_list, action_list, obs_list, mi_list, pkt_log in val_on_traces(model_path_to_save, self.val_traces, save_dirs):
                 #     avg_rewards.append(np.mean(np.array(val_rewards)))
                 #     avg_losses.append(np.mean(np.array(loss_list)))
                 #     avg_tputs.append(float(np.mean(np.array(tput_list))))
                 #     avg_delays.append(np.mean(np.array(delay_list)))
                 #     avg_send_rates.append(
                 #         float(np.mean(np.array(send_rate_list))))
-                #     # avg_rewards.append(pktlog.get_reward())
-                #     # avg_losses.append(pktlog.get_loss_rate())
-                #     # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
-                #     # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
-                #     # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
+
+                for idx, val_trace in enumerate(self.val_traces):
+                    avg_tr_bw.append(val_trace.avg_bw)
+                    avg_tr_min_rtt.append(val_trace.avg_bw)
+                    ts_list, val_rewards, loss_list, tput_list, delay_list, \
+                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
+                            val_trace, self.log_dir)
+                    # pktlog = PacketLog.from_log(pkt_log)
+                    avg_rewards.append(np.mean(np.array(val_rewards)))
+                    avg_losses.append(np.mean(np.array(loss_list)))
+                    avg_tputs.append(float(np.mean(np.array(tput_list))))
+                    avg_delays.append(np.mean(np.array(delay_list)))
+                    avg_send_rates.append(
+                        float(np.mean(np.array(send_rate_list))))
+                    # avg_rewards.append(pktlog.get_reward())
+                    # avg_losses.append(pktlog.get_loss_rate())
+                    # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
+                    # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
+                    # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
                 cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
@@ -275,10 +274,8 @@ class Aurora():
                               tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
-    def train(self, config_file,
-            # training_traces, validation_traces,
-            total_timesteps, tot_trace_cnt,
-              tb_log_name="", validaiton_flag=False):
+    def train(self, config_file: str, total_timesteps: int, tot_trace_cnt: int,
+              tb_log_name: str = "", validation_flag: bool = False):
         assert isinstance(self.model, PPO1)
 
         training_traces = generate_traces(config_file, tot_trace_cnt,
@@ -296,7 +293,7 @@ class Aurora():
         callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_traces=validation_traces,
-            config_file=config_file)
+            config_file=config_file, validation_flag=validation_flag)
         self.model.learn(total_timesteps=total_timesteps,
                          tb_log_name=tb_log_name, callback=callback)
 

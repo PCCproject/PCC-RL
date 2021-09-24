@@ -33,6 +33,8 @@ def parse_args():
                         help='trace duration. Unit: second.')
     parser.add_argument("--tensorboard-log", type=str, default=None,
                         help="tensorboard log direcotry.")
+    parser.add_argument('--validation', action='store_true',
+                        help='specify to enable validation.')
 
     return parser.parse_args()
 
@@ -53,7 +55,7 @@ def main():
     # training_traces, validation_traces,
     aurora.train(args.randomization_range_file,
                  args.total_timesteps, tot_trace_cnt= args.total_trace_count,
-                 tb_log_name=args.exp_name)
+                 tb_log_name=args.exp_name, validation_flag=args.validation)
 
 
 if __name__ == '__main__':
