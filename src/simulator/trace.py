@@ -8,7 +8,7 @@ from typing import List, Tuple, Union
 
 import numpy as np
 from common.utils import read_json_file, set_seed, write_json_file
-from simulator.network_simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.pantheon_trace_parser.flow import Flow
 
 
@@ -212,7 +212,7 @@ class Trace():
         assert len(self.timestamps) == len(self.bandwidths)
         ms_t = 0
         for ts, next_ts, bw in zip(self.timestamps[0:-1], self.timestamps[1:], self.bandwidths[0:-1]):
-            pkt_per_ms = bw * 1e6 / 8 / BYTES_PER_PACKET / 1000
+            pkt_per_ms = bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET / 1000
 
             ms_cnt = 0
             pkt_cnt = 0
@@ -260,53 +260,28 @@ def generate_trace(duration_range: Tuple[float, float],
             delay_range[0] > 0
     assert len(loss_rate_range) == 2 and \
             loss_rate_range[0] <= loss_rate_range[1] and loss_rate_range[0] >= 0
-    # assert len(queue_size_range) == 2 and \
-    #         queue_size_range[0] <= queue_size_range[1] + 1 and \
-    #         queue_size_range[0] >= 0
 
-    delay = float(np.random.uniform(delay_range[0], delay_range[1], 1))
     loss_rate = float(np.random.uniform(
         loss_rate_range[0], loss_rate_range[1], 1))
-
-    # queue_size = int(np.exp(np.random.uniform(
-    #     np.log(queue_size_range[0]),
-    #     np.log(queue_size_range[1]+1), 1)))
-
-    # if bandwidth_file:
-    #     timestamps, bandwidths = load_bandwidth_from_file(bandwidth_file)
-    #     return Trace(timestamps, bandwidths, delay, loss_rate, queue_size)
 
     duration = float(np.random.uniform(
         duration_range[0], duration_range[1], 1))
 
     # use bandwidth generator.
-    # assert d_bw_range is not None and len(
-    #     d_bw_range) == 2 and d_bw_range[0] <= d_bw_range[1]
     assert T_s_range is not None and len(
         T_s_range) == 2 and T_s_range[0] <= T_s_range[1]
-    # assert d_delay_range is not None and len(
-    #     d_delay_range) == 2 and d_delay_range[0] <= d_delay_range[1]
     assert delay_noise_range is not None and len(
         delay_noise_range) == 2 and delay_noise_range[0] <= delay_noise_range[1]
-    # d_bw = float(np.random.uniform(d_bw_range[0], d_bw_range[1], 1))
-    # d_delay = float(np.random.uniform(d_delay_range[0], d_delay_range[1], 1))
     T_s = float(np.random.uniform(T_s_range[0], T_s_range[1], 1))
     delay_noise = float(np.random.uniform(delay_noise_range[0], delay_noise_range[1], 1))
 
-    # timestamps, bandwidths = generate_bw_series(
-    #     prob_stay, T_s, cov, duration, steps, bandwidth_range[0],
-    #     bandwidth_range[1], timestep)
-    # ret_trace = Trace(timestamps, bandwidths, [delay], loss_rate, queue_size)
-    # timestamps, bandwidths, delays = generate_bw_delay_series(
-    #     d_bw, d_delay, T_s, duration, bandwidth_range[0], bandwidth_range[1],
-    #     delay_range[0], delay_range[1])
     timestamps, bandwidths, delays = generate_bw_delay_series(
         T_s, duration, bandwidth_lower_bound_range[0], bandwidth_lower_bound_range[1],
         bandwidth_upper_bound_range[0], bandwidth_upper_bound_range[1],
         delay_range[0], delay_range[1])
 
     queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
-    bdp = np.max(bandwidths) / BYTES_PER_PACKET / 8 * 1e6 * np.max(delays) * 2 / 1000
+    bdp = np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
     queue_size = max(2, int(bdp * queue_size))
 
     ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size, delay_noise)
@@ -574,7 +549,7 @@ def main():
 def generate_bw_delay_series(T_s: float, duration: float,
                              min_bw_lower_bnd: float, min_bw_upper_bnd: float,
                              max_bw_lower_bnd: float, max_bw_upper_bnd: float,
-                             min_delay: float, max_delay: float):
+                             min_delay: float, max_delay: float)-> Tuple[List[float], List[float], List[float]]:
     timestamps = []
     bandwidths = []
     delays = []
