@@ -6,7 +6,7 @@ import warnings
 from mpi4py.MPI import COMM_WORLD
 
 from simulator.aurora import Aurora
-from common.utils import set_seed
+from common.utils import set_seed, write_json_file
 
 warnings.filterwarnings("ignore")
 
@@ -39,22 +39,28 @@ def parse_args():
     return parser.parse_args()
 
 
+def save_args(args):
+    """Write arguments to a log file."""
+    if args.save_dir and os.path.exists(args.save_dir):
+        write_json_file(os.path.join(args.save_dir, 'cmd.json'), args.__dict__)
+
+
 def main():
     args = parse_args()
     assert args.pretrained_model_path is None or args.pretrained_model_path.endswith(
         ".ckpt")
-    log_dir = args.save_dir
-    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(args.save_dir, exist_ok=True)
+    save_args(args)
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
     nprocs = COMM_WORLD.Get_size()
 
     # Initialize model and agent policy
     aurora = Aurora(args.seed + COMM_WORLD.Get_rank() * 100, args.save_dir,
-                    int(7200/ nprocs), args.pretrained_model_path,
+                    int(7200 / nprocs), args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log)
     # training_traces, validation_traces,
     aurora.train(args.randomization_range_file,
-                 args.total_timesteps, tot_trace_cnt= args.total_trace_count,
+                 args.total_timesteps, tot_trace_cnt=args.total_trace_count,
                  tb_log_name=args.exp_name, validation_flag=args.validation)
 
 
