@@ -48,18 +48,6 @@ class MyMlpPolicy(FeedForwardPolicy):
                                               {"pi": [32, 16], "vf": [32, 16]}],
                                           feature_extraction="mlp", **_kwargs)
 
-def val_on_trace(model_path, trace, save_dir):
-    aurora = Aurora(20, "", 10, pretrained_model_path=model_path)
-    result = aurora._test(trace, save_dir, plot_flag=False)
-    print('finish test_on_trace')
-    return result
-
-
-def val_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str]):
-    arguments = [(model_path, trace, save_dir) for trace, save_dir in zip(traces, save_dirs)]
-    with MPIPoolExecutor(max_workers=COMM_WORLD.Get_size()) as executor:
-        return executor.starmap(val_on_trace, arguments)
-
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
     Callback for saving a model (the check is done every ``check_freq`` steps)
@@ -145,16 +133,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 avg_delays = []
                 avg_send_rates = []
                 val_start_t = time.time()
-
-                # save_dirs = [os.path.join(self.log_dir, "validation_traces", "trace_{}".format(i)) for i in range(len(self.val_traces))]
-                # for ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                #         send_rate_list, action_list, obs_list, mi_list, pkt_log in val_on_traces(model_path_to_save, self.val_traces, save_dirs):
-                #     avg_rewards.append(np.mean(np.array(val_rewards)))
-                #     avg_losses.append(np.mean(np.array(loss_list)))
-                #     avg_tputs.append(float(np.mean(np.array(tput_list))))
-                #     avg_delays.append(np.mean(np.array(delay_list)))
-                #     avg_send_rates.append(
-                #         float(np.mean(np.array(send_rate_list))))
 
                 for idx, val_trace in enumerate(self.val_traces):
                     avg_tr_bw.append(val_trace.avg_bw)
@@ -446,7 +424,7 @@ class Aurora():
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
         if save_dir:
-            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w', 1) as f:
                 summary_writer = csv.writer(f, lineterminator='\n')
                 summary_writer.writerow([
                     'trace_average_bandwidth', 'trace_average_latency',
