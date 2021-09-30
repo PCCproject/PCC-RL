@@ -185,7 +185,7 @@ class Network:
                     noise = random.uniform(0.0, self.links[pkt.next_hop].trace.delay_noise) / 1000
                     pkt.add_propagation_delay(noise)
                 pkt.add_queue_delay(q_delay)
-                pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
+                # pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not self.links[pkt.next_hop].packet_enters_link(self.cur_time):
                     pkt.drop()
                 # extra_delays.append(
