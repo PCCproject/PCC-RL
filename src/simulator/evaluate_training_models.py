@@ -78,12 +78,13 @@ def main():
         link_name = link_dir.split('/')[-2]
         for cc in TARGET_CCS:
             print("Loading real traces collected by {}...".format(cc))
-            for trace_file in tqdm(sorted(glob.glob(os.path.join(link_dir,"{}_datalink_run[1,3].log".format(cc))))):
-                traces.append(Trace.load_from_pantheon_file(trace_file, 0.0, queue_size, front_offset=5))
-                save_dir = os.path.join(args.save_dir, args.conn_type, link_name, os.path.splitext(os.path.basename(trace_file))[0])
+            for trace_file in tqdm(sorted(glob.glob(os.path.join(link_dir, "{}_datalink_run[1,3].log".format(cc))))):
+                traces.append(Trace.load_from_pantheon_file(
+                    trace_file, 0.0, queue_size, front_offset=5))
+                save_dir = os.path.join(args.save_dir, args.conn_type, link_name, os.path.splitext(
+                    os.path.basename(trace_file))[0])
                 os.makedirs(save_dir, exist_ok=True)
                 save_dirs.append(save_dir)
-        t_start = time.time()
         if args.cc == 'bbr':
             cc = BBR(False)
             cc.test_on_traces(traces, [os.path.join(save_dir, cc.cc_name)
@@ -98,38 +99,42 @@ def main():
                                        for save_dir in save_dirs], False, args.nproc)
         elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3':
             # TODO: bug here when there is no validation log
-            val_log = pd.read_csv(os.path.join(args.models_path, 'validation_log.csv'), sep='\t')
+            val_log = pd.read_csv(os.path.join(
+                args.models_path, 'validation_log.csv'), sep='\t')
             for idx in np.linspace(0, len(val_log['num_timesteps']) / 2 - 1, 10):
-            # np.concatenate(
-            #     [np.array([0]),
-            #      np.exp(np.linspace(np.log(1), np.log(len(val_log['num_timesteps']) - 1), 10))]):
                 step = int(val_log['num_timesteps'].iloc[int(idx)])
                 udr_seed = ''
                 for s in args.models_path.split('/'):
                     if 'seed' in s:
                         udr_seed = s
-                udr_save_dirs = [os.path.join(save_dir, args.cc, udr_seed, "step_{}".format(step)) for save_dir in save_dirs]
-                model_path = os.path.join(args.models_path, 'model_step_{}.ckpt'.format(step))
-                test_on_traces(model_path, traces, udr_save_dirs, args.nproc, 42, False, False)
-        elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic':
+                udr_save_dirs = [os.path.join(
+                    save_dir, args.cc, udr_seed, "step_{}".format(step)) for save_dir in save_dirs]
+                model_path = os.path.join(
+                    args.models_path, 'model_step_{}.ckpt'.format(step))
+                test_on_traces(model_path, traces, udr_save_dirs,
+                               args.nproc, 42, False, False)
+        elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old':
             genet_seed = ''
             for s in args.models_path.split('/'):
                 if 'seed' in s:
                     genet_seed = s
-            for bo in range(40):
-            # for bo_dir in natural_sort(glob.glob(os.path.join(args.models_path, "bo_*/"))):
+            for bo in range(0, 30, 3):
+                # for bo_dir in natural_sort(glob.glob(os.path.join(args.models_path, "bo_*/"))):
                 bo_dir = os.path.join(args.models_path, "bo_{}".format(bo))
                 step = 64800
-                model_path = os.path.join(bo_dir, 'model_step_{}.ckpt'.format(step))
+                model_path = os.path.join(
+                    bo_dir, 'model_step_{}.ckpt'.format(step))
                 if not os.path.exists(model_path + '.meta'):
                     continue
                 genet_save_dirs = [os.path.join(
                     save_dir, args.cc, genet_seed, "bo_{}".format(bo),
                     "step_{}".format(step)) for save_dir in save_dirs]
-                print(genet_save_dirs)
-                test_on_traces(model_path, traces, genet_save_dirs, args.nproc, 42, False, False)
+                # print(genet_save_dirs)
+                test_on_traces(model_path, traces, genet_save_dirs,
+                               args.nproc, 42, False, False)
         else:
             raise ValueError
+
 
 if __name__ == "__main__":
     main()
