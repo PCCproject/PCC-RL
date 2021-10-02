@@ -11,7 +11,7 @@ certifi==2020.12.5
 chardet==4.0.0
 cloudpickle==1.6.0
 cycler==0.10.0
-data-science-types==0.2.22
+data-science-types==0.2.23
 decorator==4.4.2
 flatbuffers==1.12
 future==0.18.2
@@ -45,6 +45,7 @@ oauthlib==3.1.0
 opencv-python==4.5.1.48
 opt-einsum==3.3.0
 pandas==1.1.5
+pandas-stubs==1.1.0.2
 parso==0.8.1
 pexpect==4.8.0
 pickleshare==0.7.5
@@ -75,6 +76,7 @@ tensorflow-gpu==1.15.0
 termcolor==1.1.0
 threadpoolctl==2.1.0
 toml==0.10.2
+tqdm==4.62.2
 traitlets==4.3.3
 typing-extensions==3.7.4.3
 urllib3==1.26.3
