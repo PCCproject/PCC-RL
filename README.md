@@ -3,6 +3,46 @@
 Reinforcement learning resources for the Performance-oriented Congestion Control
 project.
 
+## Installation and Setup
+
+- Run the following command to clone the repo.
+
+    ```bash
+    git clone git@github.com:zxxia/PCC-RL.git
+    ```
+
+- Virtual environment is highly recommended. Please set up one in python3. FYI,
+  [venv](https://docs.python.org/3.7/library/venv.html) and
+  [conda](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html).
+  Other virtual environment related tools are like
+  [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io/en/latest/),
+  [pyenv](https://github.com/pyenv/pyenv) and, etc.
+- Activate the virtual environment.
+- Run the following commands to install the required packges.
+
+  - For Ubuntu
+
+    ```bash
+    cd PCC-RL
+    sudo apt install mpich
+    pip install -r requirements.txt
+    ```
+
+- Add `src` to `$PYTHONPATH` by running
+
+    ```bash
+    cd PCC-RL
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+    ```
+  <!--  -->
+  <!-- - For MacOS -->
+  <!--  -->
+  <!--   ```bash -->
+  <!--   cd PCC-RL -->
+  <!--   brew install openmpi -->
+  <!--   pip install -r requirements.txt -->
+  <!--   ``` -->
+
 ## Traces
 
 ### Real Traces
@@ -10,7 +50,7 @@ project.
 Real traces are recorded on Pantheon platform and they can be downloaded from
 [Pantheon](https://pantheon.stanford.edu/measurements/node/). There are three
 connection types: cellular, ethernet, and wifi. The path to store them is
-`${project_root}/data/${connection_type}`
+`PCC-RL/data/${connection_type}`
 
 ### Syntheic Traces
 
@@ -24,11 +64,17 @@ The configurations are stored at `${project_root}/config/train`
 
 ### udr training
 
-`${project_root}/src/simulator/train_rl.py`
+```bash
+cd src/simulator
+# run on CPU only if CUDA & GPU(s) are installed
+CUDA_VISIBLE_DEVICES="" python train_rl.py ```
 
 ### genet training
 
-`${project_root}/src/simulator/genet_improved.py`
+```bash
+cd src/simulator
+python genet_improved.py
+```
 
 <!-- ## Overview -->
 <!--  -->
