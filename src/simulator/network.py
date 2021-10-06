@@ -27,7 +27,7 @@ from gym.utils import seeding
 
 from common import sender_obs
 from common.utils import pcc_aurora_reward
-from simulator.network_simulator.constants import (BYTES_PER_PACKET, EVENT_TYPE_ACK,
+from simulator.network_simulator.constants import (BITS_PER_BYTE, BYTES_PER_PACKET, EVENT_TYPE_ACK,
                                  EVENT_TYPE_SEND, MAX_RATE, MI_RTT_PROPORTION,
                                  MIN_RATE, REWARD_SCALE)
 from simulator.network_simulator.link import Link
@@ -61,7 +61,7 @@ class Network():
 
         self.pkt_log = []
 
-        self.recv_rate_cache = []
+        # self.recv_rate_cache = []
 
     def queue_initial_packets(self):
         for sender in self.senders:
@@ -78,7 +78,7 @@ class Network():
         [link.reset() for link in self.links]
         [sender.reset() for sender in self.senders]
         self.queue_initial_packets()
-        self.recv_rate_cache = []
+        # self.recv_rate_cache = []
 
     def get_cur_time(self):
         return self.cur_time
@@ -144,8 +144,8 @@ class Network():
                                 [self.cur_time, event_id, 'lost',
                                  BYTES_PER_PACKET, cur_latency, event_queue_delay,
                                  self.links[0].pkt_in_queue,
-                                 sender.rate * BYTES_PER_PACKET * 8,
-                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                                 sender.rate * BYTES_PER_PACKET * BITS_PER_BYTE,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                     else:
                         sender.on_packet_acked(cur_latency)
                         # debug_print('Ack packet at {}'.format(self.cur_time))
@@ -155,8 +155,8 @@ class Network():
                                 [self.cur_time, event_id, 'acked',
                                  BYTES_PER_PACKET, cur_latency,
                                  event_queue_delay, self.links[0].pkt_in_queue,
-                                 sender.rate * BYTES_PER_PACKET * 8,
-                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                                 sender.rate * BYTES_PER_PACKET * BITS_PER_BYTE,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                 else:
                     # comment out to save disk usage
                     # if self.env.record_pkt_log:
@@ -164,8 +164,8 @@ class Network():
                     #         [self.cur_time, event_id, 'arrived',
                     #          BYTES_PER_PACKET, cur_latency, event_queue_delay,
                     #          self.links[0].pkt_in_queue,
-                    #          sender.rate * BYTES_PER_PACKET * 8,
-                    #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                    #          sender.rate * BYTES_PER_PACKET * BITS_PER_BYTE,
+                    #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                     new_next_hop = next_hop + 1
                     # new_event_queue_delay += sender.path[next_hop].get_cur_queue_delay(
                     #     self.cur_time)
@@ -187,8 +187,8 @@ class Network():
                                 [self.cur_time, event_id, 'sent',
                                  BYTES_PER_PACKET, cur_latency,
                                  event_queue_delay, self.links[0].pkt_in_queue,
-                                 sender.rate * BYTES_PER_PACKET * 8,
-                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * 8])
+                                 sender.rate * BYTES_PER_PACKET * BITS_PER_BYTE,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                         push_new_event = True
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
@@ -245,8 +245,8 @@ class Network():
         # debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
         #     throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
         reward = pcc_aurora_reward(
-            throughput / 8 / BYTES_PER_PACKET, latency, loss,
-            np.mean(self.env.current_trace.bandwidths) * 1e6 / 8 / BYTES_PER_PACKET,
+            throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
+            np.mean(self.env.current_trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
             np.mean(self.env.current_trace.delays) * 2 / 1e3)
 
         # self.env.run_dur = MI_RTT_PROPORTION * self.senders[0].estRTT # + np.mean(extra_delays)
