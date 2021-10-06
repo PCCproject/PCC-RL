@@ -10,6 +10,10 @@ set -e
 SAVE_DIR=../../results_0515/udr_large_lossless_recv_ratio
 SAVE_DIR=../../results_0820/udr_recv_ratio
 SAVE_DIR=../../results_0826/udr_7
+SAVE_DIR=../../results_0904/udr
+SAVE_DIR=../../results_0905/udr
+SAVE_DIR=../../results_0909/manual
+SAVE_DIR=../../results_0909/manual_start_from_real_world_model
 # SAVE_DIR=../../results_0430/udr_7_dims
 # SAVE_DIR=tmp
 # /../../results_0415/udr_7_dims
@@ -50,6 +54,24 @@ SAVE_DIR=../../results_0826/udr_7
 
 
 # exp_name=udr_start
+# for seed in 10; do # 60 70 80 90 100
+#     exp_name=short_queue
+#     n_proc=8
+#     CUDA_VISIBLE_DEVICES="" mpiexec -np ${n_proc} python train_rl.py \
+#         --save-dir ${SAVE_DIR}/${exp_name}_new_para_val/seed_${seed} \
+#         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+#         --tensorboard-log aurora_tensorboard \
+#         --total-timesteps 1000000 \
+#         --delta-scale 1 \
+#         --randomization-range-file ../../config/train/udr_7_dims_0905/short_queue.json \
+#         --seed ${seed} \
+#         --n-proc ${n_proc} \
+#         --pretrained-model-path ../../results_0826/genet_cubic_exp_3/bo_11/model_step_28800.ckpt
+#         # --pretrained-model-path ../../results_0909/manual1/short_queue/seed_10/model_step_28800.ckpt
+#         # --pretrained-model-path ../../results_0909/manual1/short_queue/seed_10/model_step_28800.ckpt
+#             # ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt
+#         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt &
+# done
 exp_name=udr_large
 for seed in 10 30 40 50 ; do # 60 70 80 90 100
     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
@@ -64,7 +86,7 @@ for seed in 10 30 40 50 ; do # 60 70 80 90 100
 done
 
 for seed in 10 20 30 40 50; do #60 70 80 90 100
-    exp_name=udr_mid
+    exp_name=udr_large
     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
         --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
@@ -87,3 +109,66 @@ for seed in 10 20 30 40 50;do #60 70 80 90 100
         --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_21600.ckpt &
         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
 done
+
+# for seed in 10 20 30 40 50; do #60 70 80 90 100
+#     exp_name=udr_mid
+#     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+#         --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
+#         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+#         --tensorboard-log aurora_tensorboard \
+#         --total-timesteps 1000000 \
+#         --delta-scale 1 \
+#         --randomization-range-file ../../config/train/udr_7_dims_0905/${exp_name}_seed_${seed}.json \
+#         --seed ${seed} \
+#         --pretrained-model-path ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt \
+#         --time-variant-bw &
+#         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
+# done
+#
+# for seed in 10 20 30 40 50;do #60 70 80 90 100
+#     exp_name=udr_small
+#     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+#         --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
+#         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+#         --tensorboard-log aurora_tensorboard \
+#         --total-timesteps 1000000 \
+#         --delta-scale 1 \
+#         --randomization-range-file ../../config/train/udr_7_dims_0905/${exp_name}_seed_${seed}.json \
+#         --seed ${seed} \
+#         --pretrained-model-path ../..//results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt \
+#         --time-variant-bw &
+#         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
+# done
+
+# exp_name=real_fail
+# seed=40
+# for noise in 0 ; do
+# CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+#     --save-dir ${SAVE_DIR}/20mbps/${exp_name}${noise} \
+#     --exp-name ${exp_name}_noise${noise} \
+#     --tensorboard-log aurora_tensorboard \
+#     --total-timesteps 1000000 \
+#     --delta-scale 1 \
+#     --randomization-range-file ../../config/train/udr_7_dims_0905/20mbps/${exp_name}${noise}.json \
+#     --seed ${seed} \
+#     --pretrained-model-path ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt
+#     # --pretrained-model-path ../../results_0905/udr/real_fail20/model_step_259200.ckpt \
+# done
+    # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
+
+
+
+# seed=40
+# for noise in 0 2 5 10 20; do # 60 70 80 90 100
+#     exp_name=udr_large_short_queue_${noise}
+#     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+#         --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
+#         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+#         --tensorboard-log aurora_tensorboard \
+#         --total-timesteps 1000000 \
+#         --delta-scale 1 \
+#         --randomization-range-file ../../config/train/udr_7_dims_0905/${exp_name}.json \
+#         --seed ${seed} \
+#         --pretrained-model-path ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt &
+#         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt &
+# done
