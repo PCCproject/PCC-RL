@@ -284,7 +284,7 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
 
     plt.tight_layout()
     if save_dir:
-        plt.savefig(os.path.join(save_dir, 'binwise_{}_plot.png'.format(cc)))
+        plt.savefig(os.path.join(save_dir, 'binwise_{}_plot.jpg'.format(cc)))
     plt.close()
 
 def main():

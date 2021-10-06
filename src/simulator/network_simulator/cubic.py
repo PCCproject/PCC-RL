@@ -4,6 +4,7 @@ import multiprocessing as mp
 from typing import List, Tuple
 
 import numpy as np
+import tqdm
 
 from common.utils import pcc_aurora_reward
 from plot_scripts.plot_packet_log import PacketLog, plot
@@ -224,8 +225,9 @@ class Cubic:
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
         if save_dir:
-            writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), 'w', 1), lineterminator='\n')
+            os.makedirs(save_dir, exist_ok=True)
+            f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), 'w', 1)
+            writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
                                  'loss', 'reward', "action", "bytes_sent",
                                  "bytes_acked", "bytes_lost", "send_start_time",
@@ -235,6 +237,7 @@ class Cubic:
                                  'packet_in_queue', 'queue_size', 'cwnd',
                                  'ssthresh', "rto", "packets_in_flight"])
         else:
+            f_sim_log = None
             writer = None
 
         while True:
@@ -268,7 +271,29 @@ class Cubic:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        pkt_level_reward = 0
+        if f_sim_log:
+            f_sim_log.close()
+        assert senders[0].last_ack_ts is not None and senders[0].first_ack_ts is not None
+        assert senders[0].last_sent_ts is not None and senders[0].first_sent_ts is not None
+        avg_sending_rate = senders[0].tot_sent / (senders[0].last_sent_ts - senders[0].first_sent_ts)
+        tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
+        avg_lat = senders[0].cur_avg_latency
+        loss = 1 - senders[0].tot_acked / senders[0].tot_sent
+        pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
+            avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        if save_dir:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
+                summary_writer = csv.writer(f, lineterminator='\n')
+                summary_writer.writerow([
+                    'trace_average_bandwidth', 'trace_average_latency',
+                    'average_sending_rate', 'average_throughput',
+                    'average_latency', 'loss_rate', 'mi_level_reward',
+                    'pkt_level_reward'])
+                summary_writer.writerow(
+                    [trace.avg_bw, trace.avg_delay,
+                     avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                     tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
+                     loss, np.mean(rewards), pkt_level_reward])
         if self.record_pkt_log and save_dir:
             with open(os.path.join(
                 save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
@@ -278,18 +303,16 @@ class Cubic:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth', 'cwnd'])
                 pkt_logger.writerows(net.pkt_log)
+        if self.record_pkt_log and plot_flag:
             pkt_log = PacketLog.from_log(net.pkt_log)
-            pkt_level_reward = pkt_log.get_reward("", trace)
-            if plot_flag:
-                plot(trace, pkt_log, save_dir, self.cc_name)
-                plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), save_dir)
+            plot(trace, pkt_log, save_dir, self.cc_name)
+        if plot_flag and save_dir:
+            plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
                        plot_flag: bool = False, n_proc: int = 1):
         arguments = [(trace, save_dir, plot_flag) for trace, save_dir in zip(
             traces, save_dirs)]
-        n_proc = n_proc
         with mp.Pool(processes=n_proc) as pool:
-            return pool.starmap(self.test, arguments)
+            return pool.starmap(self.test, tqdm.tqdm(arguments, total=len(arguments)))

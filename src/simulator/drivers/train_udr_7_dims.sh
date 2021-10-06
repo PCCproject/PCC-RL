@@ -72,6 +72,19 @@ SAVE_DIR=../../results_0909/manual_start_from_real_world_model
 #             # ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt
 #         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt &
 # done
+exp_name=udr_large
+for seed in 10 30 40 50 ; do # 60 70 80 90 100
+    CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+        --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
+        --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+        --tensorboard-log aurora_tensorboard \
+        --total-timesteps 1000000 \
+        --randomization-range-file ../../config/train/udr_7_dims_0826/${exp_name}.json \
+        --seed ${seed} \
+        --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_21600.ckpt &
+        # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt &
+done
+
 for seed in 10 20 30 40 50; do #60 70 80 90 100
     exp_name=udr_large
     CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
@@ -79,11 +92,21 @@ for seed in 10 20 30 40 50; do #60 70 80 90 100
         --exp-name ${exp_name}_seed_${seed}_recv_ratio \
         --tensorboard-log aurora_tensorboard \
         --total-timesteps 1000000 \
-        --delta-scale 1 \
-        --randomization-range-file ../../config/train/udr_7_dims_0905/${exp_name}_seed_${seed}.json \
+        --randomization-range-file ../../config/train/udr_7_dims_0827/${exp_name}_seed_${seed}.json \
         --seed ${seed} \
-        --pretrained-model-path ../../results_0826/udr_6/udr_start/seed_20/model_step_64800.ckpt \
-        --time-variant-bw &
+        --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_21600.ckpt &
+        # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
+done
+for seed in 10 20 30 40 50;do #60 70 80 90 100
+    exp_name=udr_small
+    CUDA_VISIBLE_DEVICES="" mpiexec -np 2 python train_rl.py \
+        --save-dir ${SAVE_DIR}/${exp_name}/seed_${seed} \
+        --exp-name ${exp_name}_seed_${seed}_recv_ratio \
+        --tensorboard-log aurora_tensorboard \
+        --total-timesteps 1000000 \
+        --randomization-range-file ../../config/train/udr_7_dims_0827/${exp_name}_seed_${seed}.json \
+        --seed ${seed} \
+        --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_21600.ckpt &
         # --pretrained-model-path /tank/zxxia/PCC-RL/results_0826/udr_6/udr_start/seed_20/model_step_151200.ckpt \
 done
 

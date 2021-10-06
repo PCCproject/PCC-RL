@@ -16,6 +16,7 @@ from simulator.aurora import Aurora, test_on_traces
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
+from simulator.network_simulator.bbr_old import BBR_old
 from simulator.trace import generate_trace
 
 MODEL_PATH = ""
@@ -34,7 +35,7 @@ def parse_args():
                         help="Rounds of BO.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
     parser.add_argument('--heuristic', type=str, default="cubic",
-                        choices=('bbr', 'cubic', 'optimal'),
+                        choices=('bbr', 'bbr_old', 'cubic', 'optimal'),
                         help='Congestion control rule based method.')
 
     return parser.parse_args()
@@ -167,6 +168,7 @@ class Genet:
                 self.cur_config_file = os.path.join(
                     self.save_dir, "bo_"+str(i) + ".json")
                 self.rand_ranges.dump(self.cur_config_file)
+                to_csv(self.cur_config_file)
                 self.rl_method.log_dir = os.path.join(self.save_dir, "bo_{}".format(i))
                 data = self.cur_config_file
                 # for i in range(1, COMM_WORLD.Get_size()):
@@ -204,17 +206,20 @@ def black_box_function(bandwidth_lower_bound: float,
             # heuristic_mi_level_reward, heuristic_pkt_level_reward = heuristic.test(trace, "")
             hret = heuristic.test_on_traces(traces, [""]* len(traces) , False, COMM_WORLD.Get_size())
             for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
-                heuristic_rewards.append(heuristic_mi_level_reward)
+                # heuristic_rewards.append(heuristic_mi_level_reward)
+                heuristic_rewards.append(heuristic_pkt_level_reward)
             print("heuristic used {}s".format(time.time() - t_start))
             t_start = time.time()
-            rl_ret = test_on_traces(model_path, traces, [rl_method.log_dir] * len(traces), COMM_WORLD.Get_size(), 20)
-            # for trace in traces:
-            #     rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(trace, rl_method.log_dir)
+            # commented code buggy: run out of file descriptor.
+            # rl_ret = test_on_traces(model_path, traces, [rl_method.log_dir] * len(traces), COMM_WORLD.Get_size(), 20)
+            # for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
             #     rl_method_rewards.append(rl_mi_level_reward)
-            for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
-                rl_method_rewards.append(rl_mi_level_reward)
+            for trace in traces:
+                rl_mi_level_reward, rl_pkt_level_reward = rl_method.test(trace, rl_method.log_dir)
+                # rl_method_rewards.append(rl_mi_level_reward)
+                rl_method_rewards.append(rl_pkt_level_reward)
             print("rl used {}s".format(time.time() - t_start))
-            print(rl_method_rewards)
+            # print(rl_method_rewards)
             # rl_method_rewards.append(rl_pkt_level_reward)
         gap = float(np.mean(heuristic_rewards) - np.mean(rl_method_rewards))
         return gap
@@ -247,9 +252,11 @@ def main():
     set_seed(args.seed + COMM_WORLD.Get_rank())
 
     if args.heuristic == 'bbr':
-        heuristic = BBR(True)
+        heuristic = BBR(False)
+    elif args.heuristic == 'bbr_old':
+        heuristic = BBR_old(False)
     elif args.heuristic == 'cubic':
-        heuristic = Cubic(True)
+        heuristic = Cubic(False)
     elif args.heuristic == 'optimal':
         heuristic = None
     else:

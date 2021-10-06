@@ -1,8 +1,10 @@
+import csv
 import json
 import logging
 import os
 import random
 import re
+from typing import Union, Dict
 
 import numpy as np
 
@@ -57,7 +59,8 @@ def learnability_objective_function(throughput, delay):
     return score
 
 
-def pcc_aurora_reward(throughput, delay, loss, avg_bw=None, min_rtt=None):
+def pcc_aurora_reward(throughput: float, delay: float, loss: float,
+                      avg_bw: Union[float, None] = None, min_rtt: Union[float, None] = None) -> float:
     """PCC Aurora reward. Anchor point 0.6Mbps
     throughput: packets per second
     delay: second
@@ -71,3 +74,13 @@ def pcc_aurora_reward(throughput, delay, loss, avg_bw=None, min_rtt=None):
 
 def compute_std_of_mean(data):
     return np.std(data) / np.sqrt(len(data))
+
+
+def load_summary(summary_file: str) -> Dict[str, float]:
+    summary = {}
+    with open(summary_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            for k, v in row.items():
+                summary[k] = float(v)
+    return summary

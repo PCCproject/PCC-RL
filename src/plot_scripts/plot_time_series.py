@@ -30,8 +30,8 @@ def parse_args():
     return args
 
 
-def plot(trace, log_file, save_dir: str):
-    cc = os.path.basename(log_file).split('_')[0]
+def plot(trace: Trace, log_file: str, save_dir: str, cc: str):
+    # cc = os.path.basename(log_file).split('_')[0]
     df = pd.read_csv(log_file)
     fig, axes = plt.subplots(6, 1, figsize=(12, 10))
     axes[0].set_title(cc)
@@ -123,7 +123,8 @@ def plot(trace, log_file, save_dir: str):
     # axes[5].set_xlim(0, )
     plt.tight_layout()
     if save_dir is not None:
-        plt.savefig(os.path.join(save_dir, "{}_time_series.png".format(cc)))
+        plt.savefig(os.path.join(save_dir, "{}_time_series.jpg".format(cc)))
+    plt.close()
 
     # if log_idx == 0:
     #     print("{},{},{},{},{},".format(os.path.dirname(log_file), df['recv_rate'].mean()/1e6,
