@@ -1,9 +1,10 @@
+import csv
 import json
 import logging
 import os
 import random
 import re
-from typing import Union
+from typing import Union, Dict
 
 import numpy as np
 
@@ -73,3 +74,13 @@ def pcc_aurora_reward(throughput: float, delay: float, loss: float,
 
 def compute_std_of_mean(data):
     return np.std(data) / np.sqrt(len(data))
+
+
+def load_summary(summary_file: str) -> Dict[str, float]:
+    summary = {}
+    with open(summary_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            for k, v in row.items():
+                summary[k] = float(v)
+    return summary
