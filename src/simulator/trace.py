@@ -55,26 +55,26 @@ class Trace():
         self.return_noise = False
 
     @property
-    def avg_bw(self):
+    def avg_bw(self) -> float:
         """Mean bandwidth in Mbps."""
         return np.mean(self.bandwidths)
 
     @property
-    def min_delay(self):
+    def min_delay(self) -> float:
         """Min one-way delay in ms."""
         return np.min(self.delays)
 
     @property
-    def avg_delay(self):
+    def avg_delay(self) -> float:
         """Mean one-way delay in ms."""
         return np.mean(self.delays)
 
-    def get_next_ts(self):
+    def get_next_ts(self) -> float:
         if self.idx + 1 < len(self.timestamps):
             return self.timestamps[self.idx+1]
         return 1e6
 
-    def get_avail_bits2send(self, lo_ts, up_ts):
+    def get_avail_bits2send(self, lo_ts: float, up_ts: float) -> float:
         lo_idx = bisect_right(self.timestamps, lo_ts) - 1
         up_idx = bisect_right(self.timestamps, up_ts) - 1
         avail_bits = sum(self.bandwidths[lo_idx: up_idx]) * 1e6 * self.dt
@@ -83,7 +83,7 @@ class Trace():
         return avail_bits
 
 
-    def get_sending_t_usage(self, bits_2_send, ts):
+    def get_sending_t_usage(self, bits_2_send: float, ts: float) -> float:
         cur_idx = copy.copy(self.idx)
         t_used = 0
 
@@ -102,7 +102,7 @@ class Trace():
         self.idx = cur_idx # recover index
         return t_used
 
-    def get_bandwidth(self, ts):
+    def get_bandwidth(self, ts: float):
         """Return bandwidth(Mbps) at ts(second)."""
         # support time-variant bandwidth and constant bandwidth
         while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
@@ -111,7 +111,7 @@ class Trace():
             return self.bandwidths[-1]
         return self.bandwidths[self.idx]
 
-    def get_delay(self, ts):
+    def get_delay(self, ts: float):
         """Return link one-way delay(millisecond) at ts(second)."""
         while self.idx + 1 < len(self.timestamps) and self.timestamps[self.idx + 1] <= ts:
             self.idx += 1
@@ -146,7 +146,7 @@ class Trace():
             return self.noises[-1]
         return self.noises[self.noise_idx]
 
-    def is_finished(self, ts):
+    def is_finished(self, ts: float):
         """Return if trace is finished."""
         return ts >= self.timestamps[-1]
 
@@ -170,7 +170,7 @@ class Trace():
         write_json_file(filename, data)
 
     @staticmethod
-    def load_from_file(filename):
+    def load_from_file(filename: str):
         trace_data = read_json_file(filename)
         tr = Trace(trace_data['timestamps'], trace_data['bandwidths'],
                    trace_data['delays'], trace_data['loss'],
