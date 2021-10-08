@@ -70,6 +70,12 @@ class JSONLogger(_Tracker):
             data2dump['params']['bandwidth_lower_bound'] = 10**data2dump['params']['bandwidth_lower_bound']
             data2dump['params']['bandwidth_upper_bound'] = 10**data2dump['params']['bandwidth_upper_bound']
 
+            if data2dump['params']['loss'] < -4:
+                data2dump['params']['loss'] = 0
+            else:
+                data2dump['params']['loss'] = 10**data2dump['params']['loss']
+            data2dump['params']['loss'] = 10**data2dump['params']['loss']
+
             with open(self._path, "a") as f:
                 f.write(json.dumps(data2dump) + "\n")
 
@@ -119,6 +125,12 @@ class RandomizationRanges:
                     param)
                 if param == 'bandwidth_lower_bound' or param == 'bandwidth_upper_bound':
                     range_map_to_add[param] = [10**range_map[param], 10**range_map[param]]
+                elif param == 'loss':
+                    if range_map[param] < -4:
+                        loss = 0
+                    else:
+                        loss = 10**range_map[param]
+                    range_map_to_add[param] = [loss, loss]
                 else:
                     range_map_to_add[param] = [range_map[param], range_map[param]]
             range_map_to_add['weight'] = weight
@@ -181,6 +193,9 @@ class Genet:
             self.pbounds['bandwidth_upper_bound'][0] = np.log10(self.pbounds['bandwidth_upper_bound'][0])
             self.pbounds['bandwidth_upper_bound'][1] = np.log10(self.pbounds['bandwidth_upper_bound'][1])
 
+        if 'loss' in self.pbounds:
+            self.pbounds['loss'][0] = np.log10(self.pbounds['loss'][0] + 1e-5)
+            self.pbounds['loss'][1] = np.log10(self.pbounds['loss'][1] + 1e-5)
         self.save_dir = save_dir
         self.heuristic = heuristic
         self.model_path = model_path  # keep track of the latest model path
@@ -245,6 +260,11 @@ def black_box_function(bandwidth_lower_bound: float,
     black_box_function_calling_times += 1
     heuristic_rewards = []
     rl_method_rewards = []
+
+    if loss < -4:
+        loss = 0
+    else:
+        loss = 10**loss
     traces = [generate_trace(
         duration_range=(30, 30),
         bandwidth_lower_bound_range=(

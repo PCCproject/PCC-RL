@@ -263,6 +263,11 @@ def generate_trace(duration_range: Tuple[float, float],
 
     loss_rate = float(np.random.uniform(
         loss_rate_range[0], loss_rate_range[1], 1))
+    loss_rate_exponent = float(np.random.uniform(np.log10(loss_rate_range[0]+1e-5), np.log10(loss_rate_range[1]+1e-5), 1))
+    if loss_rate_exponent < -4:
+        loss_rate = 0
+    else:
+        loss_rate = 10**loss_rate_exponent
 
     duration = float(np.random.uniform(
         duration_range[0], duration_range[1], 1))
