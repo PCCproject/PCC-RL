@@ -10,7 +10,6 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from mpi4py.MPI import COMM_WORLD
-from mpi4py.futures import MPIPoolExecutor
 
 import gym
 import numpy as np
@@ -38,6 +37,40 @@ if type(tf.contrib) != types.ModuleType:  # if it is LazyLoader
 
 set_tf_loglevel(logging.FATAL)
 
+class MyPPO1(PPO1):
+
+    def predict(self, observation, state=None, mask=None, deterministic=False, saliency=False):
+        if state is None:
+            state = self.initial_state
+        if mask is None:
+            mask = [False for _ in range(self.n_envs)]
+        observation = np.array(observation)
+        vectorized_env = self._is_vectorized_observation(observation, self.observation_space)
+
+        observation = observation.reshape((-1,) + self.observation_space.shape)
+        grad = None
+        if deterministic and saliency:
+            actions, _, states, _, grad = self.step(observation, state, mask, deterministic=deterministic, saliency=saliency)
+        else:
+            actions, _, states, _ = self.step(observation, state, mask, deterministic=deterministic)
+
+        clipped_actions = actions
+        # Clip the actions to avoid out of bound error
+        if isinstance(self.action_space, gym.spaces.Box):
+            clipped_actions = np.clip(actions, self.action_space.low, self.action_space.high)
+
+        if not vectorized_env:
+            if state is not None:
+                raise ValueError("Error: The environment must be vectorized when using recurrent policies.")
+            clipped_actions = clipped_actions[0]
+
+        if deterministic and saliency:
+            return clipped_actions, states, grad
+        elif deterministic and saliency:
+            return clipped_actions, states
+        else:
+            return clipped_actions, states
+
 
 class MyMlpPolicy(FeedForwardPolicy):
 
@@ -47,6 +80,19 @@ class MyMlpPolicy(FeedForwardPolicy):
                                           n_steps, n_batch, reuse, net_arch=[
                                               {"pi": [32, 16], "vf": [32, 16]}],
                                           feature_extraction="mlp", **_kwargs)
+
+    def step(self, obs, state=None, mask=None, deterministic=False, saliency=False):
+        if deterministic:
+            action, value, neglogp = self.sess.run([self.deterministic_action, self.value_flat, self.neglogp],
+                                                   {self.obs_ph: obs})
+            if saliency:
+                grad = self.sess.run(tf.gradients(self.deterministic_action, self.obs_ph), {self.obs_ph: obs})[0]
+                return action, value, self.initial_state, neglogp, grad
+
+        else:
+            action, value, neglogp = self.sess.run([self.action, self.value_flat, self.neglogp],
+                                                   {self.obs_ph: obs})
+        return action, value, self.initial_state, neglogp
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -221,7 +267,7 @@ class Aurora():
         if pretrained_model_path is not None:
             if pretrained_model_path.endswith('.ckpt'):
                 model_create_start = time.time()
-                self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
+                self.model = MyPPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
                                   optim_batchsize=int(
@@ -244,7 +290,7 @@ class Aurora():
                 # model is a tensorflow model to serve
                 self.model = LoadedModel(pretrained_model_path)
         else:
-            self.model = PPO1(MyMlpPolicy, env, verbose=1, seed=seed,
+            self.model = MyPPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
                               optim_batchsize=int(timesteps_per_actorbatch/12),
@@ -297,7 +343,7 @@ class Aurora():
     def load_model(self):
         raise NotImplementedError
 
-    def _test(self, trace: Trace, save_dir: str, plot_flag: bool = False):
+    def _test(self, trace: Trace, save_dir: str, plot_flag: bool = False, saliency: bool = False):
         reward_list = []
         loss_list = []
         tput_list = []
@@ -330,21 +376,23 @@ class Aurora():
             'PccNs-v0', traces=[trace], delta_scale=self.delta_scale, record_pkt_log=self.record_pkt_log)
         env.seed(self.seed)
         obs = env.reset()
-        pred_cost = 0
-        step_cost = 0
+        grads = []  # gradients for saliency map
         while True:
-            pred_start = time.time()
             if isinstance(self.model, LoadedModel):
                 obs = obs.reshape(1, -1)
                 action = self.model.act(obs)
                 action = action['act'][0]
             else:
                 if env.net.senders[0].got_data:
-                    action, _states = self.model.predict(
-                        obs, deterministic=True)
+                    if saliency:
+                        action, _states, grad = self.model.predict(
+                            obs, deterministic=True, saliency=saliency)
+                        grads.append(grad)
+                    else:
+                        action, _states = self.model.predict(
+                            obs, deterministic=True)
                 else:
                     action = np.array([0])
-            pred_cost += time.time() - pred_start
 
             # get the new MI and stats collected in the MI
             # sender_mi = env.senders[0].get_run_data()
@@ -437,10 +485,14 @@ class Aurora():
                      tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
                      loss, np.mean(reward_list), pkt_level_reward])
 
+            if saliency:
+                with open(os.path.join(save_dir, "saliency.npy"), 'wb') as f:
+                    np.save(f, np.concatenate(grads))
+
         return ts_list, reward_list, loss_list, tput_list, delay_list, send_rate_list, action_list, obs_list, mi_list, pkt_level_reward
 
-    def test(self, trace: Trace, save_dir: str, plot_flag: bool = False) -> Tuple[float, float]:
-        _, reward_list, _, _, _, _, _, _, _, pkt_level_reward = self._test(trace, save_dir, plot_flag)
+    def test(self, trace: Trace, save_dir: str, plot_flag: bool = False, saliency: bool = False) -> Tuple[float, float]:
+        _, reward_list, _, _, _, _, _, _, _, pkt_level_reward = self._test(trace, save_dir, plot_flag, saliency)
         return np.mean(reward_list), pkt_level_reward
 
 def test_on_trace(model_path: str, trace: Trace, save_dir: str, seed: int,
@@ -453,7 +505,6 @@ def test_on_traces(model_path: str, traces: List[Trace], save_dirs: List[str],
                    nproc: int, seed: int, record_pkt_log: bool, plot_flag: bool):
     arguments = [(model_path, trace, save_dir, seed, record_pkt_log, plot_flag)
                  for trace, save_dir in zip(traces, save_dirs)]
-    # with mp.get_context("spawn").Pool(processes=nproc) as pool:
     with mp.Pool(processes=nproc) as pool:
         results = pool.starmap(test_on_trace, tqdm.tqdm(arguments, total=len(arguments)))
     return results

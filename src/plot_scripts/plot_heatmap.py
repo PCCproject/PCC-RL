@@ -3,9 +3,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
-from common.utils import read_json_file
+from common.utils import read_json_file, compute_std_of_mean, load_summary
 
 
 def parse_args():
@@ -20,7 +19,7 @@ def parse_args():
                         choices=('pretrained', 'genet_bbr', 'genet_cubic',
                                  'genet_bbr_old'),
                         help='Rule-based congestion control name.')
-    parser.add_argument('--models-path', type=str,
+    parser.add_argument('--models-path', type=str, default=None,
                         help="path to genet trained Aurora models.")
     # parser.add_argument('--config-file', type=str, required=True,
     #                     help="path to configuration file.")
@@ -88,24 +87,26 @@ def main():
     min_gap = np.inf
 
     gap_matrices = []
-    for bo in range(0, 30, 3):
+    bo_range = range(0, 10, 1)
+    for bo in bo_range:
         results = []
         for i in range(len(dim0_vals)):
             row = []
             for j in range(len(dim1_vals)):
                 gaps = []
-                for k in range(10):
+                cnt = 10
+                for k in range(cnt):
                     trace_dir = os.path.join(
                         args.root, "{}_vs_{}/pair_{}_{}/trace_{}".format(args.dims[0], args.dims[1], i, j, k))
-                    df = pd.read_csv(os.path.join(
+                    df = load_summary(os.path.join(
                         trace_dir, args.heuristic, '{}_summary.csv'.format(args.heuristic)))
                     heuristic_reward = df['{}_level_reward'.format(
                         args.reward_level)]
                     if args.rl == 'pretrained':
-                        df = pd.read_csv(os.path.join(
+                        df = load_summary(os.path.join(
                             trace_dir, 'pretrained', 'aurora_summary.csv'))
                     else:
-                        df = pd.read_csv(os.path.join(trace_dir, args.rl, 'seed_42', "bo_{}".format(
+                        df = load_summary(os.path.join(trace_dir, args.rl, "bo_{}".format(
                             bo), 'step_64800', 'aurora_summary.csv'))
                     genet_reward = df['{}_level_reward'.format(
                         args.reward_level)]
@@ -115,12 +116,11 @@ def main():
                 min_gap = min(min_gap, np.mean(gaps))
             results.append(row)
         results = np.array(results)
-        print(results.shape)
         gap_matrices.append(results)
 
-    for subplot_idx, (gap_matrix, bo, ax) in enumerate(zip(gap_matrices, range(0, 30, 3), axes.flatten())):
+    for subplot_idx, (gap_matrix, bo, ax) in enumerate(zip(gap_matrices, bo_range, axes.flatten())):
         im = ax.imshow(gap_matrix)
-        im.set_clim(vmax=0, vmin=min_gap)
+        im.set_clim(vmax=100, vmin=-200)
         selected_configs = read_json_file(os.path.join(
             args.models_path, 'bo_{}.json'.format(bo)))
 

@@ -23,6 +23,8 @@ from simulator.network_simulator.bbr import BBR
 from simulator.network_simulator.bbr_old import BBR_old
 from simulator.trace import generate_trace
 
+black_box_function_calling_times = 0
+
 
 def parse_args():
     """Parse arguments from the command line."""
@@ -67,6 +69,12 @@ class JSONLogger(_Tracker):
             data2dump = copy.deepcopy(data)
             data2dump['params']['bandwidth_lower_bound'] = 10**data2dump['params']['bandwidth_lower_bound']
             data2dump['params']['bandwidth_upper_bound'] = 10**data2dump['params']['bandwidth_upper_bound']
+
+            if data2dump['params']['loss'] < -4:
+                data2dump['params']['loss'] = 0
+            else:
+                data2dump['params']['loss'] = 10**data2dump['params']['loss']
+            data2dump['params']['loss'] = 10**data2dump['params']['loss']
 
             with open(self._path, "a") as f:
                 f.write(json.dumps(data2dump) + "\n")
@@ -117,6 +125,12 @@ class RandomizationRanges:
                     param)
                 if param == 'bandwidth_lower_bound' or param == 'bandwidth_upper_bound':
                     range_map_to_add[param] = [10**range_map[param], 10**range_map[param]]
+                elif param == 'loss':
+                    if range_map[param] < -4:
+                        loss = 0
+                    else:
+                        loss = 10**range_map[param]
+                    range_map_to_add[param] = [loss, loss]
                 else:
                     range_map_to_add[param] = [range_map[param], range_map[param]]
             range_map_to_add['weight'] = weight
@@ -179,6 +193,9 @@ class Genet:
             self.pbounds['bandwidth_upper_bound'][0] = np.log10(self.pbounds['bandwidth_upper_bound'][0])
             self.pbounds['bandwidth_upper_bound'][1] = np.log10(self.pbounds['bandwidth_upper_bound'][1])
 
+        if 'loss' in self.pbounds:
+            self.pbounds['loss'][0] = np.log10(self.pbounds['loss'][0] + 1e-5)
+            self.pbounds['loss'][1] = np.log10(self.pbounds['loss'][1] + 1e-5)
         self.save_dir = save_dir
         self.heuristic = heuristic
         self.model_path = model_path  # keep track of the latest model path
@@ -194,15 +211,16 @@ class Genet:
         """Genet trains rl_method.
         Args
             rounds: rounds of BO.
-
         """
         for i in range(rounds):
+            training_save_dir = os.path.join(self.save_dir, "bo_{}".format(i))
             optimizer = BayesianOptimization(
                 f=lambda bandwidth_lower_bound, bandwidth_upper_bound, delay,
                 queue, loss, T_s, delay_noise: self.black_box_function(
                     bandwidth_lower_bound, bandwidth_upper_bound, delay, queue,
                     loss, T_s, delay_noise, heuristic=self.heuristic,
-                    model_path=self.model_path),
+                    model_path=self.model_path,
+                    save_dir=os.path.join(training_save_dir, 'bo_traces')),
                 pbounds=self.pbounds, random_state=self.seed+i)
             os.makedirs(os.path.join(self.save_dir, "bo_{}".format(i)),
                         exist_ok=True)
@@ -217,7 +235,6 @@ class Genet:
                 self.save_dir, "bo_"+str(i) + ".json")
             self.rand_ranges.dump(self.cur_config_file)
             to_csv(self.cur_config_file)
-            training_save_dir = os.path.join(self.save_dir, "bo_{}".format(i))
 
             cmd = "mpiexec -np {nproc} python train_rl.py " \
                 "--save-dir {save_dir} --exp-name {exp_name} --seed {seed} " \
@@ -235,9 +252,19 @@ class Genet:
 def black_box_function(bandwidth_lower_bound: float,
                        bandwidth_upper_bound: float, delay: float, queue: float,
                        loss: float, T_s: float, delay_noise: float, heuristic,
-                       model_path: str) -> float:
+                       model_path: str, save_dir: str = "") -> float:
+
+    global black_box_function_calling_times
+    save_dir = os.path.join(save_dir, 'config_{}'.format(
+        black_box_function_calling_times % 15))
+    black_box_function_calling_times += 1
     heuristic_rewards = []
     rl_method_rewards = []
+
+    if loss < -4:
+        loss = 0
+    else:
+        loss = 10**loss
     traces = [generate_trace(
         duration_range=(30, 30),
         bandwidth_lower_bound_range=(
@@ -257,13 +284,15 @@ def black_box_function(bandwidth_lower_bound: float,
                 trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw))
     else:
         t_start = time.time()
-        hret = heuristic.test_on_traces(traces, [""] * len(traces), False, 8)
+        # save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
+        save_dirs = [""] * len(traces)
+        hret = heuristic.test_on_traces(traces, save_dirs, False, 8)
         for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
             # heuristic_rewards.append(heuristic_mi_level_reward)
             heuristic_rewards.append(heuristic_pkt_level_reward)
         print("heuristic used {}s".format(time.time() - t_start))
         t_start = time.time()
-        rl_ret = test_on_traces(model_path, traces, [""] * len(traces), 8, 20,
+        rl_ret = test_on_traces(model_path, traces, save_dirs, 8, 20,
                                 record_pkt_log=False, plot_flag=False)
         for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
             # rl_method_rewards.append(rl_mi_level_reward)

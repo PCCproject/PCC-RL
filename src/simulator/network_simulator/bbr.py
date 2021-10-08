@@ -147,10 +147,10 @@ class ConnectionState:
 
 
 class BBRMode(Enum):
-    BBR_STARTUP = 0 #"BBR_STARTUP"  # ramp up sending rate rapidly to fill pipe
-    BBR_DRAIN = 1 #"BBR_DRAIN"  # drain any queue created during startup
-    BBR_PROBE_BW = 2 #"BBR_PROBE_BW"  # discover, share bw: pace around estimated bw
-    BBR_PROBE_RTT = 3 #"BBR_PROBE_RTT"  # cut inflight to min to probe min_rtt
+    BBR_STARTUP = "BBR_STARTUP"  # ramp up sending rate rapidly to fill pipe
+    BBR_DRAIN = "BBR_DRAIN"  # drain any queue created during startup
+    BBR_PROBE_BW = "BBR_PROBE_BW"  # discover, share bw: pace around estimated bw
+    BBR_PROBE_RTT = "BBR_PROBE_RTT"  # cut inflight to min to probe min_rtt
 
 
 class BBRSender(Sender):
@@ -173,12 +173,12 @@ class BBRSender(Sender):
         self.app_limited_until = 0
         self.next_send_time = 0
 
-
         self.pacing_gain = BBR_HIGH_GAIN  # referece:
 
         self.target_cwnd = 0
 
         self.in_fast_recovery_mode = False
+        self.exit_fast_recovery_ts = -1
 
         self.init()
         # self.bbr_log = []
@@ -216,7 +216,7 @@ class BBRSender(Sender):
         # nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : 1ms)
         # InitialCwnd = 10 packets as Cubic
         if self.srtt is None:
-            nominal_bandwidth = self.cwnd * BYTES_PER_PACKET / 0.1 # self.net.links[0].trace.get_delay(0) * 1e-3# 1e-3  # 1ms
+            nominal_bandwidth = self.cwnd * BYTES_PER_PACKET / 0.1 # 1ms
         else:
             nominal_bandwidth = self.cwnd * BYTES_PER_PACKET / self.srtt  # bytes/sec
         self.pacing_rate = self.pacing_gain * nominal_bandwidth  # bytes/sec
@@ -246,7 +246,6 @@ class BBRSender(Sender):
             self.filled_pipe = True
 
     def update_round(self, pkt: BBRPacket):
-        # self.delivered += pkt.pkt_size
         if pkt.delivered >= self.next_round_delivered:
             self.next_round_delivered = self.conn_state.delivered
             self.round_count += 1
@@ -456,7 +455,9 @@ class BBRSender(Sender):
     def generate_rate_sample(self, pkt: BBRPacket):
         # for each newly SACKed or ACKed packet P:
         #     self.update_rate_sample(P, rs)
-        self.update_rate_sample(pkt)
+        # fix the btlbw overestimation bug by not updating delivery_rate
+        if not self.update_rate_sample(pkt):
+            return False
 
         # Clear app-limited field if bubble is ACKed and gone.
         if self.conn_state.app_limited and self.conn_state.delivered > self.conn_state.app_limited:
@@ -513,6 +514,8 @@ class BBRSender(Sender):
             # print("pkt.sent_time:", pkt.sent_time, "pkt.first_sent_time:", pkt.first_sent_time, "send_elapsed:", self.rs.send_elapsed)
             # print("C.delivered_time:", self.conn_state.delivered_time, "P.delivered_time:", pkt.delivered_time, "ack_elapsed:", self.rs.ack_elapsed)
             self.conn_state.first_sent_time = pkt.sent_time
+            return True
+        return False
         # pkt.debug_print()
 
         # Mark the packet as delivered once it's SACKed to
@@ -531,17 +534,17 @@ class BBRSender(Sender):
         #     estimated_bdp = self.btlbw * self.rtprop / BYTES_PER_PACKET
         #     cwnd_gain = self.cwnd_gain
 
-        # for debug purpose
-        # self.bbr_log.append([self.get_cur_time(), self.pacing_gain, self.pacing_rate * BITS_PER_BYTE / 1e6,
-        # self.cwnd_gain, self.cwnd, self.target_cwnd, self.prior_cwnd, self.btlbw * BITS_PER_BYTE / 1e6,
-        # self.rtprop, self.full_bw * BITS_PER_BYTE / 1e6, self.state.value,
-        # self.bytes_in_flight / 1500, int(self.in_fast_recovery_mode),
-        # self.rs.delivery_rate * BITS_PER_BYTE / 1e6, int(self.rs.pkt_in_fast_recovery_mode)])
-
         # if self.bytes_in_flight >= cwnd_gain * estimated_bdp * BYTES_PER_PACKET:
         if self.bytes_in_flight >= self.cwnd * BYTES_PER_PACKET:
             # wait for ack or timeout
             return False
+
+        # for debug purpose
+        # self.bbr_log.append([self.get_cur_time(), self.pacing_gain, self.pacing_rate * BITS_PER_BYTE / 1e6,
+        # self.cwnd_gain, self.cwnd, self.target_cwnd, self.prior_cwnd, self.btlbw * BITS_PER_BYTE / 1e6,
+        # self.rtprop, self.full_bw * BITS_PER_BYTE / 1e6, self.state.value,
+        # self.bytes_in_flight / BYTES_PER_PACKET, int(self.in_fast_recovery_mode),
+        # self.rs.delivery_rate * BITS_PER_BYTE / 1e6, self.round_start, self.round_count, self.rto, self.exit_fast_recovery_ts, self.net.links[0].pkt_in_queue, self.conn_state.delivered])
         return True
 
     def schedule_send(self, first_pkt: bool = False, on_ack: bool = False):
@@ -611,6 +614,7 @@ class BBRSender(Sender):
         self.target_cwnd = 0
 
         self.in_fast_recovery_mode = False
+        self.exit_fast_recovery_ts = -1
 
         self.init()
 
@@ -749,17 +753,16 @@ class BBR:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
-            # pkt_level_reward = pkt_log.get_reward("", trace)
         if self.record_pkt_log and plot_flag:
             pkt_log = PacketLog.from_log(net.pkt_log)
             plot(trace, pkt_log, save_dir, self.cc_name)
-            # with open(os.path.join(save_dir, "bbr_log.csv"), 'w', 1) as f:
-            #     writer = csv.writer(f, lineterminator='\n')
-            #     writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
-            #                      'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
-            #                      "full_bw", 'state', "packets_in_flight", "in_fast_recovery_mode",
-            #                      'rs_delivery_rate'])
-            #     writer.writerows(senders[0].bbr_log)
+        # with open(os.path.join(save_dir, "{}_log.csv".format(self.cc_name)), 'w', 1) as f:
+        #     writer = csv.writer(f, lineterminator='\n')
+        #     writer.writerow(['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
+        #                      'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
+        #                      "full_bw", 'state', "packets_in_flight", "in_fast_recovery_mode",
+        #                      'rs_delivery_rate', 'round_start', 'round_count', 'rto', 'exit_fast_recovery_ts', 'pkt_in_queue'])
+        #     writer.writerows(senders[0].bbr_log)
         if plot_flag and save_dir:
             plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
         return np.mean(rewards), pkt_level_reward

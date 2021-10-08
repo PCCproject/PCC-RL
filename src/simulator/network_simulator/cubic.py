@@ -303,7 +303,6 @@ class Cubic:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth', 'cwnd'])
                 pkt_logger.writerows(net.pkt_log)
-            # pkt_level_reward = pkt_log.get_reward("", trace)
         if self.record_pkt_log and plot_flag:
             pkt_log = PacketLog.from_log(net.pkt_log)
             plot(trace, pkt_log, save_dir, self.cc_name)

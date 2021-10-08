@@ -454,6 +454,9 @@ class BBRSender(Sender):
         # for each newly SACKed or ACKed packet P:
         #     self.update_rate_sample(P, rs)
         self.update_rate_sample(pkt)
+        # TODO: BUG!! uncomment the following 2 lines to fix the btlbw overestimation bug
+        # if not self.update_rate_sample(pkt):
+        #     return False
 
         # Clear app-limited field if bubble is ACKed and gone.
         if self.conn_state.app_limited and self.conn_state.delivered > self.conn_state.app_limited:
@@ -512,6 +515,8 @@ class BBRSender(Sender):
             # print("pkt.sent_time:", pkt.sent_time, "pkt.first_sent_time:", pkt.first_sent_time, "send_elapsed:", self.rs.send_elapsed)
             # print("C.delivered_time:", self.conn_state.delivered_time, "P.delivered_time:", pkt.delivered_time, "ack_elapsed:", self.rs.ack_elapsed)
             self.conn_state.first_sent_time = pkt.sent_time
+            return True
+        return False
         # pkt.debug_print()
 
         # Mark the packet as delivered once it's SACKed to
@@ -707,16 +712,6 @@ class BBR_old:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        pkt_level_reward = 0
-        if self.record_pkt_log and save_dir:
-            with open(os.path.join(
-                save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
-                pkt_logger = csv.writer(f, lineterminator='\n')
-                pkt_logger.writerow(['timestamp', 'packet_event_id',
-                                     'event_type', 'bytes', 'cur_latency',
-                                     'queue_delay', 'packet_in_queue',
-                                     'sending_rate', 'bandwidth'])
-                pkt_logger.writerows(net.pkt_log)
         if f_sim_log:
             f_sim_log.close()
         assert senders[0].last_ack_ts is not None and senders[0].first_ack_ts is not None
@@ -740,6 +735,17 @@ class BBR_old:
                      avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
                      tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
                      loss, np.mean(rewards), pkt_level_reward])
+
+        if self.record_pkt_log and save_dir:
+            with open(os.path.join(
+                save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
+                pkt_logger = csv.writer(f, lineterminator='\n')
+                pkt_logger.writerow(['timestamp', 'packet_event_id',
+                                     'event_type', 'bytes', 'cur_latency',
+                                     'queue_delay', 'packet_in_queue',
+                                     'sending_rate', 'bandwidth'])
+                pkt_logger.writerows(net.pkt_log)
+        if self.record_pkt_log and plot_flag:
             pkt_log = PacketLog.from_log(net.pkt_log)
             plot(trace, pkt_log, save_dir, self.cc_name)
         if plot_flag and save_dir:
