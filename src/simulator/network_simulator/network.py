@@ -1,12 +1,6 @@
-# import csv
 import heapq
-# import json
-# import os
 import random
-# import sys
-# import time
 from typing import List
-
 
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET, EVENT_TYPE_ACK, EVENT_TYPE_SEND
 from simulator.network_simulator.packet import Packet

@@ -276,7 +276,7 @@ class Aurora():
             f_sim_log = open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1)
             writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
-                             'recv_rate', 'max_recv_rate', 'latency',
+                             'recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
                              "bytes_acked", "bytes_lost", "MI",
                              "send_start_time",
@@ -310,7 +310,6 @@ class Aurora():
             # get the new MI and stats collected in the MI
             # sender_mi = env.senders[0].get_run_data()
             sender_mi = env.senders[0].history.back() #get_run_data()
-            max_recv_rate = env.senders[0].max_tput
             throughput = sender_mi.get("recv rate")  # bits/sec
             send_rate = sender_mi.get("send rate")  # bits/sec
             latency = sender_mi.get("avg latency")
@@ -323,11 +322,11 @@ class Aurora():
             reward = pcc_aurora_reward(
                 throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
                 trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-                trace.avg_delay * 2/ 1e3)
+                trace.avg_delay * 2 / 1e3)
             if save_dir and writer:
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
-                    round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
+                    env.net.get_cur_time(), round(env.senders[0].pacing_rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
+                    round(send_rate, 0), round(throughput, 0), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
                     sender_mi.send_start, sender_mi.send_end,
@@ -338,7 +337,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    recv_ratio, env.senders[0].estRTT])
+                    recv_ratio, env.senders[0].srtt])
             reward_list.append(reward)
             loss_list.append(loss)
             delay_list.append(latency * 1000)

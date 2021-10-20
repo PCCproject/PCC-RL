@@ -7,6 +7,7 @@ from gym.envs.registration import register
 from gym.utils import seeding
 
 from common import sender_obs
+from simulator.network_simulator.constants import BYTES_PER_PACKET
 from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
 from simulator.network_simulator.pcc.aurora.aurora_sender import AuroraSender
@@ -34,8 +35,8 @@ class AuroraEnvironment(gym.Env):
         # construct sender and network
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         self.senders = [AuroraSender(
-            10 / (self.current_trace.get_delay(0) * 2/1000), self.features,
-            self.history_len, 0, 0, self.current_trace)]
+            10 * BYTES_PER_PACKET / (self.current_trace.get_delay(0) * 2/1000),
+            self.features, self.history_len, 0, 0, self.current_trace)]
         self.net = Network(self.senders, self.links, self.record_pkt_log)
         self.run_dur = 0.01
         self.steps_taken = 0
@@ -104,4 +105,4 @@ class AuroraEnvironment(gym.Env):
         return self._get_all_sender_obs()
 
 
-register(id='AuroraEnv-v0', entry_point='simulator.network_simulator.pcc.aurora.environment:AuroraEnvironment')
+register(id='AuroraEnv-v0', entry_point='simulator.network_simulator.pcc.aurora.aurora_environment:AuroraEnvironment')

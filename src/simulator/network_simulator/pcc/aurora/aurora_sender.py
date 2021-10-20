@@ -18,18 +18,23 @@ class AuroraSender(Sender):
         super().__init__(sender_id, dest)
         self.starting_rate = pacing_rate
         self.pacing_rate = pacing_rate
+        self.pacing_rate = pacing_rate
         self.history_len = history_len
         self.features = features
         self.history = sender_obs.SenderHistory(self.history_len,
                                                 self.features, self.sender_id)
         self.trace = trace
-        raise NotImplementedError
+        self.got_data = False
+        self.cwnd = 0
 
     def on_packet_sent(self, pkt: "packet.Packet") -> None:
         return super().on_packet_sent(pkt)
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
-        return super().on_packet_acked(pkt)
+        super().on_packet_acked(pkt)
+        self.rtt_samples_ts.append(self.get_cur_time())
+        if not self.got_data:
+            self.got_data = len(self.rtt_samples) >= 1
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         return super().on_packet_lost(pkt)
@@ -94,6 +99,15 @@ class AuroraSender(Sender):
             queue_delay_samples=self.queue_delay_samples,
             packet_size=BYTES_PER_PACKET
         )
+
+    def schedule_send(self, first_pkt: bool = False, on_ack: bool = False):
+        assert self.net, "network is not registered in sender."
+        if first_pkt:
+            next_send_time = 0
+        else:
+            next_send_time = self.get_cur_time() + BYTES_PER_PACKET / self.pacing_rate
+        next_pkt = packet.Packet(next_send_time, self, 0)
+        self.net.add_packet(next_pkt)
 
     def on_mi_start(self):
         self.reset_obs()
