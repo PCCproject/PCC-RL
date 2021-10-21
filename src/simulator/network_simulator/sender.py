@@ -52,6 +52,7 @@ class Sender:
         self.rto = 3  # retransmission timeout (seconds)
 
         self.event_count = 0
+        self.got_data = True
 
     def can_send_packet(self) -> bool:
         return True

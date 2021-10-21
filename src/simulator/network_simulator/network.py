@@ -1,12 +1,6 @@
-# import csv
 import heapq
-# import json
-# import os
 import random
-# import sys
-# import time
 from typing import List
-
 
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET, EVENT_TYPE_ACK, EVENT_TYPE_SEND
 from simulator.network_simulator.packet import Packet
@@ -71,7 +65,10 @@ class Network:
         while True:
             pkt = self.q[0]
             # pkt.debug_print()
-            if pkt.ts >= end_time and pkt.event_type == EVENT_TYPE_SEND:
+            # use got_data here to make sure aurora receives at least a pkt ack
+            # in MI at the beginning of the connection. got_data does not
+            # affect other congestion controls
+            if pkt.sender.got_data and pkt.ts >= end_time and pkt.event_type == EVENT_TYPE_SEND:
                 end_time = pkt.ts
                 self.cur_time = end_time
                 break
