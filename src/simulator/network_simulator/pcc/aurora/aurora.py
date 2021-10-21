@@ -347,7 +347,7 @@ class Aurora():
             action_list.append(action.item())
             mi_list.append(sender_mi.send_end - sender_mi.send_start)
             obs_list.append(obs.tolist())
-            obs, rewards, dones, info = env.step(action)
+            obs, rewards, dones, info = env.step(action.item())
 
             if dones:
                 break

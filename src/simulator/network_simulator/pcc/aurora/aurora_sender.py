@@ -26,6 +26,7 @@ class AuroraSender(Sender):
         self.trace = trace
         self.got_data = False
         self.cwnd = 0
+        self.prev_rtt_samples = []
 
     def on_packet_sent(self, pkt: "packet.Packet") -> None:
         return super().on_packet_sent(pkt)
@@ -151,4 +152,5 @@ class AuroraSender(Sender):
         self.RTTVar = self.estRTT / 2  # RTT variance
 
         self.got_data = False
+        self.prev_rtt_samples = []
 

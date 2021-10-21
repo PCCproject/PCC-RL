@@ -88,7 +88,7 @@ class AuroraEnvironment(gym.Env):
         self.run_dur = 0.01
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         self.senders = [AuroraSender(
-            10 / (self.current_trace.get_delay(0) * 2/1000), self.features,
+            10 * BYTES_PER_PACKET / (self.current_trace.get_delay(0) * 2/1000), self.features,
             self.history_len, 0, 0, self.current_trace)]
         self.net = Network(self.senders, self.links, self.record_pkt_log)
         self.episodes_run += 1
