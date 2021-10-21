@@ -48,10 +48,10 @@ class AuroraSender(Sender):
 
     def set_rate(self, new_rate):
         self.pacing_rate = new_rate
-        if self.pacing_rate > MAX_RATE:
-            self.pacing_rate = MAX_RATE
-        if self.pacing_rate < MIN_RATE:
-            self.pacing_rate = MIN_RATE
+        if self.pacing_rate > MAX_RATE * BYTES_PER_PACKET:
+            self.pacing_rate = MAX_RATE * BYTES_PER_PACKET
+        if self.pacing_rate < MIN_RATE * BYTES_PER_PACKET:
+            self.pacing_rate = MIN_RATE * BYTES_PER_PACKET
 
     def record_run(self):
         smi = self.get_run_data()
@@ -153,4 +153,3 @@ class AuroraSender(Sender):
 
         self.got_data = False
         self.prev_rtt_samples = []
-
