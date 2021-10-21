@@ -3,6 +3,8 @@ import copy
 import os
 import time
 
+import numpy as np
+
 from common.utils import read_json_file, set_seed
 from simulator.network_simulator.bbr import BBR
 from simulator.network_simulator.cubic import Cubic
@@ -29,7 +31,7 @@ def parse_args():
                         help="direcotry to testing results.")
     parser.add_argument('--cc', type=str, required=True,
                         choices=('bbr', 'cubic', 'bbr_old', 'genet_bbr_old', 'genet_bbr',
-                                 'genet_cubic', 'pretrained'),
+                                 'genet_cubic', 'pretrained', 'overfit_config'),
                         help='Rule-based congestion control name.')
     parser.add_argument('--models-path', type=str,
                         help="path to genet trained Aurora models.")
@@ -38,7 +40,7 @@ def parse_args():
     parser.add_argument('--dims', type=str, required=True, nargs=2,
                         help="2 dimenstions used to compare. Others use default values.")
     parser.add_argument('--seed', type=int, default=42, help='seed')
-    parser.add_argument('--nproc', type=int, default=8, help='proc cnt')
+    parser.add_argument('--nproc', type=int, default=24, help='proc cnt')
 
     args, _ = parser.parse_known_args()
     return args
@@ -75,13 +77,19 @@ def main():
     print(dim1_vals)
     traces = []
     save_dirs = []
+    with open('heatmap_trace_cnt_ratio.npy', 'rb') as f:
+        cnt_ratio = np.load(f)
     for dim0_idx, dim0_val in enumerate(dim0_vals):
         for dim1_idx, dim1_val in enumerate(dim1_vals):
             dim_vals = copy.copy(DEFAULT_VALUES)
             dim_vals[dim0] = dim0_val
             dim_vals[dim1] = dim1_val
             # print(i, dim0_val, dim1_val, dim_vals)
-            for trace_idx in range(10):
+            cnt = 10
+            # if cnt_ratio[dim0_idx, dim1_idx] > 1:
+            #     cnt *= int(cnt_ratio[dim0_idx, dim1_idx])
+            # print(cnt)
+            for trace_idx in range(cnt):
                 trace = generate_trace(
                     duration_range=(dim_vals['duration'], dim_vals['duration']),
                     bandwidth_lower_bound_range=(dim_vals['bandwidth_lower_bound'],
@@ -105,13 +113,12 @@ def main():
             if 'seed' in s:
                 genet_seed = s
         for bo in range(0, 30, 3):
-        # for bo in [12, 15, 18, 21, 24, 27]: # 0 3 6 9 12 15 18 21 24 27
-        # for bo in [27]: # 0 3 6 9 12 15 18 21 24 27
         # for bo_dir in natural_sort(glob.glob(os.path.join(args.models_path, "bo_*/"))):
             bo_dir = os.path.join(args.models_path, "bo_{}".format(bo))
             step = 64800
             model_path = os.path.join(bo_dir, 'model_step_{}.ckpt'.format(step))
             if not os.path.exists(model_path + '.meta'):
+                print(model_path, 'does not exist')
                 continue
             print(model_path)
             genet_save_dirs = [os.path.join(
@@ -125,6 +132,11 @@ def main():
         t_start = time.time()
         test_on_traces(args.models_path, traces, pretrained_save_dirs, args.nproc, 42, False, False)
         print('pretrained: {:.3f}'.format(time.time() - t_start))
+    elif args.cc == 'overfit_config':
+        pretrained_save_dirs = [os.path.join(save_dir, args.cc) for save_dir in save_dirs]
+        t_start = time.time()
+        test_on_traces(args.models_path, traces, pretrained_save_dirs, args.nproc, 42, False, False)
+        print('overfit_config: {:.3f}'.format(time.time() - t_start))
     else:
         if args.cc == 'bbr':
             cc = BBR(False)

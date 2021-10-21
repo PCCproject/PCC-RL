@@ -17,7 +17,7 @@ def parse_args():
                         help='Rule-based congestion control name.')
     parser.add_argument('--rl', type=str, required=True,
                         choices=('pretrained', 'genet_bbr', 'genet_cubic',
-                                 'genet_bbr_old'),
+                                 'genet_bbr_old', 'overfit_config'),
                         help='Rule-based congestion control name.')
     parser.add_argument('--models-path', type=str, default=None,
                         help="path to genet trained Aurora models.")
@@ -87,14 +87,19 @@ def main():
     min_gap = np.inf
 
     gap_matrices = []
-    bo_range = range(0, 10, 1)
+    with open('heatmap_trace_cnt_ratio.npy', 'rb') as f:
+        cnt_ratio = np.load(f)
+    bo_range = range(0, 30, 3)
     for bo in bo_range:
         results = []
+        std_mat = np.zeros((len(dim0_vals), len(dim1_vals)))
         for i in range(len(dim0_vals)):
             row = []
             for j in range(len(dim1_vals)):
                 gaps = []
                 cnt = 10
+                # if cnt_ratio[i, j] > 1:
+                #     cnt *= int(cnt_ratio[i, j])
                 for k in range(cnt):
                     trace_dir = os.path.join(
                         args.root, "{}_vs_{}/pair_{}_{}/trace_{}".format(args.dims[0], args.dims[1], i, j, k))
@@ -105,29 +110,43 @@ def main():
                     if args.rl == 'pretrained':
                         df = load_summary(os.path.join(
                             trace_dir, 'pretrained', 'aurora_summary.csv'))
+                    elif args.rl == 'overfit_config':
+                        if bo == 0:
+                            df = load_summary(os.path.join(
+                                trace_dir, 'pretrained', 'aurora_summary.csv'))
+                        elif bo == 3:
+                            df = load_summary(os.path.join(
+                                trace_dir, 'overfit_config', 'aurora_summary.csv'))
+                        else:
+                            continue
                     else:
-                        df = load_summary(os.path.join(trace_dir, args.rl, "bo_{}".format(
+                        df = load_summary(os.path.join(trace_dir, args.rl, 'seed_42', "bo_{}".format(
                             bo), 'step_64800', 'aurora_summary.csv'))
                     genet_reward = df['{}_level_reward'.format(
                         args.reward_level)]
                     gaps.append(genet_reward - heuristic_reward)
                 row.append(np.mean(gaps))
+                if np.mean(gaps) < 0:
+                    # std_mat[i, j] = int((compute_std_of_mean(gaps) / 12.5)**2)
+                    std_mat[i, j] = compute_std_of_mean(gaps)
                 max_gap = max(max_gap, np.mean(gaps))
                 min_gap = min(min_gap, np.mean(gaps))
             results.append(row)
         results = np.array(results)
+        # with open('heatmap_trace_cnt_ratio.npy', 'wb') as f:
+        #     np.save(f, std_mat)
         gap_matrices.append(results)
 
     for subplot_idx, (gap_matrix, bo, ax) in enumerate(zip(gap_matrices, bo_range, axes.flatten())):
         im = ax.imshow(gap_matrix)
-        im.set_clim(vmax=100, vmin=-200)
-        selected_configs = read_json_file(os.path.join(
-            args.models_path, 'bo_{}.json'.format(bo)))
+        im.set_clim(vmax=0, vmin=-200)
 
-        selected_dim1_idxs = []
-        selected_dim0_idxs = []
+        if args.rl != 'pretrained' and args.rl != 'overfit_config':
+            selected_configs = read_json_file(os.path.join(
+                args.models_path, 'bo_{}.json'.format(bo)))
 
-        if args.rl != 'pretrained':
+            selected_dim1_idxs = []
+            selected_dim0_idxs = []
             for selected_config in selected_configs[1:]:
                 selected_dim1_idxs.append(
                     find_idx(selected_config[args.dims[1]][0], dim1_vals))
