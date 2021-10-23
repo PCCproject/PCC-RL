@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+from typing import Union
 
 import matplotlib
 matplotlib.use('Agg')
@@ -30,19 +31,16 @@ def parse_args():
     return args
 
 
-def plot(trace: Trace, log_file: str, save_dir: str, cc: str):
-    # cc = os.path.basename(log_file).split('_')[0]
+def plot(trace: Union[Trace, None], log_file: str, save_dir: str, cc: str):
     df = pd.read_csv(log_file)
     fig, axes = plt.subplots(6, 1, figsize=(12, 10))
     axes[0].set_title(cc)
-    avg_send_rate = df['bytes_sent'].sum() / df['timestamp'].iloc[-1] * BITS_PER_BYTE /1e6
-    avg_recv_rate = df['bytes_acked'].sum() / df['timestamp'].iloc[-1] * BITS_PER_BYTE /1e6
     axes[0].plot(df['timestamp'], df['recv_rate'] / 1e6, 'o-', ms=2,
-            label='throughput, avg {:.3f}mbps, {:.3f}'.format(
-                     df['recv_rate'].mean() / 1e6, avg_recv_rate))
+            label='throughput, avg {:.3f}mbps'.format(
+                     df['recv_rate'].mean() / 1e6))
     axes[0].plot(df['timestamp'], df['send_rate'] / 1e6, 'o-', ms=2,
-            label='send rate, avg {:.3f}mbps, {:.3f}'.format(
-                     df['send_rate'].mean() / 1e6, avg_send_rate))
+            label='send rate, avg {:.3f}mbps'.format(
+                     df['send_rate'].mean() / 1e6))
 
     if trace:
         avg_bw = trace.avg_bw
@@ -59,40 +57,30 @@ def plot(trace: Trace, log_file: str, save_dir: str, cc: str):
     axes[0].set_ylim(0, )
     axes[0].set_xlim(0, )
 
-
-    avg_lat = (df['latency'] * df['bytes_acked']).sum() / df['bytes_acked'].sum() * 1000
     axes[1].plot(df['timestamp'], df['latency']*1000,
-            label='RTT avg {:.3f}ms, {:.3f}'.format(df['latency'].mean()*1000, avg_lat))
-    # axes[1].plot(df['timestamp'], df['queue_delay']*1000,
-    #              label='Queue Delay avg {:.3f}ms'.format(df['queue_delay'].mean() * 1000))
+            label='RTT avg {:.3f}ms'.format(df['latency'].mean()*1000))
     axes[1].set_xlabel("Time(s)")
     axes[1].set_ylabel("Latency(ms)")
     axes[1].legend(loc='right')
     axes[1].set_xlim(0, )
     axes[1].set_ylim(0, )
 
-    avg_loss = df['bytes_lost'].sum()/df['bytes_sent'].sum()
     axes[2].plot(df['timestamp'], df['loss'],
-            label='loss avg {:.3f}, {:.3f}'.format(
-                df['loss'].mean(), avg_loss))
+            label='loss avg {:.3f}'.format(df['loss'].mean()))
     axes[2].set_xlabel("Time(s)")
     axes[2].set_ylabel("loss")
     axes[2].legend()
     axes[2].set_xlim(0, )
     axes[2].set_ylim(0, 1)
 
-    avg_reward = pcc_aurora_reward(avg_recv_rate / 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-                                   avg_lat /1000, avg_loss,
-                                   avg_bw / 1e6/ BITS_PER_BYTE / BYTES_PER_PACKET, min_rtt)
-
     avg_reward_mi = pcc_aurora_reward(
             df['recv_rate'].mean() / BITS_PER_BYTE / BYTES_PER_PACKET,
             df['latency'].mean(), df['loss'].mean(),
-            avg_bw * 1e6/ BITS_PER_BYTE / BYTES_PER_PACKET, min_rtt)
+            avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET, min_rtt)
 
 
     axes[3].plot(df['timestamp'], df['reward'],
-            label='rewards avg {:.3f}, {:.3f}'.format(avg_reward_mi, avg_reward))
+            label='rewards avg {:.3f}'.format(avg_reward_mi))
     axes[3].set_xlabel("Time(s)")
     axes[3].set_ylabel("Reward")
     axes[3].legend()
@@ -159,7 +147,8 @@ def main():
             trace = Trace.load_from_pantheon_file(args.trace_file, loss=0, queue=10)
         else:
             trace = None
-        plot(trace, args.log_file, args.save_dir)
+        cc = os.path.basename(log_file).split('_')[0]
+        plot(trace, args.log_file, args.save_dir, cc)
 
 
 def compute_T_s_bw(tstamps, bws):
