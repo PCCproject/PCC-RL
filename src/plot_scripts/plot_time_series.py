@@ -1,19 +1,15 @@
 import argparse
-import sys
 import os
 from typing import Union
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import Trace
 from common.utils import pcc_aurora_reward
-
-
 
 
 def parse_args():
@@ -51,6 +47,7 @@ def plot(trace: Union[Trace, None], log_file: str, save_dir: str, cc: str):
         axes[0].plot(df['timestamp'], df['bandwidth'] / 1e6,
                      label='bw, avg {:.3f}mbps'.format(df['bandwidth'].mean() / 1e6))
         avg_bw = df['bandwidth'].mean() / 1e6
+        min_rtt = None
     axes[0].set_xlabel("Time(s)")
     axes[0].set_ylabel("mbps")
     axes[0].legend(loc='right')
@@ -137,8 +134,7 @@ def plot(trace: Union[Trace, None], log_file: str, save_dir: str, cc: str):
 
 def main():
     args = parse_args()
-    # print(args.log_file)
-    for log_idx, log_file in enumerate(args.log_file):
+    for _, log_file in enumerate(args.log_file):
         if not os.path.exists(log_file):
             continue
         if args.trace_file.endswith('.json'):
@@ -149,21 +145,6 @@ def main():
             trace = None
         cc = os.path.basename(log_file).split('_')[0]
         plot(trace, args.log_file, args.save_dir, cc)
-
-
-def compute_T_s_bw(tstamps, bws):
-    print(bws, file=sys.stderr)
-    prev_ts = tstamps[0]
-    prev_bw = bws[0]
-    t_s_bw = []
-    for ts, bw in zip(tstamps[1:], bws[1:]):
-        if np.abs(bw - prev_bw) / prev_bw >= 0.5:
-            t_s_bw.append(ts - prev_ts)
-            prev_ts = ts
-            prev_bw = bw
-    if not t_s_bw:
-        return 30, 0  # trace duration
-    return np.mean(t_s_bw), len(t_s_bw) / 30
 
 
 if __name__ == "__main__":
