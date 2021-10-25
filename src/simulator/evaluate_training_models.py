@@ -4,14 +4,12 @@ Used to generate Figure 12.
 import argparse
 import glob
 import os
-import time
 
 from tqdm import tqdm
 import pandas as pd
 
 import numpy as np
 
-from common.utils import natural_sort
 from simulator.aurora import test_on_traces
 from simulator.network_simulator.bbr import BBR
 from simulator.network_simulator.bbr_old import BBR_old
@@ -78,9 +76,9 @@ def main():
         link_name = link_dir.split('/')[-2]
         for cc in TARGET_CCS:
             print("Loading real traces collected by {}...".format(cc))
-            for trace_file in tqdm(sorted(glob.glob(os.path.join(link_dir, "{}_datalink_run[1,3].log".format(cc))))):
+            for trace_file in tqdm(sorted(glob.glob(os.path.join(link_dir, "{}_datalink_run[1-3].log".format(cc))))):
                 traces.append(Trace.load_from_pantheon_file(
-                    trace_file, 0.0, queue_size, front_offset=5))
+                    trace_file, 0.0, queue_size, front_offset=0))
                 save_dir = os.path.join(args.save_dir, args.conn_type, link_name, os.path.splitext(
                     os.path.basename(trace_file))[0])
                 os.makedirs(save_dir, exist_ok=True)
@@ -99,27 +97,43 @@ def main():
                                        for save_dir in save_dirs], False, args.nproc)
         elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3':
             # TODO: bug here when there is no validation log
-            val_log = pd.read_csv(os.path.join(
-                args.models_path, 'validation_log.csv'), sep='\t')
-            for idx in np.linspace(0, len(val_log['num_timesteps']) / 2 - 1, 10):
-                step = int(val_log['num_timesteps'].iloc[int(idx)])
-                udr_seed = ''
-                for s in args.models_path.split('/'):
-                    if 'seed' in s:
-                        udr_seed = s
+            # original implementation
+            # val_log = pd.read_csv(os.path.join(
+            #     args.models_path, 'validation_log.csv'), sep='\t')
+            # for idx in np.linspace(0, len(val_log['num_timesteps']) / 2 - 1, 10):
+            #     step = int(val_log['num_timesteps'].iloc[int(idx)])
+            #     udr_seed = ''
+            #     for s in args.models_path.split('/'):
+            #         if 'seed' in s:
+            #             udr_seed = s
+            #     udr_save_dirs = [os.path.join(
+            #         save_dir, args.cc, udr_seed, "step_{}".format(step)) for save_dir in save_dirs]
+            #     model_path = os.path.join(
+            #         args.models_path, 'model_step_{}.ckpt'.format(step))
+            #     test_on_traces(model_path, traces, udr_save_dirs,
+            #                    args.nproc, 42, False, False)
+            # new implementation to be fair with genet
+            udr_seed = ''
+            for s in args.models_path.split('/'):
+                if 'seed' in s:
+                    udr_seed = s
+            step = 64800
+            while True:
+                if not os.path.exists(os.path.join(args.models_path, 'model_step_{}.ckpt.meta'.format(step))):
+                    break
                 udr_save_dirs = [os.path.join(
                     save_dir, args.cc, udr_seed, "step_{}".format(step)) for save_dir in save_dirs]
                 model_path = os.path.join(
                     args.models_path, 'model_step_{}.ckpt'.format(step))
                 test_on_traces(model_path, traces, udr_save_dirs,
                                args.nproc, 42, False, False)
+                step += 64800
         elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old':
             genet_seed = ''
             for s in args.models_path.split('/'):
                 if 'seed' in s:
                     genet_seed = s
             for bo in range(0, 30, 3):
-                # for bo_dir in natural_sort(glob.glob(os.path.join(args.models_path, "bo_*/"))):
                 bo_dir = os.path.join(args.models_path, "bo_{}".format(bo))
                 step = 64800
                 model_path = os.path.join(
