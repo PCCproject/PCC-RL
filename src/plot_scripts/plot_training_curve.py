@@ -1,14 +1,13 @@
 import argparse
-import csv
 import glob
 import os
-from typing import List
+from typing import List, Tuple
 
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 
-from common.utils import compute_std_of_mean
+from common.utils import compute_std_of_mean, load_summary
 from simulator.trace import Trace
 
 TRACE_ROOT = "../../data"
@@ -31,17 +30,21 @@ def parse_args():
     return args
 
 
-def load_cc_rewards_across_traces(log_files: List[str]) -> List[float]:
+def load_summaries_across_traces(log_files: List[str]) -> Tuple[List[float], List[float], List[float], List[float]]:
     rewards = []
+    tputs = []
+    lats = []
+    losses = []
     for log_file in log_files:
         if not os.path.exists(log_file):
             print(log_file, 'does not exist')
             continue
-        with open(log_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                rewards.append(float(row['pkt_level_reward']))
-    return rewards
+        summary = load_summary(log_file)
+        rewards.append(summary['pkt_level_reward'])
+        tputs.append(summary['average_throughput'])
+        lats.append(summary['average_latency'])
+        losses.append(summary['loss_rate'])
+    return rewards, tputs, lats, losses
 
 
 def main():
@@ -66,38 +69,56 @@ def main():
                                         os.path.splitext(os.path.basename(trace_file))[0])
                 save_dirs.append(save_dir)
 
-    bbr_old_rewards = load_cc_rewards_across_traces(
+    bbr_old_rewards, bbr_old_tputs, bbr_old_lats, bbr_old_losses = load_summaries_across_traces(
         [os.path.join(save_dir, "bbr_old", "bbr_old_summary.csv") for save_dir in save_dirs])
-    bbr_rewards = load_cc_rewards_across_traces(
+    bbr_rewards, bbr_tputs, bbr_lats, bbr_losses = load_summaries_across_traces(
         [os.path.join(save_dir, "bbr", "bbr_summary.csv") for save_dir in save_dirs])
-    cubic_rewards = load_cc_rewards_across_traces(
+    cubic_rewards, cubic_tputs, cubic_lats, cubic_losses = load_summaries_across_traces(
         [os.path.join(save_dir, "cubic", "cubic_summary.csv") for save_dir in save_dirs])
     steps = []
     genet_bbr_rewards = []
+    genet_bbr_tputs = []
+    genet_bbr_lats = []
+    genet_bbr_losses = []
     genet_bbr_old_rewards = []
+    genet_bbr_old_tputs = []
+    genet_bbr_old_lats = []
+    genet_bbr_old_losses = []
     genet_cubic_rewards = []
+    genet_cubic_tputs = []
+    genet_cubic_lats = []
+    genet_cubic_losses = []
     for bo in range(0, 30, 3):
         genet_seed = 42
-        tmp_rewards = load_cc_rewards_across_traces(
+        tmp_rewards, tmp_tputs, tmp_lats, tmp_losses = load_summaries_across_traces(
             [os.path.join(save_dir, 'genet_bbr', 'bo_{}'.format(bo),
                           "seed_{}".format(genet_seed), 'step_64800',
                           'aurora_summary.csv') for save_dir in save_dirs])
         # [os.path.join(save_dir, 'genet_bbr', 'bo_{}'.format(bo), 'step_64800', 'aurora_summary.csv') for save_dir in save_dirs])
         steps.append(bo * 72000)
         genet_bbr_rewards.append(np.mean(tmp_rewards))
-        tmp_rewards = load_cc_rewards_across_traces(
+        genet_bbr_tputs.append(np.mean(tmp_tputs))
+        genet_bbr_lats.append(np.mean(tmp_lats))
+        genet_bbr_losses.append(np.mean(tmp_losses))
+        tmp_rewards, tmp_tputs, tmp_lats, tmp_losses = load_summaries_across_traces(
             [os.path.join(save_dir, 'genet_cubic', 'bo_{}'.format(bo),
                           "seed_{}".format(genet_seed), 'step_64800',
                           'aurora_summary.csv') for save_dir in save_dirs])
         # [os.path.join(save_dir, 'genet_cubic', 'bo_{}'.format(bo), 'step_64800','aurora_summary.csv') for save_dir in save_dirs])
         genet_cubic_rewards.append(np.mean(tmp_rewards))
+        genet_cubic_tputs.append(np.mean(tmp_tputs))
+        genet_cubic_lats.append(np.mean(tmp_lats))
+        genet_cubic_losses.append(np.mean(tmp_losses))
 
-        tmp_rewards = load_cc_rewards_across_traces(
+        tmp_rewards, tmp_tputs, tmp_lats, tmp_losses = load_summaries_across_traces(
             [os.path.join(save_dir, 'genet_bbr_old', "seed_{}".format(genet_seed),
                           'bo_{}'.format(bo),  'step_64800',
                           'aurora_summary.csv') for save_dir in save_dirs])
         # [os.path.join(save_dir, 'genet_bbr', 'bo_{}'.format(bo), 'step_64800', 'aurora_summary.csv') for save_dir in save_dirs])
         genet_bbr_old_rewards.append(np.mean(tmp_rewards))
+        genet_bbr_old_tputs.append(np.mean(tmp_tputs))
+        genet_bbr_old_lats.append(np.mean(tmp_lats))
+        genet_bbr_old_losses.append(np.mean(tmp_losses))
 
     udr1_avg_rewards = []
     udr2_avg_rewards = []
@@ -105,6 +126,28 @@ def main():
     udr1_reward_errs = []
     udr2_reward_errs = []
     udr3_reward_errs = []
+
+    udr1_avg_tputs = []
+    udr2_avg_tputs = []
+    udr3_avg_tputs = []
+    udr1_tput_errs = []
+    udr2_tput_errs = []
+    udr3_tput_errs = []
+
+    udr1_avg_lats = []
+    udr2_avg_lats = []
+    udr3_avg_lats = []
+    udr1_lat_errs = []
+    udr2_lat_errs = []
+    udr3_lat_errs = []
+
+    udr1_avg_losses = []
+    udr2_avg_losses = []
+    udr3_avg_losses = []
+    udr1_loss_errs = []
+    udr2_loss_errs = []
+    udr3_loss_errs = []
+
     # udr_steps = [0, 43200, 100800, 158400, 216000,
     #              259200, 316800, 374400, 432000, 48900]
     udr_steps = list(range(64800, 2000000, 64800))
@@ -114,24 +157,45 @@ def main():
         udr1_avg_rewards_across_models = []
         udr2_avg_rewards_across_models = []
         udr3_avg_rewards_across_models = []
+
+        udr1_avg_tputs_across_models = []
+        udr2_avg_tputs_across_models = []
+        udr3_avg_tputs_across_models = []
+
+        udr1_avg_lats_across_models = []
+        udr2_avg_lats_across_models = []
+        udr3_avg_lats_across_models = []
+
+        udr1_avg_losses_across_models = []
+        udr2_avg_losses_across_models = []
+        udr3_avg_losses_across_models = []
         for seed in tqdm(range(10, 110, 10)):
-            udr1_rewards = load_cc_rewards_across_traces([os.path.join(
+            udr1_rewards, udr1_tputs, udr1_lats, udr1_losses = load_summaries_across_traces([os.path.join(
                 save_dir, "udr1", "seed_{}".format(seed), "step_{}".format(step),
                 'aurora_summary.csv') for save_dir in save_dirs])
             if udr1_rewards:
                 udr1_avg_rewards_across_models.append(np.mean(udr1_rewards))
+                udr1_avg_tputs_across_models.append(np.mean(udr1_tputs))
+                udr1_avg_lats_across_models.append(np.mean(udr1_lats))
+                udr1_avg_losses_across_models.append(np.mean(udr1_losses))
 
-            udr2_rewards = load_cc_rewards_across_traces([os.path.join(
+            udr2_rewards, udr2_tputs, udr2_lats, udr2_losses = load_summaries_across_traces([os.path.join(
                 save_dir, "udr2", "seed_{}".format(seed), "step_{}".format(step),
                 'aurora_summary.csv') for save_dir in save_dirs])
             if udr2_rewards:
                 udr2_avg_rewards_across_models.append(np.mean(udr2_rewards))
+                udr2_avg_tputs_across_models.append(np.mean(udr2_tputs))
+                udr2_avg_lats_across_models.append(np.mean(udr2_lats))
+                udr2_avg_losses_across_models.append(np.mean(udr2_losses))
 
-            udr3_rewards = load_cc_rewards_across_traces([os.path.join(
+            udr3_rewards, udr3_tputs, udr3_lats, udr3_losses = load_summaries_across_traces([os.path.join(
                 save_dir, "udr3",  "seed_{}".format(seed), "step_{}".format(step),
                 'aurora_summary.csv') for save_dir in save_dirs])
             if udr3_rewards:
                 udr3_avg_rewards_across_models.append(np.mean(udr3_rewards))
+                udr3_avg_tputs_across_models.append(np.mean(udr3_tputs))
+                udr3_avg_lats_across_models.append(np.mean(udr3_lats))
+                udr3_avg_losses_across_models.append(np.mean(udr3_losses))
         udr1_avg_rewards.append(np.mean(udr1_avg_rewards_across_models))
         udr2_avg_rewards.append(np.mean(udr2_avg_rewards_across_models))
         udr3_avg_rewards.append(np.mean(udr3_avg_rewards_across_models))
