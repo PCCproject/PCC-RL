@@ -246,8 +246,8 @@ class Genet:
                     nproc=self.nproc, save_dir=training_save_dir, exp_name="",
                     seed=self.seed, tot_step=int(7.2e4),
                     config_file=self.cur_config_file, model_path=self.model_path)
-            # if self.validation:
-            #     cmd += " --validation"
+            if self.validation:
+                cmd += " --validation"
             subprocess.run(cmd.split(' '))
             self.model_path = latest_model_from(training_save_dir)
             print(self.model_path)
