@@ -292,13 +292,7 @@ def generate_trace(duration_range: Tuple[float, float],
 
 
 def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
-    config = read_json_file(config_file)
     traces = []
-    weight_sum = 0
-    for env_config in config:
-        weight_sum += env_config['weight']
-    assert round(weight_sum, 1) == 1.0
-
     for _ in range(tot_trace_cnt):
         trace = generate_trace_from_config_file(config_file, duration)
         traces.append(trace)
@@ -486,68 +480,6 @@ def main():
             tr.dump(os.path.join(args.save_dir, str(value[1]),
                                  'trace{:04d}.json'.format(i)))
 
-# def generate_bw_delay_series(d_bw: float, d_delay, T_s: float,
-#                              duration: float, min_tp: float, max_tp: float,
-#                              min_delay: float, max_delay: float):
-#     timestamps = []
-#     bandwidths = []
-#     delays = []
-#     round_digit = 5
-#     # if min_tp != max_tp:
-#     #     target_bw = 0.6 #
-#     # else:
-#     target_bw = round(np.exp(float(np.random.uniform(
-#             np.log(min_tp), np.log(max_tp), 1))), round_digit)
-#
-#     bw_val = round(np.exp(float(np.random.uniform(
-#         np.log(min_tp), np.log(max_tp), 1))), round_digit)
-#     if min_delay != max_delay:
-#         target_delay = 5
-#     else:
-#         target_delay = round(float(np.random.uniform(min_delay, max_delay, 1)), round_digit)
-#     delay_val = round(float(np.random.uniform(
-#         min_delay, max_delay, 1)), round_digit)
-#     ts = 0
-#     bw_change_ts = 0
-#     delay_change_ts = 0
-#
-#     # hard code default values
-#     # if min_tp != max_tp and d_bw == 0:
-#     #     target_bw = 0.6
-#     # if min_delay != max_delay and d_delay == 0:
-#     #     target_delay = 5
-#     # handle T_s = 0 is wrong
-#     # if T_s == 0:
-#     #     target_delay = 5
-#     #     target_bw = 0.6
-#
-#     while ts < duration:
-#         if T_s !=0 and ts - bw_change_ts >= T_s:
-#             new_bw = bw_val * (1 + float(np.random.normal(0, d_bw, 1)))
-#             bw_val = max(min_tp, new_bw)
-#             bw_change_ts = ts
-#
-#         if T_s != 0 and ts - delay_change_ts >= T_s:
-#             new_delay = delay_val * \
-#                 (1 + float(np.random.normal(0, d_delay, 1)))
-#             delay_val = min(max(min_delay, new_delay), max_delay)
-#             delay_change_ts = ts
-#
-#         ts = round(ts, round_digit)
-#         timestamps.append(ts)
-#         bandwidths.append(bw_val)
-#         delays.append(delay_val)
-#         ts += 0.1
-#     timestamps.append(round(duration, round_digit))
-#     bandwidths.append(bw_val)
-#     delays.append(delay_val)
-#
-#     bw_mean = np.mean(np.array(bandwidths))
-#     bandwidths = [round(float(val / bw_mean * target_bw), round_digit) for val in bandwidths]
-#     delay_mean = np.mean(np.array(delays))
-#     delays = [round(float(val / delay_mean * target_delay), round_digit) for val in delays]
-#     return timestamps, bandwidths, delays
-
 
 def generate_bw_delay_series(T_s: float, duration: float,
                              min_bw_lower_bnd: float, min_bw_upper_bnd: float,
@@ -614,8 +546,6 @@ def generate_trace_from_config_file(config_file: str, duration: int = 30) -> Tra
                 duration_min, duration_max = duration, duration
 
             # used by bandwidth generation
-            # d_bw_min, d_bw_max = env_config['d_bw'] if 'd_bw' in env_config else (0, 0)
-            # d_delay_min, d_delay_max = env_config['d_delay'] if 'd_delay' in env_config else (0, 0)
             delay_noise_min, delay_noise_max = env_config['delay_noise'] if 'delay_noise' in env_config else (0, 0)
             T_s_min, T_s_max = env_config['T_s'] if 'T_s' in env_config else (1, 1)
             return generate_trace((duration_min, duration_max),

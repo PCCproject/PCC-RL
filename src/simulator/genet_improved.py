@@ -43,6 +43,8 @@ def parse_args():
                         help='Congestion control rule based method.')
     parser.add_argument('--nproc', type=int, default=2, help='number of '
                         'workers used in training.')
+    parser.add_argument('--validation', action='store_true',
+                        help='specify to enable validation.')
 
     return parser.parse_args()
 
@@ -176,7 +178,7 @@ class Genet:
 
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, model_path: str,
-                 nproc: int, seed: int = 42):
+                 nproc: int, seed: int = 42, validation: bool = False):
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -201,6 +203,7 @@ class Genet:
         self.model_path = model_path  # keep track of the latest model path
         self.start_model_path = model_path
         self.nproc = nproc
+        self.validation = validation
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -243,6 +246,8 @@ class Genet:
                     nproc=self.nproc, save_dir=training_save_dir, exp_name="",
                     seed=self.seed, tot_step=int(7.2e4),
                     config_file=self.cur_config_file, model_path=self.model_path)
+            # if self.validation:
+            #     cmd += " --validation"
             subprocess.run(cmd.split(' '))
             self.model_path = latest_model_from(training_save_dir)
             print(self.model_path)
@@ -360,7 +365,7 @@ def main():
     else:
         raise ValueError
     genet = Genet(args.config_file, args.save_dir, black_box_function,
-                  heuristic, args.model_path, args.nproc)
+                  heuristic, args.model_path, args.nproc, seed=args.seed, validation=args.validation)
     genet.train(args.bo_rounds)
 
 
