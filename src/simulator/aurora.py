@@ -26,7 +26,7 @@ from stable_baselines.common.policies import FeedForwardPolicy
 from simulator import network
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
-from common.utils import set_tf_loglevel, pcc_aurora_reward
+from common.utils import set_tf_loglevel, pcc_aurora_reward, read_json_file
 from plot_scripts.plot_packet_log import PacketLog, plot
 from plot_scripts.plot_time_series import plot as plot_simulation_log
 from udt_plugins.testing.loaded_agent import LoadedModel
@@ -307,6 +307,13 @@ class Aurora():
         # generate validation traces
         validation_traces = generate_traces(
             config_file, 20, duration=30)
+        # config = read_json_file(config_file)[-1]
+        # validation_traces = [generate_trace(config['duration'],
+        #                      config['bandwidth_lower_bound'],
+        #                      config['bandwidth_upper_bound'], config['delay'],
+        #                      config['loss'], config['queue'], config['T_s'],
+        #                      config['delay_noise']) for _ in range(20)]
+
         env = gym.make('PccNs-v0', traces=training_traces,
                        train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
         env.seed(self.seed)
