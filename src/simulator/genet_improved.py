@@ -45,6 +45,9 @@ def parse_args():
                         'workers used in training.')
     parser.add_argument('--validation', action='store_true',
                         help='specify to enable validation.')
+    parser.add_argument('--type', type=str, choices=('bo', 'random'),
+                        default='bo', help='use bo or random (without '
+                        'GaussianProcessRegressor) configuraiton selection')
 
     return parser.parse_args()
 
@@ -169,16 +172,21 @@ class Genet:
 
     Args
         config_file: configuration file which contains the large ranges of all parameters.
+        save_dir: a path to save results.
         black_box_function: a function to maximize reward_diff = heuristic_reward - rl_reward.
         heuristic: an object which is the abstraction of a rule-based method.
         model_path: path to a starting model.
         nproc: number of processes used in training.
         seed: random seed.
+        validation: a boolean flag to enable validation in training.
+        random_config_sample: a boolean flag to enable random configuration
+                              exploration instead of using BO.
     """
 
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, model_path: str,
-                 nproc: int, seed: int = 42, validation: bool = False):
+                 nproc: int, seed: int = 42, validation: bool = False,
+                 random_config_sample: bool = False):
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -204,6 +212,12 @@ class Genet:
         self.start_model_path = model_path
         self.nproc = nproc
         self.validation = validation
+        if  random_config_sample:
+            self.n_init_pts = 15
+            self.n_iter = 0
+        else:
+            self.n_init_pts = 10
+            self.n_iter = 5
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -230,7 +244,8 @@ class Genet:
             logger = JSONLogger(path=os.path.join(
                 self.save_dir, "bo_{}_logs.json".format(i)))
             optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
-            optimizer.maximize(init_points=10, n_iter=5, kappa=20, xi=0.1)
+            optimizer.maximize(init_points=self.n_init_pts, n_iter=self.n_iter,
+                               kappa=20, xi=0.1)
             best_param = optimizer.max
             print(best_param)
             self.rand_ranges.add_ranges([best_param['params']])
@@ -365,7 +380,9 @@ def main():
     else:
         raise ValueError
     genet = Genet(args.config_file, args.save_dir, black_box_function,
-                  heuristic, args.model_path, args.nproc, seed=args.seed, validation=args.validation)
+                  heuristic, args.model_path, args.nproc, seed=args.seed,
+                  validation=args.validation,
+                  random_config_sample=(args.type == 'bo'))
     genet.train(args.bo_rounds)
 
 
