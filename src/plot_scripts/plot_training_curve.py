@@ -42,7 +42,7 @@ def load_summaries_across_traces(log_files: List[str]) -> Tuple[List[float], Lis
         summary = load_summary(log_file)
         rewards.append(summary['pkt_level_reward'])
         tputs.append(summary['average_throughput'])
-        lats.append(summary['average_latency'])
+        lats.append(summary['average_latency'] * 1000)
         losses.append(summary['loss_rate'])
     return rewards, tputs, lats, losses
 

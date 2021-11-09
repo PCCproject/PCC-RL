@@ -382,7 +382,7 @@ def main():
     genet = Genet(args.config_file, args.save_dir, black_box_function,
                   heuristic, args.model_path, args.nproc, seed=args.seed,
                   validation=args.validation,
-                  random_config_sample=(args.type == 'bo'))
+                  random_config_sample=(args.type == 'random'))
     genet.train(args.bo_rounds)
 
 
