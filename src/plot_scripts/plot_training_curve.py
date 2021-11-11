@@ -4,6 +4,8 @@ import os
 from typing import List, Tuple
 
 from tqdm import tqdm
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -93,13 +95,13 @@ def main():
         genet_bbr_avg_lats_across_seeds, genet_bbr_old_avg_lats_across_seeds, genet_cubic_avg_lats_across_seeds = [], [], []
 
         genet_bbr_avg_losses_across_seeds, genet_bbr_old_avg_losses_across_seeds, genet_cubic_avg_losses_across_seeds = [], [], []
+        steps.append(bo * 72000)
         for genet_seed in range(10, 50, 10):
             # genet_seed = 42
             tmp_rewards, tmp_tputs, tmp_lats, tmp_losses = load_summaries_across_traces(
                 [os.path.join(save_dir, 'genet_bbr', 'bo_{}'.format(bo),
                               "seed_{}".format(genet_seed), 'step_64800',
                               'aurora_summary.csv') for save_dir in save_dirs])
-            steps.append(bo * 72000)
             genet_bbr_avg_rewards_across_seeds.append(np.mean(np.array(tmp_rewards)))
             genet_bbr_avg_tputs_across_seeds.append(np.mean(np.array(tmp_tputs)))
             genet_bbr_avg_lats_across_seeds.append(np.mean(np.array(tmp_lats)))
@@ -301,12 +303,16 @@ def main():
     axes[0].axhline(y=np.mean(np.array(bbr_rewards)), ls="--", label="BBR")
     axes[0].axhline(y=np.mean(np.array(bbr_old_rewards)), ls="-.", label="BBR old")
     axes[0].axhline(y=np.mean(np.array(cubic_rewards)), ls=":", label="Cubic")
+
+    assert len(steps) == len(genet_bbr_rewards)
     axes[0].plot(steps, genet_bbr_rewards, "-.", label='GENET_BBR')
     axes[0].fill_between(steps, genet_bbr_low_bnd, genet_bbr_up_bnd, color='r', alpha=0.1)
 
+    assert len(steps) == len(genet_cubic_rewards)
     axes[0].plot(steps, genet_cubic_rewards, "-", label='GENET_Cubic')
     axes[0].fill_between(steps, genet_cubic_low_bnd, genet_cubic_up_bnd, color='r', alpha=0.1)
 
+    assert len(steps) == len(genet_bbr_old_rewards)
     axes[0].plot(steps, genet_bbr_old_rewards, "-", label='GENET_BBR_old')
     axes[0].fill_between(steps, genet_bbr_old_low_bnd, genet_bbr_old_up_bnd, color='r', alpha=0.1)
 
@@ -332,6 +338,8 @@ def main():
     axes[1].axhline(y=np.mean(np.array(bbr_tputs)), ls="--", label="BBR")
     axes[1].axhline(y=np.mean(np.array(bbr_old_tputs)), ls="-.", label="BBR old")
     axes[1].axhline(y=np.mean(np.array(cubic_tputs)), ls=":", label="Cubic")
+
+    assert len(steps) == len(genet_bbr_tputs)
     axes[1].plot(steps, genet_bbr_tputs, "-.", label='GENET_BBR')
     axes[1].fill_between(steps, genet_bbr_tputs_low_bnd, genet_bbr_tputs_up_bnd, color='r', alpha=0.1)
 

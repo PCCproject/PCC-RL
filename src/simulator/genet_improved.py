@@ -319,7 +319,7 @@ def black_box_function(bandwidth_lower_bound: float,
             rl_method_rewards.append(rl_pkt_level_reward)
         print("rl used {}s".format(time.time() - t_start))
 
-    gap = float(np.mean(heuristic_rewards) - np.mean(rl_method_rewards))
+    gap = float(np.mean(np.array(heuristic_rewards)) - np.mean(np.array(rl_method_rewards)))
     return gap
 
 
@@ -360,6 +360,7 @@ def to_csv(config_file):
 
 def save_args(args):
     """Write arguments to a log file."""
+    os.makedirs(args.save_dir, exist_ok=True)
     if args.save_dir and os.path.exists(args.save_dir):
         write_json_file(os.path.join(args.save_dir, 'cmd.json'), args.__dict__)
 
