@@ -273,12 +273,10 @@ class Cubic:
                 break
         if f_sim_log:
             f_sim_log.close()
-        assert senders[0].last_ack_ts is not None and senders[0].first_ack_ts is not None
-        assert senders[0].last_sent_ts is not None and senders[0].first_sent_ts is not None
-        avg_sending_rate = senders[0].tot_sent / (senders[0].last_sent_ts - senders[0].first_sent_ts)
-        tput = senders[0].tot_acked / (senders[0].last_ack_ts - senders[0].first_ack_ts)
-        avg_lat = senders[0].cur_avg_latency
-        loss = 1 - senders[0].tot_acked / senders[0].tot_sent
+        avg_sending_rate = senders[0].avg_sending_rate
+        tput = senders[0].avg_throughput
+        avg_lat = senders[0].avg_latency
+        loss = senders[0].pkt_loss_rate
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
         if save_dir:

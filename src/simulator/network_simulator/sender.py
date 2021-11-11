@@ -173,5 +173,28 @@ class Sender:
     def debug_print(self):
         pass
 
+    @property
+    def avg_sending_rate(self):
+        """Average sending rate in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_sent / (self.last_sent_ts - self.first_sent_ts)
+
+    @property
+    def avg_throughput(self):
+        """Average throughput in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_acked / (self.last_ack_ts - self.first_ack_ts)
+
+    @property
+    def avg_latency(self):
+        """Average latency in second."""
+        return self.cur_avg_latency
+
+    @property
+    def pkt_loss_rate(self):
+        """Packet loss rate in one connection session."""
+        return 1 - self.tot_acked / self.tot_sent
 
 SenderType = TypeVar('SenderType', bound=Sender)

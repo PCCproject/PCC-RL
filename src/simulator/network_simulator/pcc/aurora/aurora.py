@@ -366,12 +366,10 @@ class Aurora():
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
 
-        assert env.senders[0].last_ack_ts is not None and env.senders[0].first_ack_ts is not None
-        assert env.senders[0].last_sent_ts is not None and env.senders[0].first_sent_ts is not None
-        avg_sending_rate = env.senders[0].tot_sent / (env.senders[0].last_sent_ts - env.senders[0].first_sent_ts)
-        tput = env.senders[0].tot_acked / (env.senders[0].last_ack_ts - env.senders[0].first_ack_ts)
-        avg_lat = env.senders[0].cur_avg_latency
-        loss = 1 - env.senders[0].tot_acked / env.senders[0].tot_sent
+        avg_sending_rate = env.senders[0].avg_sending_rate
+        tput = env.senders[0].avg_throughput
+        avg_lat = env.senders[0].avg_latency
+        loss = env.senders[0].pkt_loss_rate
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
         if save_dir:
