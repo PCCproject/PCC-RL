@@ -1,8 +1,8 @@
-from typing import TypeVar
+from typing import List, TypeVar, Tuple
 
 from common import sender_obs
 from simulator.network_simulator import network, packet
-from simulator.network_simulator.constants import BYTES_PER_PACKET
+from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 
 
 class Sender:
@@ -54,6 +54,13 @@ class Sender:
         self.event_count = 0
         self.got_data = True
 
+        # variables to track binwise measurements
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
+        self.bin_size = 500 # ms
+
     def can_send_packet(self) -> bool:
         return True
 
@@ -69,6 +76,9 @@ class Sender:
         if self.first_sent_ts is None:
             self.first_sent_ts = pkt.ts
         self.last_sent_ts = pkt.ts
+
+        bin_id = int((pkt.ts - self.first_sent_ts) * 1000 / self.bin_size)
+        self.bin_bytes_sent[bin_id] = self.bin_bytes_sent.get(bin_id, 0) + pkt.pkt_size
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         self.acked += 1
@@ -95,6 +105,12 @@ class Sender:
 
         self.rtt_samples.append(pkt.rtt)
         self.queue_delay_samples.append(pkt.queue_delay)
+
+        self.rtt_samples.append(pkt.rtt)
+        bin_id = int((pkt.ts - self.first_ack_ts) * 1000 / self.bin_size)
+        self.bin_bytes_acked[bin_id] = self.bin_bytes_acked.get(bin_id, 0) + pkt.pkt_size
+        self.lat_ts.append(pkt.ts)
+        self.lats.append(pkt.rtt)
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
@@ -132,15 +148,6 @@ class Sender:
             queue_delay_samples=self.queue_delay_samples,
             packet_size=BYTES_PER_PACKET
         )
-
-    # def print_debug(self):
-    #     print("Sender:")
-    #     print("Obs: %s" % str(self.get_obs()))
-    #     print("Rate: %f" % self.rate)
-    #     print("Sent: %d" % self.sent)
-    #     print("Acked: %d" % self.acked)
-    #     print("Lost: %d" % self.lost)
-    #     print("Min Latency: %s" % str(self.min_latency))
 
     def reset_obs(self):
         self.sent = 0
@@ -196,5 +203,29 @@ class Sender:
     def pkt_loss_rate(self):
         """Packet loss rate in one connection session."""
         return 1 - self.tot_acked / self.tot_sent
+
+    @property
+    def bin_tput(self) -> Tuple[List[float], List[float]]:
+        tput_ts = []
+        tput = []
+        for bin_id in sorted(self.bin_bytes_acked):
+            tput_ts.append(bin_id * self.bin_size / 1000)
+            tput.append(
+                self.bin_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
+        return tput_ts, tput
+
+    @property
+    def bin_sending_rate(self) -> Tuple[List[float], List[float]]:
+        sending_rate_ts = []
+        sending_rate = []
+        for bin_id in sorted(self.bin_bytes_sent):
+            sending_rate_ts.append(bin_id * self.bin_size / 1000)
+            sending_rate.append(
+                self.bin_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
+        return sending_rate_ts, sending_rate
+
+    @property
+    def latencies(self) -> Tuple[List[float], List[float]]:
+        return self.lat_ts, self.lats
 
 SenderType = TypeVar('SenderType', bound=Sender)
