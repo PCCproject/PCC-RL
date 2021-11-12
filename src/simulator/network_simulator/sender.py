@@ -110,7 +110,7 @@ class Sender:
         bin_id = int((pkt.ts - self.first_ack_ts) * 1000 / self.bin_size)
         self.bin_bytes_acked[bin_id] = self.bin_bytes_acked.get(bin_id, 0) + pkt.pkt_size
         self.lat_ts.append(pkt.ts)
-        self.lats.append(pkt.rtt)
+        self.lats.append(pkt.rtt * 1000)
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
         self.lost += 1
@@ -211,7 +211,7 @@ class Sender:
         for bin_id in sorted(self.bin_bytes_acked):
             tput_ts.append(bin_id * self.bin_size / 1000)
             tput.append(
-                self.bin_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
+                self.bin_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
         return tput_ts, tput
 
     @property
@@ -221,7 +221,7 @@ class Sender:
         for bin_id in sorted(self.bin_bytes_sent):
             sending_rate_ts.append(bin_id * self.bin_size / 1000)
             sending_rate.append(
-                self.bin_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size / 1e6)
+                self.bin_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
         return sending_rate_ts, sending_rate
 
     @property

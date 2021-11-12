@@ -7,7 +7,7 @@ import numpy as np
 import tqdm
 
 from common.utils import pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog, plot
+from plot_scripts.plot_packet_log import plot
 from plot_scripts.plot_time_series import plot as plot_simulation_log
 from simulator.network_simulator.constants import (BITS_PER_BYTE, BYTES_PER_PACKET, MIN_CWND, TCP_INIT_CWND)
 from simulator.network_simulator.link import Link
@@ -279,6 +279,7 @@ class Cubic:
         loss = senders[0].pkt_loss_rate
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        pkt_level_original_reward = pcc_aurora_reward(tput, avg_lat, loss)
         if save_dir:
             with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w') as f:
                 summary_writer = csv.writer(f, lineterminator='\n')
@@ -301,11 +302,14 @@ class Cubic:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth', 'cwnd'])
                 pkt_logger.writerows(net.pkt_log)
-        if self.record_pkt_log and plot_flag:
-            pkt_log = PacketLog.from_log(net.pkt_log)
-            plot(trace, pkt_log, save_dir, self.cc_name)
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
+            plot(trace, *senders[0].bin_tput, *senders[0].bin_sending_rate,
+                 tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 *senders[0].latencies, avg_lat * 1000, loss,
+                 pkt_level_original_reward, pkt_level_reward, save_dir,
+                 self.cc_name)
         return np.mean(rewards), pkt_level_reward
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str],
