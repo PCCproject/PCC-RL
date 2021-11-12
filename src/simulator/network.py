@@ -279,7 +279,7 @@ class Network():
         # else:  # latency decrease
         #     self.senders[0].start_stage = False
         #     # self.senders[0].max_tput = max(self.senders[0].recv_rate, self.senders[0].max_tput)
-        return reward * REWARD_SCALE
+        return reward # * REWARD_SCALE
 
 
 class Sender():
