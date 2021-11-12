@@ -232,18 +232,16 @@ class PacketLog():
         return self.avg_latency
 
 
-def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
+def plot(trace: Union[Trace, None], throughput_ts: List[float],
+         throughput: List[float], sending_rate_ts: List[float],
+         sending_rate: List[float], avg_tput: float, avg_sending_rate: float,
+         rtt_ts: List[float], rtt: List[float], avg_lat: float, pkt_loss: float,
+         reward: float, normalized_reward: float, save_dir: str, cc: str):
     fig, axes = plt.subplots(2, 1, figsize=(6, 8))
-    sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
-    throughput_ts, throughput = pkt_log.get_throughput()
-    rtt_ts, rtt = pkt_log.get_rtt()
-    queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
-    loss = pkt_log.get_loss_rate()
-    # print(throughput[:10])
     axes[0].plot(throughput_ts, throughput, "-o", ms=2,  # drawstyle='steps-post',
-                 label='throughput, avg {:.3f}Mbps'.format(pkt_log.get_avg_throughput()))
+                 label='throughput, avg {:.3f}Mbps'.format(avg_tput))
     axes[0].plot(sending_rate_ts, sending_rate, "-o", ms=2,  # drawstyle='steps-post',
-                 label='sending rate, avg {:.3f}Mbps'.format(pkt_log.get_avg_sending_rate()))
+                 label='sending rate, avg {:.3f}Mbps'.format(avg_sending_rate))
     if trace is not None:
         axes[0].plot(trace.timestamps, trace.bandwidths, "-o", ms=2,  # drawstyle='steps-post',
                      label='bandwidth, avg {:.3f}Mbps'.format(np.mean(trace.bandwidths)))
@@ -261,15 +259,10 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     axes[0].set_ylabel("Rate(Mbps)")
     axes[0].set_xlim(0, )
     axes[0].set_ylim(0, )
-    reward = pkt_log.get_reward("", None)
-    normalized_reward = reward
-    if trace is not None:
-        normalized_reward = pkt_log.get_reward("", trace)
     axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
         cc, reward, normalized_reward))
 
-    axes[1].plot(rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(
-        pkt_log.get_avg_latency()))
+    axes[1].plot(rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(avg_lat))
     # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
     if trace is not None:
         axes[1].plot(rtt_ts, np.ones_like(rtt) * 2 * trace.min_delay, c='C2',
@@ -278,7 +271,7 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     axes[1].set_xlabel("Time(s)")
     axes[1].set_ylabel("Latency(ms)")
     axes[1].set_title('{} loss={:.3f}, rand loss={:.3f}, queue={}, lat_noise={:.3f}'.format(
-        cc, loss, trace_random_loss, queue_size, delay_noise))
+        cc, pkt_loss, trace_random_loss, queue_size, delay_noise))
     axes[1].set_xlim(0, )
     # axes[1].set_ylim(0, )
 
@@ -286,6 +279,7 @@ def plot(trace: Union[Trace, None], pkt_log: PacketLog, save_dir: str, cc: str):
     if save_dir:
         plt.savefig(os.path.join(save_dir, 'binwise_{}_plot.jpg'.format(cc)))
     plt.close()
+
 
 def main():
     args = parse_args()
@@ -302,8 +296,20 @@ def main():
             continue
         pkt_log = PacketLog.from_log_file(log_file, 500)
         cc = os.path.splitext(os.path.basename(log_file))[0].split('_')[0]
-        plot(trace, pkt_log, args.save_dir, cc)
 
+        sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
+        throughput_ts, throughput = pkt_log.get_throughput()
+        rtt_ts, rtt = pkt_log.get_rtt()
+        # queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
+        pkt_loss = pkt_log.get_loss_rate()
+        avg_tput = pkt_log.get_avg_throughput()
+        avg_sending_rate = pkt_log.get_avg_sending_rate()
+        avg_lat = pkt_log.get_avg_latency()
+        reward = pkt_log.get_reward("", None)
+        normalized_reward = pkt_log.get_reward("", trace)
+        plot(trace, throughput_ts, throughput, sending_rate_ts, sending_rate,
+             avg_tput, avg_sending_rate, rtt_ts, rtt, avg_lat, pkt_loss,
+             reward, normalized_reward, args.save_dir, cc)
 
         # if log_idx == 0:
         #     print("{},{},{},{},{},".format(os.path.dirname(log_file),
@@ -311,7 +317,6 @@ def main():
         # else:
         #     print("{},{},{},{},".format(np.mean(throughput),
         #                                 np.mean(rtt), loss, reward), end=',')
-
 
 
 if __name__ == '__main__':
