@@ -105,7 +105,7 @@ class Network:
                                 [self.cur_time, pkt.pkt_id, 'lost',
                                  pkt.pkt_size, pkt.cur_latency, pkt.queue_delay,
                                  self.links[0].pkt_in_queue,
-                                 sender.pacing_rate * BYTES_PER_PACKET,
+                                 sender.pacing_rate * BITS_PER_BYTE,
                                  self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
                                  sender.cwnd, sender.rto])
                     else:
@@ -120,9 +120,8 @@ class Network:
                                 [self.cur_time, pkt.pkt_id, 'acked',
                                  pkt.pkt_size, pkt.cur_latency,
                                  pkt.queue_delay, self.links[0].pkt_in_queue,
-                                 sender.pacing_rate * BYTES_PER_PACKET,
-                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
-                                 sender.cwnd, sender.rto])
+                                 sender.pacing_rate * BITS_PER_BYTE,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE])
                 else:  # in acklink
                     # comment out to save disk usage
                     # if self.record_pkt_log:
@@ -130,7 +129,7 @@ class Network:
                     #         [self.cur_time, pkt.pkt_id, 'arrived',
                     #          pkt.pkt_size, pkt.cur_latency, pkt.queue_delay,
                     #          self.links[0].pkt_in_queue,
-                    #          sender.pacing_rate * BYTES_PER_PACKET,
+                    #          sender.pacing_rate * BITS_PER_BYTE,
                     #          self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
                     #          sender.cwnd, sender.rto])
                     link_prop_latency = self.links[pkt.next_hop].get_cur_propagation_latency(
@@ -155,9 +154,8 @@ class Network:
                                 [self.cur_time, pkt.pkt_id, 'sent',
                                  pkt.pkt_size, pkt.cur_latency,
                                  pkt.queue_delay, self.links[0].pkt_in_queue,
-                                 sender.pacing_rate * BYTES_PER_PACKET,
-                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,
-                                 sender.cwnd, sender.rto])
+                                 sender.pacing_rate * BITS_PER_BYTE,
+                                 self.links[0].get_bandwidth(self.cur_time) * BYTES_PER_PACKET * BITS_PER_BYTE,])
                         push_new_event = True
                         sender.schedule_send()
                     else:

@@ -285,8 +285,7 @@ class Aurora():
                              "packet_size", 'min_lat', 'sent_latency_inflation',
                              'latency_ratio', 'send_ratio',
                              'bandwidth', "queue_delay",
-                             'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto", "recv_ratio", "srtt"])
+                             'packet_in_queue', 'queue_size', "recv_ratio", "srtt"])
         else:
             f_sim_log = None
             writer = None
@@ -325,7 +324,7 @@ class Aurora():
                 trace.avg_delay * 2 / 1e3)
             if save_dir and writer:
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].pacing_rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
+                    env.net.get_cur_time(), round(env.senders[0].pacing_rate * BITS_PER_BYTE, 0),
                     round(send_rate, 0), round(throughput, 0), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
@@ -369,12 +368,14 @@ class Aurora():
         pkt_level_original_reward = pcc_aurora_reward(tput, avg_lat, loss)
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
-            plot(trace, *env.senders[0].bin_tput, *env.senders[0].bin_sending_rate,
-                 tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+            bin_tput_ts, bin_tput = env.senders[0].bin_tput
+            bin_sending_rate_ts, bin_sending_rate = env.senders[0].bin_sending_rate
+            lat_ts, lat = env.senders[0].latencies
+            plot(trace, bin_tput_ts, bin_tput, bin_sending_rate_ts,
+                 bin_sending_rate, tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
                  avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
-                 *env.senders[0].latencies, avg_lat * 1000, loss,
-                 pkt_level_original_reward, pkt_level_reward, save_dir,
-                 self.cc_name)
+                 lat_ts, lat, avg_lat * 1000, loss, pkt_level_original_reward,
+                 pkt_level_reward, save_dir, self.cc_name)
         if save_dir:
             with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w', 1) as f:
                 summary_writer = csv.writer(f, lineterminator='\n')

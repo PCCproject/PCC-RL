@@ -281,6 +281,22 @@ def plot(trace: Union[Trace, None], throughput_ts: List[float],
     plt.close()
 
 
+def plot_pkt_log(trace, pkt_log, save_dir, cc):
+    sending_rate_ts, sending_rate = pkt_log.get_sending_rate()
+    throughput_ts, throughput = pkt_log.get_throughput()
+    rtt_ts, rtt = pkt_log.get_rtt()
+    # queue_delay_ts, queue_delay = pkt_log.get_queue_delay()
+    pkt_loss = pkt_log.get_loss_rate()
+    avg_tput = pkt_log.get_avg_throughput()
+    avg_sending_rate = pkt_log.get_avg_sending_rate()
+    avg_lat = pkt_log.get_avg_latency()
+    reward = pkt_log.get_reward("", None)
+    normalized_reward = pkt_log.get_reward("", trace)
+    plot(trace, throughput_ts, throughput, sending_rate_ts, sending_rate,
+         avg_tput, avg_sending_rate, rtt_ts, rtt, avg_lat, pkt_loss, reward,
+         normalized_reward, save_dir, cc)
+
+
 def main():
     args = parse_args()
     if args.trace_file and args.trace_file.endswith('.json'):
