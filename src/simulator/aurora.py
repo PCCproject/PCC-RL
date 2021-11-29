@@ -122,7 +122,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
                 delimiter='\t', lineterminator='\n')
             self.val_log_writer.writerow(
-                ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
+                ['n_calls', 'num_timesteps', 'mean_validation_reward', 'mean_validation_pkt_level_reward', 'loss',
                  'throughput', 'latency', 'sending_rate', 'tot_t_used(min)',
                  'val_t_used(min)', 'train_t_used(min)'])
 
@@ -174,6 +174,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 avg_tr_min_rtt = []
                 avg_tr_loss = []
                 avg_rewards = []
+                avg_pkt_level_rewards = []
                 avg_losses = []
                 avg_tputs = []
                 avg_delays = []
@@ -184,25 +185,21 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     avg_tr_bw.append(val_trace.avg_bw)
                     avg_tr_min_rtt.append(val_trace.avg_bw)
                     ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
+                        send_rate_list, action_list, obs_list, mi_list, pkt_level_reward = self.aurora._test(
                             val_trace, self.log_dir)
-                    # pktlog = PacketLog.from_log(pkt_log)
                     avg_rewards.append(np.mean(np.array(val_rewards)))
                     avg_losses.append(np.mean(np.array(loss_list)))
                     avg_tputs.append(float(np.mean(np.array(tput_list))))
                     avg_delays.append(np.mean(np.array(delay_list)))
                     avg_send_rates.append(
                         float(np.mean(np.array(send_rate_list))))
-                    # avg_rewards.append(pktlog.get_reward())
-                    # avg_losses.append(pktlog.get_loss_rate())
-                    # avg_tputs.append(np.mean(pktlog.get_throughput()[1]))
-                    # avg_delays.append(np.mean(pktlog.get_rtt()[1]))
-                    # avg_send_rates.append(np.mean(pktlog.get_sending_rate()[1]))
+                    avg_pkt_level_rewards.append(pkt_level_reward)
                 cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
                         [float(self.n_calls), float(self.num_timesteps),
                          np.mean(np.array(avg_rewards)),
+                         np.mean(np.array(avg_pkt_level_rewards)),
                          np.mean(np.array(avg_losses)),
                          np.mean(np.array(avg_tputs)),
                          np.mean(np.array(avg_delays)),
@@ -404,15 +401,6 @@ class Aurora():
             # get the new MI and stats collected in the MI
             # sender_mi = env.senders[0].get_run_data()
             sender_mi = env.senders[0].history.back() #get_run_data()
-            # if env.net.senders[0].got_data:
-            #     action = heuristic.step(obs, sender_mi)
-            #     # action = my_heuristic.stateless_step(env.senders[0].send_rate,
-            #     #         env.senders[0].avg_latency, env.senders[0].lat_diff, env.senders[0].start_stage,
-            #     #         env.senders[0].max_tput, env.senders[0].min_rtt, sender_mi.rtt_samples[-1])
-            #     # action = my_heuristic.stateless_step(*obs)
-            # else:
-            #     action = np.array([0])
-            # max_recv_rate = heuristic.max_tput
             max_recv_rate = env.senders[0].max_tput
             throughput = sender_mi.get("recv rate")  # bits/sec
             send_rate = sender_mi.get("send rate")  # bits/sec

@@ -252,7 +252,7 @@ class Network():
         # self.env.run_dur = MI_RTT_PROPORTION * self.senders[0].estRTT # + np.mean(extra_delays)
         if latency > 0.0:
             self.env.run_dur = MI_RTT_PROPORTION * \
-                sender_mi.get("avg latency") + np.mean(extra_delays)
+                sender_mi.get("avg latency") + np.mean(np.array(extra_delays))
         # elif self.env.run_dur != 0.01:
             # assert self.env.run_dur >= 0.03
             # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
@@ -450,7 +450,7 @@ class Sender():
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
         if not self.rtt_samples and self.prev_rtt_samples:
-            rtt_samples = [np.mean(self.prev_rtt_samples)]
+            rtt_samples = [np.mean(np.array(self.prev_rtt_samples))]
         else:
             rtt_samples = self.rtt_samples
         # if not self.rtt_samples:

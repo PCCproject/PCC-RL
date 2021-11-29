@@ -61,12 +61,12 @@ class Trace():
     @property
     def min_delay(self) -> float:
         """Min one-way delay in ms."""
-        return np.min(self.delays)
+        return np.min(np.array(self.delays))
 
     @property
     def avg_delay(self) -> float:
         """Mean one-way delay in ms."""
-        return np.mean(self.delays)
+        return np.mean(np.array(self.delays))
 
     def get_next_ts(self) -> float:
         if self.idx + 1 < len(self.timestamps):
@@ -80,7 +80,6 @@ class Trace():
         avail_bits -= self.bandwidths[lo_idx] * 1e6 * (lo_ts - self.timestamps[lo_idx])
         avail_bits += self.bandwidths[up_idx] * 1e6 * (up_ts - self.timestamps[up_idx])
         return avail_bits
-
 
     def get_sending_t_usage(self, bits_2_send: float, ts: float) -> float:
         cur_idx = copy.copy(self.idx)
@@ -355,9 +354,11 @@ def generate_bw_delay_series(T_s: float, duration: float,
 
     return timestamps, bandwidths, delays
 
+
 def generate_trace_from_config_file(config_file: str, duration: int = 30) -> Trace:
     config = read_json_file(config_file)
     return generate_trace_from_config(config, duration)
+
 
 def generate_trace_from_config(config, duration: int = 30) -> Trace:
     weight_sum = 0
