@@ -57,7 +57,6 @@ class Network:
 
     def run(self, dur: float):
         """Run the network with specified duration."""
-        start_time = self.cur_time
         # TODO: change how to get the last time stamp in trace
         for sender in self.senders:
             sender.reset_obs()
