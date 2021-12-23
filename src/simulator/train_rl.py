@@ -59,9 +59,17 @@ def main():
                     int(7200 / nprocs), args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log)
     # training_traces, validation_traces,
+    if args.randomization_range_file:
+        training_traces = []
+        validation_traces = []
+    else:
+        pass
+
     aurora.train(args.randomization_range_file,
                  args.total_timesteps, tot_trace_cnt=args.total_trace_count,
-                 tb_log_name=args.exp_name, validation_flag=args.validation)
+                 tb_log_name=args.exp_name, validation_flag=args.validation,
+                 training_traces=training_traces,
+                 validation_traces=validation_traces)
 
 
 if __name__ == '__main__':

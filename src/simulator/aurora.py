@@ -263,7 +263,6 @@ class Aurora():
         # print('create_dummy_env,{}'.format(time.time() - init_start))
         if pretrained_model_path is not None:
             if pretrained_model_path.endswith('.ckpt'):
-                model_create_start = time.time()
                 self.model = MyPPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                                   optim_stepsize=0.001, schedule='constant',
                                   timesteps_per_actorbatch=timesteps_per_actorbatch,
@@ -272,8 +271,6 @@ class Aurora():
                                   optim_epochs=12, gamma=gamma,
                                   tensorboard_log=tensorboard_log,
                                   n_cpu_tf_sess=1)
-                # print('create_ppo1,{}'.format(time.time() - model_create_start))
-                tf_restore_start = time.time()
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.restore(self.model.sess, pretrained_model_path)
@@ -296,14 +293,29 @@ class Aurora():
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
     def train(self, config_file: str, total_timesteps: int, tot_trace_cnt: int,
-              tb_log_name: str = "", validation_flag: bool = False):
+              tb_log_name: str = "", validation_flag: bool = False,
+              training_traces: List[Trace] = [],
+              validation_traces: List[Trace] = []):
         assert isinstance(self.model, PPO1)
 
-        training_traces = generate_traces(config_file, tot_trace_cnt,
-                                          duration=30)
+        if not config_file and not training_traces:
+            raise ValueError("Both configuration file and training_traces are "
+                             "provided. Please choose one.")
+        elif config_file and training_traces:
+            raise ValueError("Neither configuration file nor training_traces "
+                             "are provided. Please provide one.")
+        elif config_file and not training_traces:
+            training_traces = generate_traces(config_file, tot_trace_cnt,
+                                              duration=30)
         # generate validation traces
-        validation_traces = generate_traces(
-            config_file, 20, duration=30)
+        if not config_file and not validation_traces:
+            raise ValueError("Both configuration file and validation_traces "
+                             "are provided. Please choose one.")
+        elif config_file and validation_traces:
+            raise ValueError("Neither configuration file nor validation_traces"
+                             " are provided. Please provide one.")
+        elif config_file and not validation_traces:
+            validation_traces = generate_traces( config_file, 20, duration=30)
         # config = read_json_file(config_file)[-1]
         # validation_traces = [generate_trace(config['duration'],
         #                      config['bandwidth_lower_bound'],
