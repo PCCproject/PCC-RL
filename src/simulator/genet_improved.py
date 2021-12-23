@@ -13,6 +13,7 @@ import numpy as np
 from bayes_opt import BayesianOptimization
 from bayes_opt.observer import _Tracker
 from bayes_opt.event import Events
+import pandas as pd
 
 from common.utils import (
     natural_sort, pcc_aurora_reward, read_json_file, set_seed, write_json_file)
@@ -157,14 +158,24 @@ class RandomizationRanges:
         write_json_file(filename, self.rand_ranges)
 
 
-def latest_model_from(path: str) -> str:
-    ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
-    if not ckpts:
-        ckpt = ""
-    else:
-        ckpt = os.path.splitext(natural_sort(ckpts)[-1])[0]
+def get_model_from(path: str, opt='latest') -> str:
+    if opt == 'latest':
+        ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
+        if not ckpts:
+            ckpt = ""
+        else:
+            ckpt = os.path.splitext(natural_sort(ckpts)[-1])[0]
 
-    return ckpt
+        return ckpt
+    elif opt == 'best':
+        df = pd.read_csv(os.path.join(path, "validation_log.csv"), sep='\t')
+        assert isinstance(df, pd.DataFrame)
+        best_idx = df['mean_validation_reward'].argmax()
+        best_step = int(df['num_timesteps'][best_idx])
+        best_ckpt = os.path.join(path, "model_step_{}.ckpt".format(best_step))
+
+        return best_ckpt
+    raise ValueError
 
 
 class Genet:
@@ -212,7 +223,7 @@ class Genet:
         self.start_model_path = model_path
         self.nproc = nproc
         self.validation = validation
-        if  random_config_sample:
+        if random_config_sample:
             self.n_init_pts = 15
             self.n_iter = 0
         else:
@@ -264,7 +275,7 @@ class Genet:
             if self.validation:
                 cmd += " --validation"
             subprocess.run(cmd.split(' '))
-            self.model_path = latest_model_from(training_save_dir)
+            self.model_path = get_model_from(training_save_dir, 'latest')
             print(self.model_path)
             assert self.model_path
 

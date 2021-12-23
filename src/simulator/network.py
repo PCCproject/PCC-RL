@@ -244,10 +244,11 @@ class Network():
         loss = sender_mi.get("loss ratio")
         # debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
         #     throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
+        avg_bw_in_mi = self.env.current_trace.get_avail_bits2send(start_time, end_time) / (end_time - start_time) / BITS_PER_BYTE / BYTES_PER_PACKET
+        # avg_bw_in_mi = np.mean(self.env.current_trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET
         reward = pcc_aurora_reward(
             throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
-            np.mean(self.env.current_trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(self.env.current_trace.delays) * 2 / 1e3)
+            avg_bw_in_mi, np.mean(self.env.current_trace.delays) * 2 / 1e3)
 
         # self.env.run_dur = MI_RTT_PROPORTION * self.senders[0].estRTT # + np.mean(extra_delays)
         if latency > 0.0:

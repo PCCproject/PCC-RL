@@ -1,6 +1,8 @@
 import argparse
 import os
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -30,7 +32,7 @@ def parse_args():
                                  'bandwidth_upper_bound', 'queue', 'T_s',
                                  'duration', 'delay_noise'),
                         help="2 dimenstions used to compare. Others use default values.")
-    # parser.add_argument('--seed', type=int, default=42, help='seed')
+    parser.add_argument('--seed', type=int, default=42, help='seed')
     # parser.add_argument('--nproc', type=int, default=8, help='proc cnt')
 
     args, _ = parser.parse_known_args()
@@ -40,6 +42,8 @@ def parse_args():
 def find_idx(target_val, vals):
     for i in range(len(vals) - 1):
         if vals[i] <= target_val <= vals[i+1]:
+            return i
+        elif i == 0 and target_val < vals[i]:
             return i
 
 
@@ -68,10 +72,13 @@ def get_dim_vals(dim: str):
         dim_ticklabels = ['0.1', '0.5', '1', '1.6', '2', '2.5', '3']
         dim_axlabel = 'Queue (BDP)'
     elif dim == 'T_s':
-        dim_vals = [0.1, 0.4, 0.6, 0.8, 1.2, 1.6,
-                    2.0, 5, 8, 10.0, 12.0, 15.0, 17.0, 25, 30]
-        dim_ticks = [0, 3, 6, 9, 12, 14]
-        dim_ticklabels = ['0.1', '0.8', '2.0', '10.0', '17.0', '30.0']
+        dim_vals = [1, 2, 3, 4, 5, 6, 7, 8, 10.0, 12.0, 15.0, 17.0, 20, 25, 28, 30]
+        dim_ticks = [1, 5, 10, 15]
+        dim_ticklabels = ['2', '7', '15', '30']
+        # dim_vals = [0.1, 0.4, 0.6, 0.8, 1.2, 1.6,
+        #             2.0, 5, 8, 10.0, 12.0, 15.0, 17.0, 25, 30]
+        # dim_ticks = [0, 3, 6, 9, 12, 14]
+        # dim_ticklabels = ['0.1', '0.8', '2.0', '10.0', '17.0', '30.0']
         dim_axlabel = 'Bandwidth Change Interval (s)'
     else:
         raise NotImplementedError
@@ -86,6 +93,11 @@ def main():
     max_gap = np.NINF
     min_gap = np.inf
 
+    # tokens = os.path.basename(os.path.dirname(args.root)).split('_')
+    # overfit_config0_dim0_idx = int(tokens[1])
+    # overfit_config0_dim1_idx = int(tokens[2])
+    # overfit_config1_dim0_idx = int(tokens[4])
+    # overfit_config1_dim1_idx = int(tokens[5])
     gap_matrices = []
     with open('heatmap_trace_cnt_ratio.npy', 'rb') as f:
         cnt_ratio = np.load(f)
@@ -96,6 +108,8 @@ def main():
         for i in range(len(dim0_vals)):
             row = []
             for j in range(len(dim1_vals)):
+                # if (i != overfit_config0_dim0_idx and j != overfit_config0_dim1_idx) or (i != overfit_config1_dim0_idx and j != overfit_config1_dim1_idx):
+                #     continue
                 gaps = []
                 cnt = 10
                 # if cnt_ratio[i, j] > 1:
@@ -103,8 +117,13 @@ def main():
                 for k in range(cnt):
                     trace_dir = os.path.join(
                         args.root, "{}_vs_{}/pair_{}_{}/trace_{}".format(args.dims[0], args.dims[1], i, j, k))
+                    # if os.path.exists(os.path.join(trace_dir, args.heuristic, '{}_summary.csv'.format(args.heuristic))):
+                    # if (i == overfit_config0_dim0_idx and j == overfit_config0_dim1_idx):
                     df = load_summary(os.path.join(
                         trace_dir, args.heuristic, '{}_summary.csv'.format(args.heuristic)))
+                    # else:
+                    #     df = {'{}_level_reward'.format(
+                            # args.reward_level): 0}
                     heuristic_reward = df['{}_level_reward'.format(
                         args.reward_level)]
                     if args.rl == 'pretrained':
@@ -112,15 +131,21 @@ def main():
                             trace_dir, 'pretrained', 'aurora_summary.csv'))
                     elif args.rl == 'overfit_config':
                         if bo == 0:
-                            df = load_summary(os.path.join(
-                                trace_dir, 'pretrained', 'aurora_summary.csv'))
-                        elif bo == 3:
+                            # if os.path.exists(os.path.join(
+                            #     trace_dir, 'overfit_config', 'aurora_summary.csv')):
+                            # if (i == overfit_config0_dim0_idx and j == overfit_config0_dim1_idx):
                             df = load_summary(os.path.join(
                                 trace_dir, 'overfit_config', 'aurora_summary.csv'))
+                            # else:
+                            #     df = {'{}_level_reward'.format(
+                                    # args.reward_level): 0}
+                        # elif bo == 3:
+                        #     df = load_summary(os.path.join(
+                        #         trace_dir, 'overfit_config', 'aurora_summary.csv'))
                         else:
                             continue
                     else:
-                        df = load_summary(os.path.join(trace_dir, args.rl, 'seed_42', "bo_{}".format(
+                        df = load_summary(os.path.join(trace_dir, args.rl, 'seed_{}'.format(args.seed), "bo_{}".format(
                             bo), 'step_64800', 'aurora_summary.csv'))
                     genet_reward = df['{}_level_reward'.format(
                         args.reward_level)]
@@ -171,6 +196,14 @@ def main():
             # plt.savefig(os.path.join(args.root, '{}_vs_{}'.format(args.dims[0], args.dims[1]),
             #                          '{}_{}_{}_level_reward_heatmap.jpg'.format(args.rl, args.heuristic, args.reward_level)))
             break
+        elif args.rl == 'overfit_config':
+            tokens = os.path.basename(os.path.dirname(args.root)).split('_')
+            overfit_config0_dim0_idx = int(tokens[1])
+            overfit_config0_dim1_idx = int(tokens[2])
+            # overfit_config1_dim0_idx = int(tokens[4])
+            # overfit_config1_dim1_idx = int(tokens[5])
+            ax.scatter(overfit_config0_dim1_idx, overfit_config0_dim0_idx, marker='.', c='r', s=2)
+            # ax.scatter(overfit_config1_dim1_idx, overfit_config1_dim0_idx, marker='x', c='r', s=2)
         else:
             ax.set_title("BO {}".format(bo))
             # plt.savefig(os.path.join(args.root, '{}_vs_{}'.format(args.dims[0], args.dims[1]),
@@ -179,8 +212,8 @@ def main():
     cbar.ax.set_xlabel("{} - {}".format(args.rl, args.heuristic), rotation=0)
     # fig.tight_layout()
     plt.savefig(os.path.join(args.root, '{}_vs_{}'.format(args.dims[0], args.dims[1]),
-                             '{}_{}_{}_level_reward_heatmap.jpg'.format(
-                                 args.rl, args.heuristic, args.reward_level)), bbox_inches='tight')
+                             '{}_{}_{}_level_reward_seed_{}_heatmap.jpg'.format(
+                                 args.rl, args.heuristic, args.reward_level, args.seed)))
     plt.close()
 
 

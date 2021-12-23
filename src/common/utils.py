@@ -67,8 +67,9 @@ def pcc_aurora_reward(throughput: float, delay: float, loss: float,
     loss:
     avg_bw: packets per second
     """
+    # if avg_bw is not None and min_rtt is not None:
+    #     return 10 * 50 * throughput/avg_bw - 1000 * delay * 0.2 / min_rtt - 2000 * loss
     if avg_bw is not None:
-    # return 10 * 50 * throughput/avg_bw - 1000 * delay * 0.2 / min_rtt - 2000 * loss
         return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
     return 10 * throughput - 1000 * delay - 2000 * loss
 
