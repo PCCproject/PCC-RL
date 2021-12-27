@@ -76,10 +76,27 @@ class Trace():
     @property
     def bw_change_freq(self) -> float:
         """Bandwidth change frequency in Hz."""
+        avg_bw_per_sec = []
+        t_start = self.timestamps[0]
+        tot_bw = [self.bandwidths[0]]
+        for ts, bw in zip(self.timestamps[1:], self.bandwidths[1:]):
+            if (ts - t_start) < 0.5:
+                tot_bw.append(bw)
+            else:
+                avg_bw_per_sec.append(np.mean(tot_bw))
+                t_start = ts
+                tot_bw = [bw]
+        if tot_bw:
+            avg_bw_per_sec.append(np.mean(tot_bw))
         change_cnt = 0
-        for bw0, bw1 in zip(self.bandwidths[:-1], self.bandwidths[1:]):
+        for bw0, bw1 in zip(avg_bw_per_sec[:-1], avg_bw_per_sec[1:]):
             if (bw1 - bw0) / bw0 > 0.2: # value change greater than 20%
                 change_cnt += 1
+
+        # change_cnt = 0
+        # for bw0, bw1 in zip(self.bandwidths[:-1], self.bandwidths[1:]):
+        #     if (bw1 - bw0) / bw0 > 0.2: # value change greater than 20%
+        #         change_cnt += 1
         return change_cnt / self.duration
 
     @property
