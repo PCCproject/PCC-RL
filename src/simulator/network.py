@@ -670,6 +670,17 @@ class SimulatedNetworkEnv(gym.Env):
         self.steps_taken = 0
         self.net.reset()
         self.current_trace = np.random.choice(self.traces)
+        if self.train_flag and not self.config_file:
+            bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
+                    BITS_PER_BYTE * 1e6 * np.max(self.current_trace.delays) * 2 / 1000
+            self.current_trace.queue_size = max(2, int(bdp * np.random.uniform(0.2, 3.0))) # hard code this for now
+            loss_rate_exponent = float(np.random.uniform(np.log10(0+1e-5), np.log10(0.5+1e-5), 1))
+            if loss_rate_exponent < -4:
+                loss_rate = 0
+            else:
+                loss_rate = 10**loss_rate_exponent
+            self.current_trace.loss_rate = loss_rate
+
         self.current_trace.reset()
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)

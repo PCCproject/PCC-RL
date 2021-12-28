@@ -72,12 +72,13 @@ def main():
         with open(args.train_trace_file, 'r') as f:
             for line in f:
                 line = line.strip()
-                if "ethernet" in line:
-                    queue = 500
-                elif "cellular" in line:
-                    queue = 50
-                else:
-                    queue = 100
+                queue = 100  # dummy value
+                # if "ethernet" in line:
+                #     queue = 500
+                # elif "cellular" in line:
+                #     queue = 50
+                # else:
+                #     queue = 100
                 training_traces.append(Trace.load_from_pantheon_file(
                     line, queue=queue, loss=0))
                 print(len(training_traces))
@@ -85,12 +86,13 @@ def main():
         with open(args.val_trace_file, 'r') as f:
             for line in f:
                 line = line.strip()
-                if "ethernet" in line:
-                    queue = 500
-                elif "cellular" in line:
-                    queue = 50
-                else:
-                    queue = 100
+                queue = 100  # dummy value
+                # if "ethernet" in line:
+                #     queue = 500
+                # elif "cellular" in line:
+                #     queue = 50
+                # else:
+                #     queue = 100
                 val_traces.append(Trace.load_from_pantheon_file(
                     line, queue=queue, loss=0))
 
