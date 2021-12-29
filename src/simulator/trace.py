@@ -224,7 +224,7 @@ class Trace():
 
     @staticmethod
     def load_from_pantheon_file(uplink_filename: str, loss: float, queue: int,
-                                ms_per_bin: int = 500, front_offset: int = 0,
+                                ms_per_bin: int = 500, front_offset: float = 0,
                                 wrap: bool = False):
         flow = Flow(uplink_filename, ms_per_bin)
         downlink_filename = uplink_filename.replace('datalink', 'acklink')
@@ -275,6 +275,23 @@ class Trace():
                 if ms_cnt >= (next_ts - ts) * 1000:
                     break
         return ms_series
+
+    def rotate_backward(self, offset: float):
+        self.reset()
+        timestamps = []
+        bandwidths = []
+        wrapped_ts = []
+        wrapped_bw = []
+        for ts, bw in zip(self.timestamps, self.bandwidths):
+            if ts >= offset:
+                timestamps.append(ts - offset)
+                bandwidths.append(bw)
+                wrapped_ts.append(self.timestamps[-1] - offset + self.dt + ts)
+                wrapped_bw.append(bw)
+        timestamps += wrapped_ts
+        bandwidths += wrapped_bw
+        self.timestamps = timestamps
+        self.bandwidths = bandwidths
 
 
 def generate_trace(duration_range: Tuple[float, float],
