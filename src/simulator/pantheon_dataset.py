@@ -1,7 +1,8 @@
-import os
 import glob
-from simulator.trace import Trace
+import multiprocessing as mp
+import os
 
+from simulator.trace import Trace
 
 LINKS_ADDED_AFTER_NSDI = [
     '2019-12-11T14-49-Colombia-to-AWS-Brazil-2-5-runs-3-flows',
@@ -38,16 +39,19 @@ class PantheonDataset:
             for cc in target_ccs:
                 self.trace_files += list(sorted(glob.glob(os.path.join(
                     link_dir, "{}_datalink_run[1-3].log".format(cc)))))
+        self.trace_names = [os.path.splitext(os.path.basename(trace_file))[0]
+                            for trace_file in self.trace_files]
         self.traces = []
 
     def get_traces(self, loss: float, queue_size: int,
-                   front_offset: float = 0.0, wrap: bool = False):
+                   front_offset: float = 0.0, wrap: bool = False,
+                   nproc: int =8):
         if self.traces:
             return self.traces
-        for trace_file in self.trace_files:
-            self.traces.append(Trace.load_from_pantheon_file(
-                trace_file, loss, queue_size, front_offset=front_offset,
-                wrap=wrap))
+        arguments = [(trace_file, loss, queue_size, front_offset, wrap)
+                     for trace_file in self.trace_files]
+        with mp.Pool(processes=nproc) as pool:
+            self.traces = pool.starmap(Trace.load_from_pantheon_file, arguments)
         return self.traces
 
     def __len__(self):
