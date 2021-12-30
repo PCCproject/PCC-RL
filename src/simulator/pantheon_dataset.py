@@ -1,6 +1,7 @@
 import glob
 import multiprocessing as mp
 import os
+from typing import List
 
 from simulator.trace import Trace
 
@@ -26,26 +27,31 @@ LINKS_ADDED_AFTER_NSDI = [
 class PantheonDataset:
 
     def __init__(self, root: str, conn_type: str, post_nsdi: bool = False,
-                 target_ccs=["bbr", "cubic", "vegas", "indigo", "ledbat", "quic"]):
+                 target_ccs: List[str] = ["bbr", "cubic", "vegas", "indigo",
+                                          "ledbat", "quic"]):
         self.conn_type = conn_type
         self.link_dirs = glob.glob(os.path.join(root, conn_type, "*/"))
         self.trace_files = []
         self.link_names = []
+        self.trace_names = [] # list of (link_name, run_name)
         for link_dir in self.link_dirs:
             link_name = link_dir.split('/')[-2]
             if not post_nsdi and link_name in LINKS_ADDED_AFTER_NSDI:
                 continue
             self.link_names.append(link_name)
             for cc in target_ccs:
-                self.trace_files += list(sorted(glob.glob(os.path.join(
+                trace_files = list(sorted(glob.glob(os.path.join(
                     link_dir, "{}_datalink_run[1-3].log".format(cc)))))
-        self.trace_names = [os.path.splitext(os.path.basename(trace_file))[0]
-                            for trace_file in self.trace_files]
+                self.trace_files += trace_files
+                for trace_file in trace_files:
+                    run_name = os.path.splitext(os.path.basename(trace_file))[0]
+                    self.trace_names.append((link_name, run_name))
+
         self.traces = []
 
     def get_traces(self, loss: float, queue_size: int,
                    front_offset: float = 0.0, wrap: bool = False,
-                   nproc: int =8):
+                   nproc: int = 8):
         if self.traces:
             return self.traces
         arguments = [(trace_file, loss, queue_size, front_offset, wrap)
