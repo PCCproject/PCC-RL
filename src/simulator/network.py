@@ -18,6 +18,7 @@ import sys
 import time
 import warnings
 warnings.simplefilter(action='ignore', category=UserWarning)
+from typing import Tuple, List
 
 import gym
 import numpy as np
@@ -346,6 +347,54 @@ class Sender():
         self.bin_size = 500 # ms
 
     _next_id = 1
+
+    @property
+    def avg_sending_rate(self):
+        """Average sending rate in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_sent / (self.last_sent_ts - self.first_sent_ts)
+
+    @property
+    def avg_throughput(self):
+        """Average throughput in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_acked / (self.last_ack_ts - self.first_ack_ts)
+
+    @property
+    def avg_latency(self):
+        """Average latency in second."""
+        return self.cur_avg_latency
+
+    @property
+    def pkt_loss_rate(self):
+        """Packet loss rate in one connection session."""
+        return 1 - self.tot_acked / self.tot_sent
+
+    @property
+    def bin_tput(self) -> Tuple[List[float], List[float]]:
+        tput_ts = []
+        tput = []
+        for bin_id in sorted(self.bin_bytes_acked):
+            tput_ts.append(bin_id * self.bin_size / 1000)
+            tput.append(
+                self.bin_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
+        return tput_ts, tput
+
+    @property
+    def bin_sending_rate(self) -> Tuple[List[float], List[float]]:
+        sending_rate_ts = []
+        sending_rate = []
+        for bin_id in sorted(self.bin_bytes_sent):
+            sending_rate_ts.append(bin_id * self.bin_size / 1000)
+            sending_rate.append(
+                self.bin_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
+        return sending_rate_ts, sending_rate
+
+    @property
+    def latencies(self) -> Tuple[List[float], List[float]]:
+        return self.lat_ts, self.lats
 
     def _get_next_id():
         result = Sender._next_id
