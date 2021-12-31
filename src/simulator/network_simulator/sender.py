@@ -173,6 +173,11 @@ class Sender:
         self.last_ack_ts = None
         self.reset_obs()
 
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
+
     def timeout(self):
         # placeholder
         raise NotImplementedError

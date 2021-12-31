@@ -338,6 +338,13 @@ class Sender():
         self.first_sent_ts = None
         self.last_sent_ts = None
 
+        # variables to track binwise measurements
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
+        self.bin_size = 500 # ms
+
     _next_id = 1
 
     def _get_next_id():
@@ -380,6 +387,9 @@ class Sender():
             self.first_sent_ts = self.net.get_cur_time()
         self.last_sent_ts = self.net.get_cur_time()
 
+        bin_id = int((self.net.get_cur_time() - self.first_sent_ts) * 1000 / self.bin_size)
+        self.bin_bytes_sent[bin_id] = self.bin_bytes_sent.get(bin_id, 0) + BYTES_PER_PACKET
+
     def on_packet_acked(self, rtt):
         assert self.net
         self.cur_avg_latency = (self.cur_avg_latency * self.tot_acked + rtt) / (self.tot_acked + 1)
@@ -408,6 +418,11 @@ class Sender():
         if not self.got_data:
             self.got_data = len(self.rtt_samples) >= 1
         # self.got_data = True
+
+        bin_id = int((self.net.get_cur_time() - self.first_ack_ts) * 1000 / self.bin_size)
+        self.bin_bytes_acked[bin_id] = self.bin_bytes_acked.get(bin_id, 0) + BYTES_PER_PACKET
+        self.lat_ts.append(self.net.get_cur_time())
+        self.lats.append(rtt * 1000)
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -538,6 +553,11 @@ class Sender():
         self.cur_avg_latency = 0.0
         self.first_ack_ts = None
         self.last_ack_ts = None
+
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
 
     def timeout(self):
         # placeholder

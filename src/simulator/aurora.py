@@ -27,7 +27,7 @@ from simulator import network
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog, plot_pkt_log
+from plot_scripts.plot_packet_log import PacketLog, plot_pkt_log, plot
 from plot_scripts.plot_time_series import plot as plot_simulation_log
 from udt_plugins.testing.loaded_agent import LoadedModel
 
@@ -463,11 +463,6 @@ class Aurora():
                                      'bytes', 'cur_latency', 'queue_delay',
                                      'packet_in_queue', 'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(env.net.pkt_log)
-        if self.record_pkt_log and plot_flag:
-            pkt_log = PacketLog.from_log(env.net.pkt_log)
-            plot_pkt_log(trace, pkt_log, save_dir, "aurora")
-        if plot_flag and save_dir:
-            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
 
         assert env.senders[0].last_ack_ts is not None and env.senders[0].first_ack_ts is not None
         assert env.senders[0].last_sent_ts is not None and env.senders[0].first_sent_ts is not None
@@ -477,6 +472,20 @@ class Aurora():
         loss = 1 - env.senders[0].tot_acked / env.senders[0].tot_sent
         pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        pkt_level_original_reward = pcc_aurora_reward(tput, avg_lat, loss)
+        if self.record_pkt_log and plot_flag:
+            pkt_log = PacketLog.from_log(env.net.pkt_log)
+            plot_pkt_log(trace, pkt_log, save_dir, "aurora")
+        if plot_flag and save_dir:
+            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
+            bin_tput_ts, bin_tput = env.senders[0].bin_tput
+            bin_sending_rate_ts, bin_sending_rate = env.senders[0].bin_sending_rate
+            lat_ts, lat = env.senders[0].latencies
+            plot(trace, bin_tput_ts, bin_tput, bin_sending_rate_ts,
+                 bin_sending_rate, tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 lat_ts, lat, avg_lat * 1000, loss, pkt_level_original_reward,
+                 pkt_level_reward, save_dir, self.cc_name)
         if save_dir:
             with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w', 1) as f:
                 summary_writer = csv.writer(f, lineterminator='\n')
