@@ -54,7 +54,7 @@ class PantheonDataset:
                    nproc: int = 8):
         if self.traces:
             return self.traces
-        arguments = [(trace_file, loss, queue_size, front_offset, wrap)
+        arguments = [(trace_file, loss, queue_size, 500, front_offset, wrap)
                      for trace_file in self.trace_files]
         with mp.Pool(processes=nproc) as pool:
             self.traces = pool.starmap(Trace.load_from_pantheon_file, arguments)
