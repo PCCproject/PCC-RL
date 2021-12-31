@@ -26,8 +26,8 @@ from stable_baselines.common.policies import FeedForwardPolicy
 from simulator import network
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
-from common.utils import set_tf_loglevel, pcc_aurora_reward, read_json_file
-from plot_scripts.plot_packet_log import PacketLog, plot
+from common.utils import set_tf_loglevel, pcc_aurora_reward
+from plot_scripts.plot_packet_log import PacketLog, plot_pkt_log
 from plot_scripts.plot_time_series import plot as plot_simulation_log
 from udt_plugins.testing.loaded_agent import LoadedModel
 
@@ -374,7 +374,7 @@ class Aurora():
             f_sim_log = open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1)
             writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
-                             'recv_rate', 'max_recv_rate', 'latency',
+                             'recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
                              "bytes_acked", "bytes_lost", "MI",
                              "send_start_time",
@@ -383,8 +383,7 @@ class Aurora():
                              "packet_size", 'min_lat', 'sent_latency_inflation',
                              'latency_ratio', 'send_ratio',
                              'bandwidth', "queue_delay",
-                             'packet_in_queue', 'queue_size', 'cwnd',
-                             'ssthresh', "rto", "recv_ratio", "srtt"])
+                             'packet_in_queue', 'queue_size', "recv_ratio", "srtt"])
         else:
             f_sim_log = None
             writer = None
@@ -430,7 +429,7 @@ class Aurora():
             if save_dir and writer:
                 writer.writerow([
                     env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
-                    round(send_rate, 0), round(throughput, 0), round(max_recv_rate), latency, loss,
+                    round(send_rate, 0), round(throughput, 0), latency, loss,
                     reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
                     sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
                     sender_mi.send_start, sender_mi.send_end,
@@ -441,7 +440,7 @@ class Aurora():
                     env.links[0].get_bandwidth(
                         env.net.get_cur_time()) * BYTES_PER_PACKET * BITS_PER_BYTE,
                     avg_queue_delay, env.links[0].pkt_in_queue, env.links[0].queue_size,
-                    env.senders[0].cwnd, env.senders[0].ssthresh, env.senders[0].rto, recv_ratio, env.senders[0].estRTT])
+                    recv_ratio, env.senders[0].estRTT])
             reward_list.append(reward)
             loss_list.append(loss)
             delay_list.append(latency * 1000)
@@ -466,7 +465,7 @@ class Aurora():
                 pkt_logger.writerows(env.net.pkt_log)
         if self.record_pkt_log and plot_flag:
             pkt_log = PacketLog.from_log(env.net.pkt_log)
-            plot(trace, pkt_log, save_dir, "aurora")
+            plot_pkt_log(trace, pkt_log, save_dir, "aurora")
         if plot_flag and save_dir:
             plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
 

@@ -5,8 +5,7 @@ import numpy as np
 from common import sender_obs
 from common.utils import pcc_aurora_reward
 from simulator.network_simulator.constants import (
-    BITS_PER_BYTE, BYTES_PER_PACKET, MAX_RATE, MI_RTT_PROPORTION, MIN_RATE,
-    REWARD_SCALE)
+    BITS_PER_BYTE, BYTES_PER_PACKET, MAX_RATE, MI_RTT_PROPORTION, MIN_RATE)
 from simulator.network_simulator.sender import Sender
 from simulator.network_simulator import packet
 from simulator.trace import Trace
@@ -128,7 +127,7 @@ class AuroraSender(Sender):
         if latency > 0.0:
             self.mi_duration = MI_RTT_PROPORTION * \
                 sender_mi.get("avg latency") # + np.mean(extra_delays)
-        return reward * REWARD_SCALE, self.mi_duration
+        return reward, self.mi_duration
 
     def reset_obs(self):
         self.sent = 0
