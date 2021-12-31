@@ -326,7 +326,6 @@ class Sender():
         self.lat_diff = 0
         self.recv_rate = 0
         self.send_rate = 0
-        self.avg_latency = 0
         self.latest_rtt = 0
 
         # variables to track accross the connection session
@@ -593,7 +592,6 @@ class Sender():
         self.lat_diff = 0
         self.recv_rate = 0
         self.send_rate = 0
-        self.avg_latency = 0
         self.latest_rtt = 0
 
         self.tot_sent = 0 # no. of packets
@@ -709,15 +707,6 @@ class SimulatedNetworkEnv(gym.Env):
         #         self.senders[0].max_tput, self.senders[0].min_rtt,
         #         self.senders[0].latest_rtt])
         return sender_obs, reward, should_stop, {}
-
-    def print_debug(self):
-        assert self.links and self.senders
-        print("---Link Debug---")
-        for link in self.links:
-            link.print_debug()
-        print("---Sender Debug---")
-        for sender in self.senders:
-            sender.print_debug()
 
     def create_new_links_and_senders(self):
         self.links = [Link(self.current_trace), Link(self.current_trace)]
