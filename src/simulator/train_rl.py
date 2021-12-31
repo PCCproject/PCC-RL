@@ -6,6 +6,7 @@ import warnings
 from mpi4py.MPI import COMM_WORLD
 
 from simulator.aurora import Aurora
+from simulator.trace import Trace
 from common.utils import set_seed, write_json_file
 
 warnings.filterwarnings("ignore")
@@ -28,6 +29,12 @@ def parse_args():
     parser.add_argument("--randomization-range-file", type=str, default=None,
                         help="A json file which contains a list of "
                         "randomization ranges with their probabilites.")
+    parser.add_argument("--train-trace-file", type=str, default=None,
+                        help="A file contains a list of paths to the training "
+                        "traces.")
+    parser.add_argument("--val-trace-file", type=str, default=None,
+                        help="A file contains a list of paths to the validation"
+                        " traces.")
     parser.add_argument("--total-trace-count", type=int, default=500)
     parser.add_argument("--duration", type=float, default=10,
                         help='trace duration. Unit: second.')
@@ -59,9 +66,42 @@ def main():
                     int(7200 / nprocs), args.pretrained_model_path,
                     tensorboard_log=args.tensorboard_log)
     # training_traces, validation_traces,
+    training_traces = []
+    val_traces = []
+    if args.train_trace_file:
+        with open(args.train_trace_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                queue = 100  # dummy value
+                # if "ethernet" in line:
+                #     queue = 500
+                # elif "cellular" in line:
+                #     queue = 50
+                # else:
+                #     queue = 100
+                training_traces.append(Trace.load_from_pantheon_file(
+                    line, queue=queue, loss=0))
+                print(len(training_traces))
+    if args.val_trace_file:
+        with open(args.val_trace_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                queue = 100  # dummy value
+                # if "ethernet" in line:
+                #     queue = 500
+                # elif "cellular" in line:
+                #     queue = 50
+                # else:
+                #     queue = 100
+                val_traces.append(Trace.load_from_pantheon_file(
+                    line, queue=queue, loss=0))
+
+
     aurora.train(args.randomization_range_file,
                  args.total_timesteps, tot_trace_cnt=args.total_trace_count,
-                 tb_log_name=args.exp_name, validation_flag=args.validation)
+                 tb_log_name=args.exp_name, validation_flag=args.validation,
+                 training_traces=training_traces,
+                 validation_traces=val_traces)
 
 
 if __name__ == '__main__':

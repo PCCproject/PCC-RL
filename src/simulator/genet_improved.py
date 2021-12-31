@@ -13,6 +13,7 @@ import numpy as np
 from bayes_opt import BayesianOptimization
 from bayes_opt.observer import _Tracker
 from bayes_opt.event import Events
+import pandas as pd
 
 from common.utils import (
     natural_sort, pcc_aurora_reward, read_json_file, set_seed, write_json_file)
@@ -48,6 +49,8 @@ def parse_args():
     parser.add_argument('--type', type=str, choices=('bo', 'random'),
                         default='bo', help='use bo or random (without '
                         'GaussianProcessRegressor) configuraiton selection')
+    parser.add_argument('--model-select', type=str, choices=('best', 'latest'),
+                        default='latest', help='method to select a model from the saved ones.')
 
     return parser.parse_args()
 
@@ -157,14 +160,24 @@ class RandomizationRanges:
         write_json_file(filename, self.rand_ranges)
 
 
-def latest_model_from(path: str) -> str:
-    ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
-    if not ckpts:
-        ckpt = ""
-    else:
-        ckpt = os.path.splitext(natural_sort(ckpts)[-1])[0]
+def get_model_from(path: str, opt='latest') -> str:
+    if opt == 'latest':
+        ckpts = list(glob.glob(os.path.join(path, "model_step_*.ckpt.meta")))
+        if not ckpts:
+            ckpt = ""
+        else:
+            ckpt = os.path.splitext(natural_sort(ckpts)[-1])[0]
 
-    return ckpt
+        return ckpt
+    elif opt == 'best':
+        df = pd.read_csv(os.path.join(path, "validation_log.csv"), sep='\t')
+        assert isinstance(df, pd.DataFrame)
+        best_idx = df['mean_validation_reward'].argmax()
+        best_step = int(df['num_timesteps'][best_idx])
+        best_ckpt = os.path.join(path, "model_step_{}.ckpt".format(best_step))
+
+        return best_ckpt
+    raise ValueError
 
 
 class Genet:
@@ -181,12 +194,13 @@ class Genet:
         validation: a boolean flag to enable validation in training.
         random_config_sample: a boolean flag to enable random configuration
                               exploration instead of using BO.
+        model_select: how to pick a model from trained models. latest or best. Default: latest
     """
 
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, model_path: str,
                  nproc: int, seed: int = 42, validation: bool = False,
-                 random_config_sample: bool = False):
+                 random_config_sample: bool = False, model_select: str = 'latest'):
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -212,12 +226,15 @@ class Genet:
         self.start_model_path = model_path
         self.nproc = nproc
         self.validation = validation
-        if  random_config_sample:
+        if random_config_sample:
             self.n_init_pts = 15
             self.n_iter = 0
         else:
             self.n_init_pts = 10
             self.n_iter = 5
+        if model_select != 'latest' and model_select != 'best':
+            raise ValueError('Wrong way of model_select!')
+        self.model_select = model_select
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -264,7 +281,7 @@ class Genet:
             if self.validation:
                 cmd += " --validation"
             subprocess.run(cmd.split(' '))
-            self.model_path = latest_model_from(training_save_dir)
+            self.model_path = get_model_from(training_save_dir, 'latest')
             print(self.model_path)
             assert self.model_path
 
@@ -383,7 +400,8 @@ def main():
     genet = Genet(args.config_file, args.save_dir, black_box_function,
                   heuristic, args.model_path, args.nproc, seed=args.seed,
                   validation=args.validation,
-                  random_config_sample=(args.type == 'random'))
+                  random_config_sample=(args.type == 'random'),
+                  model_select=args.model_select)
     genet.train(args.bo_rounds)
 
 

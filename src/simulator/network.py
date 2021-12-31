@@ -244,15 +244,16 @@ class Network():
         loss = sender_mi.get("loss ratio")
         # debug_print("thpt %f, delay %f, loss %f, bytes sent %f, bytes acked %f" % (
         #     throughput/1e6, latency, loss, sender_mi.bytes_sent, sender_mi.bytes_acked))
+        avg_bw_in_mi = self.env.current_trace.get_avail_bits2send(start_time, end_time) / (end_time - start_time) / BITS_PER_BYTE / BYTES_PER_PACKET
+        # avg_bw_in_mi = np.mean(self.env.current_trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET
         reward = pcc_aurora_reward(
             throughput / BITS_PER_BYTE / BYTES_PER_PACKET, latency, loss,
-            np.mean(self.env.current_trace.bandwidths) * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-            np.mean(self.env.current_trace.delays) * 2 / 1e3)
+            avg_bw_in_mi, np.mean(self.env.current_trace.delays) * 2 / 1e3)
 
         # self.env.run_dur = MI_RTT_PROPORTION * self.senders[0].estRTT # + np.mean(extra_delays)
         if latency > 0.0:
             self.env.run_dur = MI_RTT_PROPORTION * \
-                sender_mi.get("avg latency") + np.mean(extra_delays)
+                sender_mi.get("avg latency") + np.mean(np.array(extra_delays))
         # elif self.env.run_dur != 0.01:
             # assert self.env.run_dur >= 0.03
             # self.env.run_dur = max(MI_RTT_PROPORTION * sender_mi.get("avg latency"), 5 * (1 / self.senders[0].rate))
@@ -450,7 +451,7 @@ class Sender():
         #print("self.rate = %f" % self.rate)
         # print(self.acked, self.sent)
         if not self.rtt_samples and self.prev_rtt_samples:
-            rtt_samples = [np.mean(self.prev_rtt_samples)]
+            rtt_samples = [np.mean(np.array(self.prev_rtt_samples))]
         else:
             rtt_samples = self.rtt_samples
         # if not self.rtt_samples:
@@ -669,6 +670,17 @@ class SimulatedNetworkEnv(gym.Env):
         self.steps_taken = 0
         self.net.reset()
         self.current_trace = np.random.choice(self.traces)
+        if self.train_flag and not self.config_file:
+            bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
+                    BITS_PER_BYTE * 1e6 * np.max(self.current_trace.delays) * 2 / 1000
+            self.current_trace.queue_size = max(2, int(bdp * np.random.uniform(0.2, 3.0))) # hard code this for now
+            loss_rate_exponent = float(np.random.uniform(np.log10(0+1e-5), np.log10(0.5+1e-5), 1))
+            if loss_rate_exponent < -4:
+                loss_rate = 0
+            else:
+                loss_rate = 10**loss_rate_exponent
+            self.current_trace.loss_rate = loss_rate
+
         self.current_trace.reset()
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)

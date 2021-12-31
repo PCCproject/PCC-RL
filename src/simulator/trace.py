@@ -31,7 +31,7 @@ class Trace():
     def __init__(self, timestamps: Union[List[float], List[int]],
                  bandwidths: Union[List[int], List[float]],
                  delays: Union[List[int], List[float]], loss_rate: float,
-                 queue_size: int, delay_noise: float = 0, offset=0):
+                 queue_size: int, delay_noise: float = 0):
         assert len(timestamps) == len(bandwidths)
         self.timestamps = timestamps
         if len(timestamps) >= 2:
@@ -54,19 +54,65 @@ class Trace():
         self.return_noise = False
 
     @property
+    def min_bw(self) -> float:
+        """Min bandwidth in Mbps."""
+        return np.min(self.bandwidths)
+
+    @property
+    def max_bw(self) -> float:
+        """Max bandwidth in Mbps."""
+        return np.max(self.bandwidths)
+
+    @property
     def avg_bw(self) -> float:
         """Mean bandwidth in Mbps."""
         return np.mean(self.bandwidths)
 
     @property
+    def std_bw(self) -> float:
+        """Std of bandwidth in Mbps."""
+        return np.std(self.bandwidths)
+
+    @property
+    def bw_change_freq(self) -> float:
+        """Bandwidth change frequency in Hz."""
+        avg_bw_per_sec = []
+        t_start = self.timestamps[0]
+        tot_bw = [self.bandwidths[0]]
+        for ts, bw in zip(self.timestamps[1:], self.bandwidths[1:]):
+            if (ts - t_start) < 0.5:
+                tot_bw.append(bw)
+            else:
+                avg_bw_per_sec.append(np.mean(tot_bw))
+                t_start = ts
+                tot_bw = [bw]
+        if tot_bw:
+            avg_bw_per_sec.append(np.mean(tot_bw))
+        change_cnt = 0
+        for bw0, bw1 in zip(avg_bw_per_sec[:-1], avg_bw_per_sec[1:]):
+            if (bw1 - bw0) / bw0 > 0.2: # value change greater than 20%
+                change_cnt += 1
+
+        # change_cnt = 0
+        # for bw0, bw1 in zip(self.bandwidths[:-1], self.bandwidths[1:]):
+        #     if (bw1 - bw0) / bw0 > 0.2: # value change greater than 20%
+        #         change_cnt += 1
+        return change_cnt / self.duration
+
+    @property
+    def duration(self) -> float:
+        """Trace duration in second."""
+        return self.timestamps[-1] - self.timestamps[0]
+
+    @property
     def min_delay(self) -> float:
         """Min one-way delay in ms."""
-        return np.min(self.delays)
+        return np.min(np.array(self.delays))
 
     @property
     def avg_delay(self) -> float:
         """Mean one-way delay in ms."""
-        return np.mean(self.delays)
+        return np.mean(np.array(self.delays))
 
     def get_next_ts(self) -> float:
         if self.idx + 1 < len(self.timestamps):
@@ -80,7 +126,6 @@ class Trace():
         avail_bits -= self.bandwidths[lo_idx] * 1e6 * (lo_ts - self.timestamps[lo_idx])
         avail_bits += self.bandwidths[up_idx] * 1e6 * (up_ts - self.timestamps[up_idx])
         return avail_bits
-
 
     def get_sending_t_usage(self, bits_2_send: float, ts: float) -> float:
         cur_idx = copy.copy(self.idx)
@@ -179,7 +224,8 @@ class Trace():
 
     @staticmethod
     def load_from_pantheon_file(uplink_filename: str, loss: float, queue: int,
-                                ms_per_bin: int = 500, front_offset: int = 0):
+                                ms_per_bin: int = 500, front_offset: float = 0,
+                                wrap: bool = False):
         flow = Flow(uplink_filename, ms_per_bin)
         downlink_filename = uplink_filename.replace('datalink', 'acklink')
         if downlink_filename and os.path.exists(downlink_filename):
@@ -189,15 +235,17 @@ class Trace():
         delay = (np.min(flow.one_way_delay) + np.min(downlink.one_way_delay)) / 2
         timestamps = []
         bandwidths = []
+        wrapped_ts = []
+        wrapped_bw = []
         for ts, bw in zip(flow.throughput_timestamps, flow.throughput):
             if ts >= front_offset:
                 timestamps.append(ts - front_offset)
                 bandwidths.append(bw)
-
-        # added to shift the trace 5 seconds
-        # timestamps = [ts  - 5 for ts in flow.throughput_timestamps if ts >= 5]
-        # tputs  = [tput for ts, tput in zip(flow.throughput_timestamps, flow.throughput) if ts >= 5]
-        # tr = Trace(timestamps, tputs, [delay], loss, queue)
+            elif wrap:
+                wrapped_ts.append(flow.throughput_timestamps[-1] - front_offset + ms_per_bin / 1000 + ts)
+                wrapped_bw.append(bw)
+        timestamps += wrapped_ts
+        bandwidths += wrapped_bw
 
         tr = Trace(timestamps, bandwidths, [delay], loss, queue)
         return tr
@@ -227,6 +275,23 @@ class Trace():
                 if ms_cnt >= (next_ts - ts) * 1000:
                     break
         return ms_series
+
+    def rotate_backward(self, offset: float):
+        self.reset()
+        timestamps = []
+        bandwidths = []
+        wrapped_ts = []
+        wrapped_bw = []
+        for ts, bw in zip(self.timestamps, self.bandwidths):
+            if ts >= offset:
+                timestamps.append(ts - offset)
+                bandwidths.append(bw)
+                wrapped_ts.append(self.timestamps[-1] - offset + self.dt + ts)
+                wrapped_bw.append(bw)
+        timestamps += wrapped_ts
+        bandwidths += wrapped_bw
+        self.timestamps = timestamps
+        self.bandwidths = bandwidths
 
 
 def generate_trace(duration_range: Tuple[float, float],
@@ -355,9 +420,11 @@ def generate_bw_delay_series(T_s: float, duration: float,
 
     return timestamps, bandwidths, delays
 
+
 def generate_trace_from_config_file(config_file: str, duration: int = 30) -> Trace:
     config = read_json_file(config_file)
     return generate_trace_from_config(config, duration)
+
 
 def generate_trace_from_config(config, duration: int = 30) -> Trace:
     weight_sum = 0
