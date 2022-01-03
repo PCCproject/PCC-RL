@@ -69,7 +69,7 @@ def main():
         raise ValueError
     dataset = PantheonDataset(TRACE_ROOT, args.conn_type, post_nsdi=False,
                               target_ccs=TARGET_CCS)
-    traces = dataset.get_traces(0, queue_size, front_offset=5, wrap=True)
+    traces = dataset.get_traces(0, queue_size, front_offset=10, wrap=True)
     save_dirs = [os.path.join(args.save_dir, args.conn_type, link_name,
                               trace_name) for link_name, trace_name in dataset.trace_names]
 
@@ -88,7 +88,7 @@ def main():
     elif args.cc == 'real':
         model_path = args.models_path
         real_save_dirs = [os.path.join(
-            save_dir, args.cc, str(args.seed)) for save_dir in save_dirs]
+            save_dir, args.cc, "seed_{}".format(args.seed)) for save_dir in save_dirs]
         test_on_traces(model_path, traces, real_save_dirs,
                        args.nproc, 42, False, plot_flag=True)
     elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3':
