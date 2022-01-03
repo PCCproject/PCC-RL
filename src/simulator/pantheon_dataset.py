@@ -30,7 +30,7 @@ class PantheonDataset:
                  target_ccs: List[str] = ["bbr", "cubic", "vegas", "indigo",
                                           "ledbat", "quic"]):
         self.conn_type = conn_type
-        self.link_dirs = glob.glob(os.path.join(root, conn_type, "*/"))
+        self.link_dirs = sorted(glob.glob(os.path.join(root, conn_type, "*/")))
         self.trace_files = []
         self.link_names = []
         self.trace_names = [] # list of (link_name, run_name)
