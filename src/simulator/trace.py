@@ -242,8 +242,10 @@ class Trace():
                 timestamps.append(ts - front_offset)
                 bandwidths.append(bw)
             elif wrap:
-                wrapped_ts.append(flow.throughput_timestamps[-1] - front_offset + ms_per_bin / 1000 + ts)
-                wrapped_bw.append(bw)
+                new_ts = flow.throughput_timestamps[-1] - front_offset + ms_per_bin / 1000 + ts
+                if new_ts < 25:  # mimic the behavior in pantheon+mahimahi emulator.
+                    wrapped_ts.append(new_ts)
+                    wrapped_bw.append(bw)
         timestamps += wrapped_ts
         bandwidths += wrapped_bw
 
