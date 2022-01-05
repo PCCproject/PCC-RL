@@ -299,21 +299,21 @@ class Aurora():
         assert isinstance(self.model, PPO1)
 
         if not config_file and not training_traces:
-            raise ValueError("Both configuration file and training_traces are "
-                             "provided. Please choose one.")
-        elif config_file and training_traces:
             raise ValueError("Neither configuration file nor training_traces "
                              "are provided. Please provide one.")
+        elif config_file and training_traces:
+            raise ValueError("Both configuration file and training_traces are "
+                             "provided. Please choose one.")
         elif config_file and not training_traces:
             training_traces = generate_traces(config_file, tot_trace_cnt,
                                               duration=30)
         # generate validation traces
         if not config_file and not validation_traces:
-            raise ValueError("Both configuration file and validation_traces "
-                             "are provided. Please choose one.")
-        elif config_file and validation_traces:
             raise ValueError("Neither configuration file nor validation_traces"
                              " are provided. Please provide one.")
+        elif config_file and validation_traces:
+            raise ValueError("Both configuration file and validation_traces "
+                             "are provided. Please choose one.")
         elif config_file and not validation_traces:
             validation_traces = generate_traces( config_file, 20, duration=30)
         # config = read_json_file(config_file)[-1]
