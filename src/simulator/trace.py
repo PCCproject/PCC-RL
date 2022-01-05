@@ -1,3 +1,4 @@
+import argparse
 from bisect import bisect_right
 import copy
 import csv
@@ -204,7 +205,7 @@ class Trace():
         self.idx = 0
 
     def dump(self, filename: str):
-        # save trace details into a json file.
+        """save trace details into a json file."""
         data = {'timestamps': self.timestamps,
                 'bandwidths': self.bandwidths,
                 'delays': self.delays,
@@ -403,7 +404,7 @@ def generate_bw_delay_series(T_s: float, duration: float,
         min_delay, max_delay, 1)), round_digit)
     ts = 0
     bw_change_ts = 0
-    delay_change_ts = 0
+    # delay_change_ts = 0
 
     while ts < duration:
         if T_s !=0 and ts - bw_change_ts >= T_s:
@@ -466,3 +467,31 @@ def generate_trace_from_config(config, duration: int = 30) -> Trace:
                                   (T_s_min, T_s_max),
                                   (delay_noise_min, delay_noise_max))
     raise ValueError("This line should never be reached.")
+
+
+def parse_args():
+    """Parse arguments from the command line."""
+    parser = argparse.ArgumentParser("Training code.")
+    parser.add_argument('--save-dir', type=str, required=True,
+                        help="direcotry to save the model.")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="A json file which contains a list of "
+                        "randomization ranges with their probabilites.")
+    parser.add_argument("--count", type=int, required=True)
+    parser.add_argument("--seed", type=int, default=42)
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    set_seed(args.seed)
+    for i in range(args.count):
+        trace = generate_trace_from_config_file(args.config_file)
+        trace_file = os.path.join(args.save_dir, 'trace_{}.json'.format(i))
+        os.makedirs(args.save_dir, exist_ok=True)
+        trace.dump(trace_file)
+
+
+if __name__ == '__main__':
+    main()
