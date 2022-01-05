@@ -56,6 +56,7 @@ def get_dim_vals(dim: str):
         dim_vals = [0.1, 0.2, 0.5, 0.8, 1, 1.2, 1.6, 1.8, 2, 2.2, 2.5, 2.8, 3]
     elif dim == 'T_s':
         dim_vals = [0.1, 0.4, 0.6, 0.8, 1.2, 1.6, 2.0, 5, 8, 10.0, 12.0, 15.0, 17.0, 25, 30]
+        # dim_vals = [1, 2, 3, 4, 5, 6, 7, 8, 10.0, 12.0, 15.0, 17.0, 20, 25, 28, 30]
     else:
         raise NotImplementedError
     return dim_vals
@@ -64,6 +65,11 @@ def get_dim_vals(dim: str):
 def main():
     args = parse_args()
     set_seed(args.seed)
+    # tokens = os.path.basename(os.path.dirname(os.path.dirname(args.save_dir))).split('_')
+    # config0_dim0_idx = int(tokens[1])
+    # config0_dim1_idx = int(tokens[2])
+    # config1_dim0_idx = int(tokens[4])
+    # config1_dim1_idx = int(tokens[5])
 
     dim0, dim1 = args.dims
     config = read_json_file(args.config_file)[0]
@@ -133,9 +139,9 @@ def main():
         test_on_traces(args.models_path, traces, pretrained_save_dirs, args.nproc, 42, False, False)
         print('pretrained: {:.3f}'.format(time.time() - t_start))
     elif args.cc == 'overfit_config':
-        pretrained_save_dirs = [os.path.join(save_dir, args.cc) for save_dir in save_dirs]
+        overfit_config_save_dirs = [os.path.join(save_dir, args.cc) for save_dir in save_dirs]
         t_start = time.time()
-        test_on_traces(args.models_path, traces, pretrained_save_dirs, args.nproc, 42, False, False)
+        test_on_traces(args.models_path, traces, overfit_config_save_dirs, args.nproc, 42, False, False)
         print('overfit_config: {:.3f}'.format(time.time() - t_start))
     else:
         if args.cc == 'bbr':
