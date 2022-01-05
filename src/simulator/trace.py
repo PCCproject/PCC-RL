@@ -7,7 +7,7 @@ import os
 from typing import List, Tuple, Union
 
 import numpy as np
-from common.utils import read_json_file, set_seed, write_json_file
+from common.utils import read_json_file, set_seed, write_json_file, pcc_aurora_reward
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.pantheon_trace_parser.flow import Flow
 
@@ -114,6 +114,13 @@ class Trace():
     def avg_delay(self) -> float:
         """Mean one-way delay in ms."""
         return np.mean(np.array(self.delays))
+
+    @property
+    def optimal_reward(self):
+        return pcc_aurora_reward(
+                self.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+                self.avg_delay * 2 / 1000, self.loss_rate,
+                self.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
 
     def get_next_ts(self) -> float:
         if self.idx + 1 < len(self.timestamps):
@@ -486,9 +493,10 @@ def parse_args():
 def main():
     args = parse_args()
     set_seed(args.seed)
+    assert args.count < 100000
     for i in range(args.count):
         trace = generate_trace_from_config_file(args.config_file)
-        trace_file = os.path.join(args.save_dir, 'trace_{}.json'.format(i))
+        trace_file = os.path.join(args.save_dir, 'trace_{:05d}.json'.format(i))
         os.makedirs(args.save_dir, exist_ok=True)
         trace.dump(trace_file)
 

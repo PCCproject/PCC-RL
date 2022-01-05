@@ -16,9 +16,8 @@ from bayes_opt.event import Events
 import pandas as pd
 
 from common.utils import (
-    natural_sort, pcc_aurora_reward, read_json_file, set_seed, write_json_file)
+    natural_sort, read_json_file, set_seed, write_json_file)
 from simulator.aurora import test_on_traces
-from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.network_simulator.cubic import Cubic
 from simulator.network_simulator.bbr import BBR
 from simulator.network_simulator.bbr_old import BBR_old
@@ -316,9 +315,7 @@ def black_box_function(bandwidth_lower_bound: float,
     # print("trace generation used {}s".format(time.time() - t_start))
     if not heuristic:
         for trace in traces:
-            heuristic_rewards.append(pcc_aurora_reward(
-                trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
-                trace.avg_delay * 2 / 1000, trace.loss_rate, trace.avg_bw))
+            heuristic_rewards.append(trace.optimal_reward)
     else:
         t_start = time.time()
         # save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
