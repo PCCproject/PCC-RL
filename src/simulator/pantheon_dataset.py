@@ -102,11 +102,16 @@ class PantheonDataset:
         data_attribute = []
         for trace, conn_type in zip(traces, self.link_conn_types):
             assert trace.dt == 0.5
-            data_feature.append(np.array(trace.bandwidths[:60]).reshape(-1, 1))
+            idx = 0
+            while len(trace.bandwidths) < 60:
+                trace.bandwidths.append(trace.bandwidths[idx])
+                idx = (idx + 1) % 60
+            sample_feature = np.array(trace.bandwidths[:60]).reshape(-1, 1)
+            data_feature.append(sample_feature)
             if conn_type == 'cellular':
-                data_attribute.append(np.array([1, 0]).reshape(-1, 1))
+                data_attribute.append(np.array([1, 0]))
             elif conn_type == 'ethernet':
-                data_attribute.append(np.array([0, 1]).reshape(-1, 1))
+                data_attribute.append(np.array([0, 1]))
             else:
                 raise ValueError
         data_feature = zero_one_normalize(np.stack(data_feature))
