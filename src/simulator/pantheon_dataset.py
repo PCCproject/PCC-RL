@@ -3,6 +3,8 @@ import multiprocessing as mp
 import os
 from typing import List, Union
 
+import numpy as np
+
 from simulator.trace import Trace
 
 LINKS_ADDED_AFTER_NSDI = [
@@ -37,7 +39,19 @@ class PantheonDataset:
                  target_ccs: List[str] = ["bbr", "cubic", "vegas", "indigo",
                                           "ledbat", "quic"]):
         self.conn_type = conn_type
-        self.link_dirs = sorted(glob.glob(os.path.join(root, conn_type, "*/")))
+        self.link_conn_types = []
+        if self.conn_type == 'ethernet' or self.conn_type == 'cellular':
+            self.link_dirs = sorted(glob.glob(os.path.join(
+                root, self.conn_type, "*/")))
+
+        elif self.conn_type == 'all':
+            self.link_dirs = sorted(glob.glob(os.path.join(
+                root, 'cellular', "*/"))) + sorted(glob.glob(os.path.join(
+                root, 'ethernet', "*/")))
+        else:
+            raise ValueError('Wrong connection type. Only "ethernet", '
+                    '"cellular", and "all" are supported.')
+
         self.trace_files = []
         self.link_names = []
         self.trace_names = [] # list of (link_name, run_name)
@@ -53,6 +67,12 @@ class PantheonDataset:
                 for trace_file in trace_files:
                     run_name = os.path.splitext(os.path.basename(trace_file))[0]
                     self.trace_names.append((link_name, run_name))
+                    if 'cellular' in trace_file:
+                        self.link_conn_types.append('cellular')
+                    elif 'ethernet' in trace_file:
+                        self.link_conn_types.append('ethernet')
+                    else:
+                        raise ValueError
 
         self.traces = []
 
@@ -74,3 +94,23 @@ class PantheonDataset:
 
     def __len__(self):
         return len(self.trace_files)
+
+    def prepare_data_for_DoppelGANger(self):
+        traces = self.get_traces(0)
+        data_feature = []
+        data_attribute = []
+        for trace, conn_type in zip(traces, self.link_conn_types):
+            assert trace.dt == 0.5
+            data_feature.append(np.array(trace.bandwidths[:60]).reshape(-1, 1))
+            if conn_type == 'cellular':
+                data_attribute.append(np.array([1, 0]).reshape(-1, 1))
+            elif conn_type == 'ethernet':
+                data_attribute.append(np.array([0, 1]).reshape(-1, 1))
+            else:
+                raise ValueError
+        data_feature = np.stack(data_feature)
+        data_attribute = np.stack(data_attribute)
+
+        data_gen_flag = np.zeros(data_feature[:,:, 0].shape)
+        print(data_attribute.shape)
+        return data_feature, data_attribute, data_gen_flag
