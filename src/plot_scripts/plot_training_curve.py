@@ -1,5 +1,4 @@
 import argparse
-import glob
 import os
 from typing import List, Tuple
 
@@ -10,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from common.utils import compute_std_of_mean, load_summary
-from simulator.trace import Trace
+from simulator.pantheon_dataset import PantheonDataset
 
 TRACE_ROOT = "../../data"
 # TRACE_ROOT = "../../data/cellular/2018-12-11T00-27-AWS-Brazil-2-to-Colombia-cellular-3-runs-3-flows"
@@ -24,8 +23,8 @@ def parse_args():
                                      "Pantheon traces over training.")
     parser.add_argument('--save-dir', type=str, required=True,
                         help="direcotry to testing results.")
-    parser.add_argument("--conn-type", type=str, required=True,
-                        choices=('cellular', 'ethernet', 'wifi'),
+    parser.add_argument("--conn-type", type=str, default='all',
+                        choices=('cellular', 'ethernet', 'wifi', 'all'),
                         help='connection type')
 
     args, _ = parser.parse_known_args()
@@ -49,27 +48,28 @@ def load_summaries_across_traces(log_files: List[str]) -> Tuple[List[float], Lis
     return rewards, tputs, lats, losses
 
 
+def contains_nan_only(l) -> bool:
+    for v in l:
+        if not np.isnan(v):
+            return False
+    return True
+
+
 def main():
     args = parse_args()
-    link_dirs = glob.glob(os.path.join(TRACE_ROOT, args.conn_type, "*/"))
-    if args.conn_type == 'ethernet':
-        queue_size = 500
-    elif args.conn_type == 'cellular':
-        queue_size = 50
+    if args.conn_type == 'all':
+        cellular_dataset = PantheonDataset(TRACE_ROOT, 'cellular', post_nsdi=False, target_ccs=TARGET_CCS)
+        save_dirs = [os.path.join(args.save_dir, 'cellular', link_name,
+                                  trace_name) for link_name, trace_name in cellular_dataset.trace_names]
+        ethernet_dataset = PantheonDataset(TRACE_ROOT, 'ethernet', post_nsdi=False, target_ccs=TARGET_CCS)
+        save_dirs = save_dirs + [os.path.join(args.save_dir, 'ethernet', link_name,
+                                  trace_name) for link_name, trace_name in ethernet_dataset.trace_names]
+    elif args.conn_type == 'cellular' or args.conn_type == 'ethernet':
+        dataset = PantheonDataset(TRACE_ROOT, args.conn_type, post_nsdi=False, target_ccs=TARGET_CCS)
+        save_dirs = [os.path.join(args.save_dir, args.conn_type, link_name,
+                                  trace_name) for link_name, trace_name in dataset.trace_names]
     else:
         raise ValueError
-    traces = []
-    save_dirs = []
-    for link_dir in link_dirs:
-        link_name = link_dir.split('/')[-2]
-        for cc in TARGET_CCS:
-            print("Loading {}, {} traces collected by {}...".format(args.conn_type, link_name, cc))
-            for trace_file in tqdm(sorted(glob.glob(os.path.join(link_dir, "{}_datalink_run[1-3].log".format(cc))))):
-                traces.append(Trace.load_from_pantheon_file(
-                    trace_file, 0.0, queue_size, front_offset=0))
-                save_dir = os.path.join(args.save_dir, args.conn_type, link_name,
-                                        os.path.splitext(os.path.basename(trace_file))[0])
-                save_dirs.append(save_dir)
 
     bbr_old_rewards, bbr_old_tputs, bbr_old_lats, bbr_old_losses = load_summaries_across_traces(
         [os.path.join(save_dir, "bbr_old", "bbr_old_summary.csv") for save_dir in save_dirs])

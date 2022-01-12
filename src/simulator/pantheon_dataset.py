@@ -1,7 +1,7 @@
 import glob
 import multiprocessing as mp
 import os
-from typing import List
+from typing import List, Union
 
 from simulator.trace import Trace
 
@@ -12,6 +12,7 @@ LINKS_ADDED_AFTER_NSDI = [
     "2020-02-18T01-17-AWS-Brazil-1-to-Brazil-5-runs-3-flows",
     "2020-02-18T01-17-AWS-India-1-to-India-5-runs-3-flows",
 
+
     "2019-07-11T21-09-AWS-California-1-to-Stanford-cellular-3-runs",
     "2019-06-27T17-42-AWS-California-1-to-Stanford-cellular-3-runs",
     "2019-06-27T00-52-AWS-California-1-to-Stanford-cellular-3-runs",
@@ -21,7 +22,13 @@ LINKS_ADDED_AFTER_NSDI = [
     "2019-01-24T23-21-AWS-India-1-to-India-cellular-3-runs-3-flows",
     "2019-01-24T13-00-AWS-India-1-to-India-cellular-3-runs",
     "2019-01-22T00-44-India-cellular-to-AWS-India-1-3-runs-3-flows",
-    "2019-01-21T19-18-India-cellular-to-AWS-India-1-3-runs"]
+    "2019-01-21T19-18-India-cellular-to-AWS-India-1-3-runs",
+
+    # didnt have before nsdi in simu
+    "2018-12-10T20-36-AWS-India-1-to-India-cellular-3-runs",
+    "2018-12-10T20-36-AWS-India-2-to-Stanford-cellular-3-runs",
+    "2019-07-17T15-55-AWS-California-1-to-Stanford-cellular-3-runs",
+    "2019-08-26T16-05-AWS-California-1-to-Stanford-cellular-3-runs"]
 
 
 class PantheonDataset:
@@ -49,15 +56,20 @@ class PantheonDataset:
 
         self.traces = []
 
-    def get_traces(self, loss: float, queue_size: int,
+    def get_traces(self, loss: float, queue_size: Union[int, None] = None,
                    front_offset: float = 0.0, wrap: bool = False,
                    nproc: int = 8):
         if self.traces:
             return self.traces
+        if not queue_size:
+            queue_size = 10
         arguments = [(trace_file, loss, queue_size, 500, front_offset, wrap)
                      for trace_file in self.trace_files]
         with mp.Pool(processes=nproc) as pool:
             self.traces = pool.starmap(Trace.load_from_pantheon_file, arguments)
+        if not queue_size:
+            for trace in self.traces:
+                trace.queue_size = max(2, int(trace.bdp))
         return self.traces
 
     def __len__(self):

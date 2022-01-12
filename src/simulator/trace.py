@@ -55,6 +55,10 @@ class Trace():
         self.return_noise = False
 
     @property
+    def bdp(self) -> float:
+        return np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
+
+    @property
     def min_bw(self) -> float:
         """Min bandwidth in Mbps."""
         return np.min(self.bandwidths)

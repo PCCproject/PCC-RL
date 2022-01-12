@@ -32,10 +32,8 @@ GENET_MODEL_PATH = "../../models/udr_large_lossless/seed_20/model_step_2124000.c
 RESULT_ROOT = "../../results_0826"
 RESULT_ROOT = "../../results_0910"
 TRACE_ROOT = "../../data"
-# TRACE_ROOT = "../../data/cellular/2018-12-11T00-27-AWS-Brazil-2-to-Colombia-cellular-3-runs-3-flows"
 
 TARGET_CCS = ["bbr", "cubic", "vegas", "indigo", "ledbat", "quic"]
-# TARGET_CCS = ['bbr'] #, "cubic", "vegas", "indigo", "ledbat", "quic"]
 
 
 def parse_args():
@@ -45,7 +43,8 @@ def parse_args():
                         help="direcotry to testing results.")
     parser.add_argument('--cc', type=str, required=True,
                         choices=("bbr", 'bbr_old', "cubic", "udr1", "udr2", "udr3",
-                                 "genet_bbr", 'genet_bbr_old', 'genet_cubic', 'real'),
+                                 "genet_bbr", 'genet_bbr_old', 'genet_cubic',
+                                 'real', 'cl1', 'cl2', 'pretrained'),
                         help='congestion control name')
     parser.add_argument("--conn-type", type=str, required=True,
                         choices=('ethernet', 'cellular', 'wifi'),
@@ -91,7 +90,23 @@ def main():
             save_dir, args.cc, "seed_{}".format(args.seed)) for save_dir in save_dirs]
         test_on_traces(model_path, traces, real_save_dirs,
                        args.nproc, 42, False, plot_flag=True)
-    elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3':
+    elif args.cc == 'pretrained':
+        udr_seed = ''
+        for s in args.models_path.split('/'):
+            if 'seed' in s:
+                udr_seed = s
+        step = 7200
+        while step <= 151200:
+            if not os.path.exists(os.path.join(args.models_path, 'model_step_{}.ckpt.meta'.format(step))):
+                break
+            udr_save_dirs = [os.path.join(
+                save_dir, args.cc, udr_seed, "step_{}".format(step)) for save_dir in save_dirs]
+            model_path = os.path.join(
+                args.models_path, 'model_step_{}.ckpt'.format(step))
+            test_on_traces(model_path, traces, udr_save_dirs,
+                           args.nproc, 42, False, True)
+            step += 28800
+    elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3' or args.cc == 'cl1' or args.cc == 'cl2':
         # TODO: bug here when there is no validation log
         # original implementation
         # val_log = pd.read_csv(os.path.join(
@@ -113,7 +128,7 @@ def main():
         for s in args.models_path.split('/'):
             if 'seed' in s:
                 udr_seed = s
-        step = 64800
+        step = 0
         while True:
             if not os.path.exists(os.path.join(args.models_path, 'model_step_{}.ckpt.meta'.format(step))):
                 break
