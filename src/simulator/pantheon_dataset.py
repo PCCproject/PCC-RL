@@ -5,6 +5,7 @@ from typing import List, Union
 
 import numpy as np
 
+from common.utils import zero_one_normalize
 from simulator.trace import Trace
 
 LINKS_ADDED_AFTER_NSDI = [
@@ -108,9 +109,12 @@ class PantheonDataset:
                 data_attribute.append(np.array([0, 1]).reshape(-1, 1))
             else:
                 raise ValueError
-        data_feature = np.stack(data_feature)
+        data_feature = zero_one_normalize(np.stack(data_feature))
         data_attribute = np.stack(data_attribute)
 
-        data_gen_flag = np.zeros(data_feature[:,:, 0].shape)
-        print(data_attribute.shape)
+        data_gen_flag = np.ones(data_feature[:,:, 0].shape)
         return data_feature, data_attribute, data_gen_flag
+
+data = PantheonDataset('../../data', 'all')
+data.prepare_data_for_DoppelGANger()
+

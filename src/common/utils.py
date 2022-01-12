@@ -92,3 +92,7 @@ def save_args(args, save_dir: str):
     os.makedirs(save_dir, exist_ok=True)
     if save_dir and os.path.exists(save_dir):
         write_json_file(os.path.join(save_dir, 'cmd.json'), args.__dict__)
+
+
+def zero_one_normalize(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
