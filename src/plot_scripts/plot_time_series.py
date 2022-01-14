@@ -137,14 +137,16 @@ def main():
     for _, log_file in enumerate(args.log_file):
         if not os.path.exists(log_file):
             continue
-        if args.trace_file.endswith('.json'):
+        if not args.trace_file:
+            trace = None
+        elif args.trace_file.endswith('.json'):
             trace = Trace.load_from_file(args.trace_file)
         elif args.trace_file.endswith('.log'):
             trace = Trace.load_from_pantheon_file(args.trace_file, loss=0, queue=10)
         else:
             trace = None
         cc = os.path.basename(log_file).split('_')[0]
-        plot(trace, args.log_file, args.save_dir, cc)
+        plot(trace, log_file, args.save_dir, cc)
 
 
 if __name__ == "__main__":
