@@ -617,15 +617,19 @@ class SimulatedNetworkEnv(gym.Env):
                  # features="sent latency inflation,latency ratio,send ratio",
                  features="sent latency inflation,latency ratio,recv ratio",
                  train_flag=False, delta_scale=1.0, config_file=None,
-                 record_pkt_log: bool = False):
+                 record_pkt_log: bool = False, real_trace_prob: float = 0):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
+        self.real_trace_prob = real_trace_prob
         self.record_pkt_log = record_pkt_log
         self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
-        self.current_trace = np.random.choice(self.traces)
+        if self.config_file:
+            self.current_trace = generate_traces(self.config_file, 1, 30)[0]
+        else:
+            self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
         self.use_cwnd = False
 
@@ -660,11 +664,6 @@ class SimulatedNetworkEnv(gym.Env):
                                             np.tile(single_obs_max_vec,
                                                     self.history_len),
                                             dtype=np.float32)
-        # single_obs_min_vec = np.array([0, 0, -1e12, 0, 0, 0, 0])
-        # single_obs_max_vec =  np.array([1e12, 1e12, 1e12, 1, 1e12, 1e12, 1e12])
-        # self.observation_space = spaces.Box(single_obs_min_vec,
-        #                                     single_obs_max_vec,
-        #                                     dtype=np.float32)
 
         self.reward_sum = 0.0
         self.reward_ewma = 0.0
@@ -727,7 +726,18 @@ class SimulatedNetworkEnv(gym.Env):
     def reset(self):
         self.steps_taken = 0
         self.net.reset()
-        self.current_trace = np.random.choice(self.traces)
+        # old snippet start
+        # self.current_trace = np.random.choice(self.traces)
+        # old snippet end
+
+        # choose real trace with a probability. otherwise, use synthetic trace
+        self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
+        if random.uniform(0, 1) < self.real_trace_prob:
+            real_trace = np.random.choice(self.traces)  # randomly select a real trace
+            real_trace.queue_size = self.current_trace.queue_size
+            real_trace.loss_rate = self.current_trace.loss_rate
+            self.current_trace = real_trace
+
         # if self.train_flag and not self.config_file:
         #     bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
         #             BITS_PER_BYTE * 1e6 * np.max(self.current_trace.delays) * 2 / 1000
@@ -743,18 +753,16 @@ class SimulatedNetworkEnv(gym.Env):
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
-        if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
-            self.traces = generate_traces(self.config_file, 10, duration=30)
+
+        # old code snippet start
+        # if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
+        #     self.traces = generate_traces(self.config_file, 10, duration=30)
+        # old code snippet end
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
-        # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
-        # return np.array([self.senders[0].send_rate, self.senders[0].avg_latency,
-        #         self.senders[0].lat_diff, int(self.senders[0].start_stage),
-        #         self.senders[0].max_tput, self.senders[0].min_rtt,
-        #         self.senders[0].latest_rtt])
 
 
 register(id='PccNs-v0', entry_point='simulator.network:SimulatedNetworkEnv')

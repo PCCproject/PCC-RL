@@ -29,8 +29,8 @@ black_box_function_calling_times = 0
 def parse_args():
     """Parse arguments from the command line."""
     parser = argparse.ArgumentParser("BO training in simulator.")
-    parser.add_argument('--save-dir', type=str, required=True,
-                        help="directory to save testing and intermediate results.")
+    parser.add_argument('--save-dir', type=str, required=True, help="directory"
+                        " to save testing and intermediate results.")
     parser.add_argument('--model-path', type=str, default=None,
                         help="path to Aurora model to start from.")
     parser.add_argument("--config-file", type=str, required=True,
@@ -49,7 +49,11 @@ def parse_args():
                         default='bo', help='use bo or random (without '
                         'GaussianProcessRegressor) configuraiton selection')
     parser.add_argument('--model-select', type=str, choices=('best', 'latest'),
-                        default='latest', help='method to select a model from the saved ones.')
+                        default='latest', help='method to select a model from '
+                        'the saved ones.')
+    parser.add_argument("--train-trace-file", type=str, default=None,
+                        help="A file contains a list of paths to the real "
+                        "network traces used in training.")
 
     return parser.parse_args()
 
@@ -199,7 +203,8 @@ class Genet:
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, model_path: str,
                  nproc: int, seed: int = 42, validation: bool = False,
-                 random_config_sample: bool = False, model_select: str = 'latest'):
+                 random_config_sample: bool = False, model_select: str = 'latest',
+                 train_trace_file: Union[None, str] = None):
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -234,6 +239,7 @@ class Genet:
         if model_select != 'latest' and model_select != 'best':
             raise ValueError('Wrong way of model_select!')
         self.model_select = model_select
+        self.train_trace_file = train_trace_file
         # my_observer = BasicObserver()
         # self.optimizer.subscribe(
         #     event=Events.OPTIMIZATION_STEP,
@@ -279,6 +285,8 @@ class Genet:
                     config_file=self.cur_config_file, model_path=self.model_path)
             if self.validation:
                 cmd += " --validation"
+            if self.train_trace_file:
+                cmd += " --train-trace-file {}".format(self.train_trace_file)
             subprocess.run(cmd.split(' '))
             self.model_path = get_model_from(training_save_dir, 'latest')
             print(self.model_path)
@@ -398,7 +406,8 @@ def main():
                   heuristic, args.model_path, args.nproc, seed=args.seed,
                   validation=args.validation,
                   random_config_sample=(args.type == 'random'),
-                  model_select=args.model_select)
+                  model_select=args.model_select,
+                  train_trace_file=args.train_trace_file)
     genet.train(args.bo_rounds)
 
 

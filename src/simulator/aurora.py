@@ -295,15 +295,18 @@ class Aurora():
     def train(self, config_file: str, total_timesteps: int, tot_trace_cnt: int,
               tb_log_name: str = "", validation_flag: bool = False,
               training_traces: List[Trace] = [],
-              validation_traces: List[Trace] = []):
+              validation_traces: List[Trace] = [], real_trace_prob: float = 0):
         assert isinstance(self.model, PPO1)
 
         if not config_file and not training_traces:
             raise ValueError("Neither configuration file nor training_traces "
                              "are provided. Please provide one.")
         elif config_file and training_traces:
-            raise ValueError("Both configuration file and training_traces are "
-                             "provided. Please choose one.")
+            # both configuration file and training_traces are provided.
+            # use config_file to generate synthetic traces
+            # assume real traces are in training_traces
+            pass
+
         elif config_file and not training_traces:
             training_traces = generate_traces(config_file, tot_trace_cnt,
                                               duration=30)
@@ -323,8 +326,9 @@ class Aurora():
         #                      config['loss'], config['queue'], config['T_s'],
         #                      config['delay_noise']) for _ in range(20)]
 
-        env = gym.make('PccNs-v0', traces=training_traces,
-                       train_flag=True, delta_scale=self.delta_scale, config_file=config_file)
+        env = gym.make('PccNs-v0', traces=training_traces, train_flag=True,
+                       delta_scale=self.delta_scale, config_file=config_file,
+                       real_trace_prob=0)
         env.seed(self.seed)
         # env = Monitor(env, self.log_dir)
         self.model.set_env(env)
