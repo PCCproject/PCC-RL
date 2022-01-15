@@ -79,12 +79,12 @@ class PantheonDataset:
 
     def get_traces(self, loss: float, queue_size: Union[int, None] = None,
                    front_offset: float = 0.0, wrap: bool = False,
-                   nproc: int = 8):
+                   nproc: int = 8, ms_bin: int = 500):
         if self.traces:
             return self.traces
         if not queue_size:
             queue_size = 10
-        arguments = [(trace_file, loss, queue_size, 500, front_offset, wrap)
+        arguments = [(trace_file, loss, queue_size, ms_bin, front_offset, wrap)
                      for trace_file in self.trace_files]
         with mp.Pool(processes=nproc) as pool:
             self.traces = pool.starmap(Trace.load_from_pantheon_file, arguments)
@@ -96,17 +96,19 @@ class PantheonDataset:
     def __len__(self):
         return len(self.trace_files)
 
-    def prepare_data_for_DoppelGANger(self):
-        traces = self.get_traces(0)
+    def prepare_data_for_DoppelGANger(self, ms_bin: int = 500):
+        traces = self.get_traces(0, ms_bin=ms_bin)
         data_feature = []
         data_attribute = []
         for trace, conn_type in zip(traces, self.link_conn_types):
-            assert trace.dt == 0.5
+            assert trace.dt == ms_bin / 1000
             idx = 0
-            while len(trace.bandwidths) < 60:
+            val_cnt = int(30 / (ms_bin / 1000))
+            print(val_cnt)
+            while len(trace.bandwidths) < val_cnt:
                 trace.bandwidths.append(trace.bandwidths[idx])
-                idx = (idx + 1) % 60
-            sample_feature = np.array(trace.bandwidths[:60]).reshape(-1, 1)
+                idx = (idx + 1) % val_cnt
+            sample_feature = np.array(trace.bandwidths[:val_cnt]).reshape(-1, 1)
             data_feature.append(sample_feature)
             if conn_type == 'cellular':
                 data_attribute.append(np.array([1, 0]))

@@ -33,7 +33,7 @@ class Trace():
                  bandwidths: Union[List[int], List[float]],
                  delays: Union[List[int], List[float]], loss_rate: float,
                  queue_size: int, delay_noise: float = 0):
-        assert len(timestamps) == len(bandwidths)
+        assert len(timestamps) == len(bandwidths), "len(timestamps)={}, len(bandwidths)={}".format(len(timestamps), len(bandwidths))
         self.timestamps = timestamps
         if len(timestamps) >= 2:
             self.dt = timestamps[1] - timestamps[0]
@@ -316,7 +316,7 @@ def generate_trace(duration_range: Tuple[float, float],
                    queue_size_range: Tuple[float, float],
                    T_s_range: Union[Tuple[float, float], None] = None,
                    delay_noise_range: Union[Tuple[float, float], None] = None,
-                   seed: Union[int, None] = None):
+                   seed: Union[int, None] = None, dt: float = 0.1):
     """Generate trace for a network flow.
 
     Args:
@@ -359,7 +359,7 @@ def generate_trace(duration_range: Tuple[float, float],
     timestamps, bandwidths, delays = generate_bw_delay_series(
         T_s, duration, bandwidth_lower_bound_range[0], bandwidth_lower_bound_range[1],
         bandwidth_upper_bound_range[0], bandwidth_upper_bound_range[1],
-        delay_range[0], delay_range[1])
+        delay_range[0], delay_range[1], dt=dt)
 
     queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
     bdp = np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
@@ -400,7 +400,7 @@ def load_bandwidth_from_file(filename: str):
 def generate_bw_delay_series(T_s: float, duration: float,
                              min_bw_lower_bnd: float, min_bw_upper_bnd: float,
                              max_bw_lower_bnd: float, max_bw_upper_bnd: float,
-                             min_delay: float, max_delay: float)-> Tuple[List[float], List[float], List[float]]:
+                             min_delay: float, max_delay: float, dt: float=0.1)-> Tuple[List[float], List[float], List[float]]:
     timestamps = []
     bandwidths = []
     delays = []
@@ -427,7 +427,7 @@ def generate_bw_delay_series(T_s: float, duration: float,
         timestamps.append(ts)
         bandwidths.append(bw_val)
         delays.append(delay_val)
-        ts += 0.1
+        ts += dt
     timestamps.append(round(duration, round_digit))
     bandwidths.append(bw_val)
     delays.append(delay_val)
