@@ -259,8 +259,12 @@ def plot(trace: Union[Trace, None], throughput_ts: List[float],
     axes[0].set_ylabel("Rate(Mbps)")
     axes[0].set_xlim(0, )
     axes[0].set_ylim(0, )
-    axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
-        cc, reward, normalized_reward))
+    if trace is not None:
+        axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}, gap={:.3f}'.format(
+            cc, reward, normalized_reward, trace.optimal_reward - normalized_reward))
+    else:
+        axes[0].set_title('{} reward={:.3f}, normalized reward={:.3f}'.format(
+            cc, reward, normalized_reward))
 
     axes[1].plot(rtt_ts, rtt, ms=2, label='RTT, avg {:.3f}ms'.format(avg_lat))
     # axes[1].plot(queue_delay_ts, queue_delay, label='Queue delay, avg {:.3f}ms'.format(np.mean(queue_delay)))
