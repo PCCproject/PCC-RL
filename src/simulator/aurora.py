@@ -328,7 +328,7 @@ class Aurora():
 
         env = gym.make('PccNs-v0', traces=training_traces, train_flag=True,
                        delta_scale=self.delta_scale, config_file=config_file,
-                       real_trace_prob=0)
+                       real_trace_prob=real_trace_prob)
         env.seed(self.seed)
         # env = Monitor(env, self.log_dir)
         self.model.set_env(env)

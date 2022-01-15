@@ -44,6 +44,8 @@ def parse_args():
                         help='specify to enable validation.')
     parser.add_argument('--dataset', type=str, default='synthetic',
                         choices=('pantheon', 'synthetic'), help='dataset name')
+    parser.add_argument('--real-trace-prob', type=float, default=0.0,
+                        help='Probability of picking a real trace in training')
 
     return parser.parse_args()
 
@@ -112,7 +114,8 @@ def main():
                  args.total_timesteps, tot_trace_cnt=args.total_trace_count,
                  tb_log_name=args.exp_name, validation_flag=args.validation,
                  training_traces=training_traces,
-                 validation_traces=val_traces)
+                 validation_traces=val_traces,
+                 real_trace_prob=args.real_trace_prob)
 
 
 if __name__ == '__main__':

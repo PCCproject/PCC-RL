@@ -54,6 +54,8 @@ def parse_args():
     parser.add_argument("--train-trace-file", type=str, default=None,
                         help="A file contains a list of paths to the real "
                         "network traces used in training.")
+    parser.add_argument("--real-trace-prob", type=float, default=0,
+                        help="Probability of picking a real trace in training")
 
     return parser.parse_args()
 
@@ -204,7 +206,9 @@ class Genet:
                  black_box_function: Callable, heuristic, model_path: str,
                  nproc: int, seed: int = 42, validation: bool = False,
                  random_config_sample: bool = False, model_select: str = 'latest',
-                 train_trace_file: Union[None, str] = None):
+                 train_trace_file: Union[None, str] = None,
+                 real_trace_prob: float = 0):
+        self.real_trace_prob = real_trace_prob
         self.black_box_function = black_box_function
         self.seed = seed
         self.config_file = config_file
@@ -278,11 +282,15 @@ class Genet:
 
             cmd = "mpiexec -np {nproc} python train_rl.py " \
                 "--save-dir {save_dir} --exp-name {exp_name} --seed {seed} " \
-                "--total-timesteps {tot_step} --randomization-range-file {config_file} " \
-                "--pretrained-model-path {model_path}".format(
+                "--total-timesteps {tot_step} " \
+                "--randomization-range-file {config_file} " \
+                "--pretrained-model-path {model_path} " \
+                "--real-trace-prob {real_trace_prob}".format(
                     nproc=self.nproc, save_dir=training_save_dir, exp_name="",
                     seed=self.seed, tot_step=int(7.2e4),
-                    config_file=self.cur_config_file, model_path=self.model_path)
+                    config_file=self.cur_config_file,
+                    model_path=self.model_path,
+                    real_trace_prob=self.real_trace_prob)
             if self.validation:
                 cmd += " --validation"
             if self.train_trace_file:
@@ -407,7 +415,8 @@ def main():
                   validation=args.validation,
                   random_config_sample=(args.type == 'random'),
                   model_select=args.model_select,
-                  train_trace_file=args.train_trace_file)
+                  train_trace_file=args.train_trace_file,
+                  real_trace_prob=args.real_trace_prob)
     genet.train(args.bo_rounds)
 
 
