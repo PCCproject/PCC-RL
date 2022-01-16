@@ -96,6 +96,14 @@ class PantheonDataset:
     def __len__(self):
         return len(self.trace_files)
 
+    def dump_dataset(self, save_dir: str):
+        traces = self.get_traces(0, ms_bin=500)
+        for trace, link_type, (link_name, trace_name) in zip(
+                traces, self.link_conn_types, self.trace_names):
+            link_dir = os.path.join(save_dir, link_type, link_name)
+            os.makedirs(link_dir, exist_ok=True)
+            trace.dump(os.path.join(link_dir, trace_name + '.json'))
+
     def prepare_data_for_DoppelGANger(self, ms_bin: int = 500):
         traces = self.get_traces(0, ms_bin=ms_bin)
         data_feature = []

@@ -42,7 +42,7 @@ def parse_args():
                         help="tensorboard log direcotry.")
     parser.add_argument('--validation', action='store_true',
                         help='specify to enable validation.')
-    parser.add_argument('--dataset', type=str, default='synthetic',
+    parser.add_argument('--dataset', type=str, default='pantheon',
                         choices=('pantheon', 'synthetic'), help='dataset name')
     parser.add_argument('--real-trace-prob', type=float, default=0.0,
                         help='Probability of picking a real trace in training')
@@ -76,20 +76,7 @@ def main():
         with open(args.train_trace_file, 'r') as f:
             for line in f:
                 line = line.strip()
-                if args.dataset == 'pantheon':
-                    queue = 100  # dummy value
-                    # if "ethernet" in line:
-                    #     queue = 500
-                    # elif "cellular" in line:
-                    #     queue = 50
-                    # else:
-                    #     queue = 100
-                    training_traces.append(Trace.load_from_pantheon_file(
-                        line, queue=queue, loss=0))
-                elif args.dataset == 'synthetic':
-                    training_traces.append(Trace.load_from_file(line))
-                else:
-                    raise ValueError
+                training_traces.append(Trace.load_from_file(line))
 
     if args.val_trace_file:
         with open(args.val_trace_file, 'r') as f:

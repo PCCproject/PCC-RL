@@ -731,12 +731,15 @@ class SimulatedNetworkEnv(gym.Env):
         # old snippet end
 
         # choose real trace with a probability. otherwise, use synthetic trace
-        self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
-        if random.uniform(0, 1) < self.real_trace_prob and self.traces:
-            real_trace = np.random.choice(self.traces)  # randomly select a real trace
-            real_trace.queue_size = self.current_trace.queue_size
-            real_trace.loss_rate = self.current_trace.loss_rate
-            self.current_trace = real_trace
+        if self.train_flag and self.config_file:
+            self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
+            if random.uniform(0, 1) < self.real_trace_prob and self.traces:
+                real_trace = np.random.choice(self.traces)  # randomly select a real trace
+                real_trace.queue_size = self.current_trace.queue_size
+                real_trace.loss_rate = self.current_trace.loss_rate
+                self.current_trace = real_trace
+        else:
+            self.current_trace = np.random.choice(self.traces)
 
         # if self.train_flag and not self.config_file:
         #     bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
