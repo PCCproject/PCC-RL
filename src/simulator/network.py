@@ -626,6 +626,7 @@ class SimulatedNetworkEnv(gym.Env):
         self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
+        self.train_flag = train_flag
         if self.config_file:
             self.current_trace = generate_traces(self.config_file, 1, 30)[0]
         elif self.traces:
@@ -636,10 +637,9 @@ class SimulatedNetworkEnv(gym.Env):
             self.real_trace_configs = []
             for trace in self.traces:
                 self.real_trace_configs.append(trace.real_trace_configs(True))
-            self.real_trace_configs = np.array(self.real_trace_configs).reshape(-1, )
+            self.real_trace_configs = np.array(self.real_trace_configs).reshape(-1, 4)
         else:
             self.real_trace_configs = None
-        self.train_flag = train_flag
         self.use_cwnd = False
 
         self.history_len = history_len
@@ -743,7 +743,7 @@ class SimulatedNetworkEnv(gym.Env):
         if self.train_flag and self.config_file:
             self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
             if random.uniform(0, 1) < self.real_trace_prob and self.traces:
-                config_syn = self.current_trace.real_trace_configs(normalized=True).reshape(1, -1)
+                config_syn = np.array(self.current_trace.real_trace_configs(normalized=True)).reshape(1, -1)
                 assert self.real_trace_configs is not None
                 dists = np.linalg.norm(self.real_trace_configs - config_syn)
                 target_idx = np.argmin(dists)
