@@ -33,12 +33,14 @@ class Trace():
                  bandwidths: Union[List[int], List[float]],
                  delays: Union[List[int], List[float]], loss_rate: float,
                  queue_size: int, delay_noise: float = 0):
-        assert len(timestamps) == len(bandwidths), "len(timestamps)={}, len(bandwidths)={}".format(len(timestamps), len(bandwidths))
+        assert len(timestamps) == len(bandwidths), \
+                "len(timestamps)={}, len(bandwidths)={}".format(
+                        len(timestamps), len(bandwidths))
         self.timestamps = timestamps
         if len(timestamps) >= 2:
             self.dt = timestamps[1] - timestamps[0]
         else:
-            self.dt = 0.01
+            self.dt = 0.1
 
         self.bandwidths = [val if val >= 0.1 else 0.1 for val in bandwidths]
         self.delays = delays
@@ -56,7 +58,8 @@ class Trace():
 
     @property
     def bdp(self) -> float:
-        return np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
+        return np.max(self.bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * \
+                1e6 * np.max(self.delays) * 2 / 1000
 
     @property
     def min_bw(self) -> float:

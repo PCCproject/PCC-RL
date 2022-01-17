@@ -7,7 +7,7 @@ from mpi4py.MPI import COMM_WORLD
 
 from simulator.aurora import Aurora
 from simulator.trace import Trace
-from common.utils import set_seed, write_json_file
+from common.utils import set_seed, save_args
 
 warnings.filterwarnings("ignore")
 
@@ -50,18 +50,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def save_args(args):
-    """Write arguments to a log file."""
-    if args.save_dir and os.path.exists(args.save_dir):
-        write_json_file(os.path.join(args.save_dir, 'cmd.json'), args.__dict__)
-
-
 def main():
     args = parse_args()
     assert args.pretrained_model_path is None or args.pretrained_model_path.endswith(
         ".ckpt")
     os.makedirs(args.save_dir, exist_ok=True)
-    save_args(args)
+    save_args(args, args.save_dir)
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
     nprocs = COMM_WORLD.Get_size()
 
