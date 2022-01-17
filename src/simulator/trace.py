@@ -27,12 +27,14 @@ class Trace():
         loss_rate: uplink random packet loss rate.
         queue: queue in packets.
         delay_noise: maximum noise added to a packet in ms.
+        bw_change_interval: bandwidth change interval in second.
     """
 
     def __init__(self, timestamps: Union[List[float], List[int]],
                  bandwidths: Union[List[int], List[float]],
                  delays: Union[List[int], List[float]], loss_rate: float,
-                 queue_size: int, delay_noise: float = 0):
+                 queue_size: int, delay_noise: float = 0,
+                 bw_change_interval: float = 0):
         assert len(timestamps) == len(bandwidths), \
                 "len(timestamps)={}, len(bandwidths)={}".format(
                         len(timestamps), len(bandwidths))
@@ -55,6 +57,16 @@ class Trace():
         self.noises = []
         self.noise_idx = 0
         self.return_noise = False
+        self.bw_change_interval = bw_change_interval
+
+    def real_trace_configs(self, normalized=False) -> List[float]:
+        if normalized:
+            return [(self.min_bw - 0.1) / (100 - 0.1),
+                    (self.max_bw - 0.1) / (100 - 0.1),
+                    (self.avg_delay - 2) / (200 - 2),
+                    (1 / self.bw_change_interval - 0) / (15 - 0)]
+        return [self.min_bw, self.max_bw, self.avg_delay,
+                1 / self.bw_change_freq]
 
     @property
     def bdp(self) -> float:
@@ -219,13 +231,14 @@ class Trace():
         self.idx = 0
 
     def dump(self, filename: str):
-        """save trace details into a json file."""
+        """Save trace details into a json file."""
         data = {'timestamps': self.timestamps,
                 'bandwidths': self.bandwidths,
                 'delays': self.delays,
                 'loss': self.loss_rate,
                 'queue': self.queue_size,
-                'delay_noise': self.delay_noise}
+                'delay_noise': self.delay_noise,
+                'T_s': self.bw_change_interval}
         write_json_file(filename, data)
 
     @staticmethod
@@ -368,7 +381,8 @@ def generate_trace(duration_range: Tuple[float, float],
     bdp = np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
     queue_size = max(2, int(bdp * queue_size))
 
-    ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size, delay_noise)
+    ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size,
+                      delay_noise, T_s)
     return ret_trace
 
 
@@ -403,15 +417,18 @@ def load_bandwidth_from_file(filename: str):
 def generate_bw_delay_series(T_s: float, duration: float,
                              min_bw_lower_bnd: float, min_bw_upper_bnd: float,
                              max_bw_lower_bnd: float, max_bw_upper_bnd: float,
-                             min_delay: float, max_delay: float, dt: float=0.1)-> Tuple[List[float], List[float], List[float]]:
+                             min_delay: float, max_delay: float, dt: float=0.1) -> Tuple[List[float], List[float], List[float]]:
     timestamps = []
     bandwidths = []
     delays = []
     round_digit = 5
     min_bw_lower_bnd = round(min_bw_lower_bnd, round_digit)
-    bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(max_bw_lower_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
-    assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(min_bw_lower_bnd, bw_upper_bnd)
-    bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(min_bw_upper_bnd, bw_upper_bnd)), 1))), round_digit)
+    bw_upper_bnd =  round(np.exp(float(np.random.uniform(
+        np.log(max_bw_lower_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
+    assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(
+            min_bw_lower_bnd, bw_upper_bnd)
+    bw_lower_bnd =  round(np.exp(float(np.random.uniform(
+        np.log(min_bw_lower_bnd), np.log(min(min_bw_upper_bnd, bw_upper_bnd)), 1))), round_digit)
     # bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
     bw_val = round(float(np.random.uniform(bw_lower_bnd, bw_upper_bnd, 1)), round_digit)
     delay_val = round(float(np.random.uniform(

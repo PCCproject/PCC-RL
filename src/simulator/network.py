@@ -628,8 +628,17 @@ class SimulatedNetworkEnv(gym.Env):
         self.traces = traces
         if self.config_file:
             self.current_trace = generate_traces(self.config_file, 1, 30)[0]
-        else:
+        elif self.traces:
             self.current_trace = np.random.choice(self.traces)
+        else:
+            raise ValueError
+        if self.train_flag and self.traces:
+            self.real_trace_configs = []
+            for trace in self.traces:
+                self.real_trace_configs.append(trace.real_trace_configs(True))
+            self.real_trace_configs = np.array(self.real_trace_configs).reshape(-1, )
+        else:
+            self.real_trace_configs = None
         self.train_flag = train_flag
         self.use_cwnd = False
 
@@ -734,9 +743,14 @@ class SimulatedNetworkEnv(gym.Env):
         if self.train_flag and self.config_file:
             self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
             if random.uniform(0, 1) < self.real_trace_prob and self.traces:
-                real_trace = np.random.choice(self.traces)  # randomly select a real trace
-                real_trace.queue_size = self.current_trace.queue_size
-                real_trace.loss_rate = self.current_trace.loss_rate
+                config_syn = self.current_trace.real_trace_configs(normalized=True).reshape(1, -1)
+                assert self.real_trace_configs is not None
+                dists = np.linalg.norm(self.real_trace_configs - config_syn)
+                target_idx = np.argmin(dists)
+                real_trace = self.traces[target_idx]
+                # real_trace = np.random.choice(self.traces)  # randomly select a real trace
+                # real_trace.queue_size = self.current_trace.queue_size
+                # real_trace.loss_rate = self.current_trace.loss_rate
                 self.current_trace = real_trace
         else:
             self.current_trace = np.random.choice(self.traces)
