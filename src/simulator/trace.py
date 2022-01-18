@@ -390,7 +390,7 @@ def generate_trace(duration_range: Tuple[float, float],
     return ret_trace
 
 
-def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
+def generate_traces(config_file: str, tot_trace_cnt: int, duration: int) -> List[Trace]:
     traces = []
     for _ in range(tot_trace_cnt):
         trace = generate_trace_from_config_file(config_file, duration)
@@ -398,7 +398,7 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
     return traces
 
 
-def generate_traces_from_config(config, tot_trace_cnt: int, duration: int):
+def generate_traces_from_config(config, tot_trace_cnt: int, duration: int) -> List[Trace]:
     traces = []
     for _ in range(tot_trace_cnt):
         trace = generate_trace_from_config(config, duration)

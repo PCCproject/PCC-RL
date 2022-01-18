@@ -749,8 +749,8 @@ class SimulatedNetworkEnv(gym.Env):
                 target_idx = np.argmin(dists)
                 real_trace = self.traces[target_idx]
                 # real_trace = np.random.choice(self.traces)  # randomly select a real trace
-                # real_trace.queue_size = self.current_trace.queue_size
-                # real_trace.loss_rate = self.current_trace.loss_rate
+                real_trace.queue_size = self.current_trace.queue_size
+                real_trace.loss_rate = self.current_trace.loss_rate
                 self.current_trace = real_trace
         else:
             self.current_trace = np.random.choice(self.traces)
