@@ -98,3 +98,12 @@ def save_args(args, save_dir: str):
 
 def zero_one_normalize(data):
     return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+
+def load_bo_json_log(file: str):
+    logs = []
+    with open(file, 'r') as f:
+        for line in f:
+            line.strip()
+            logs.append(json.loads(line))
+    return logs
