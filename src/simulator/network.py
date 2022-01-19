@@ -745,7 +745,7 @@ class SimulatedNetworkEnv(gym.Env):
             if random.uniform(0, 1) < self.real_trace_prob and self.traces:
                 config_syn = np.array(self.current_trace.real_trace_configs(normalized=True)).reshape(1, -1)
                 assert self.real_trace_configs is not None
-                dists = np.linalg.norm(self.real_trace_configs - config_syn)
+                dists = np.linalg.norm(self.real_trace_configs - config_syn, axis=1)
                 target_idx = np.argmin(dists)
                 real_trace = self.traces[target_idx]
                 # real_trace = np.random.choice(self.traces)  # randomly select a real trace

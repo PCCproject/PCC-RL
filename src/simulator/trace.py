@@ -57,18 +57,15 @@ class Trace():
         self.noises = []
         self.noise_idx = 0
         self.return_noise = False
-        if bw_change_interval == 0 and self.bw_change_freq != 0:
-                self.bw_change_interval = 1/ self.bw_change_freq
-        else:
-            self.bw_change_interval = 30
+        self.bw_change_interval = bw_change_interval
 
     def real_trace_configs(self, normalized=False) -> List[float]:
         if normalized:
-            # if self.bw_change_interval == 0:
             return [(self.min_bw - 0.1) / (100 - 0.1),
                     (self.max_bw - 0.1) / (100 - 0.1),
-                    (self.avg_delay - 2) / (200 - 2),
-                    self.bw_change_interval / (30 - 0)]
+                    (self.avg_delay - 0) / (200 - 2),
+                    max((1 / self.bw_change_freq) / (30 - 0), 1)
+                    if self.bw_change_freq > 0 else 1]
         return [self.min_bw, self.max_bw, self.avg_delay,
                 1 / self.bw_change_freq]
 
@@ -114,7 +111,7 @@ class Trace():
             avg_bw_per_sec.append(np.mean(tot_bw))
         change_cnt = 0
         for bw0, bw1 in zip(avg_bw_per_sec[:-1], avg_bw_per_sec[1:]):
-            if (bw1 - bw0) / bw0 > 0.1: # value change greater than 20%
+            if (bw1 - bw0) / bw0 > 0.2: # value change greater than 20%
                 change_cnt += 1
 
         # change_cnt = 0
