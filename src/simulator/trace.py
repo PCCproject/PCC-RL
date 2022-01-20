@@ -501,6 +501,32 @@ def generate_trace_from_config(config, duration: int = 30) -> Trace:
     raise ValueError("This line should never be reached.")
 
 
+def generate_configs(config_file: str, n: int):
+    config_range = read_json_file(config_file)[0]
+    configs = []
+
+    for _ in range(n):
+        min_bw = 10**np.random.uniform(
+                np.log10(config_range['bandwidth_lower_bound'][0]),
+                np.log10(config_range['bandwidth_lower_bound'][1]), 1)[0]
+        max_bw = 10**np.random.uniform(
+                np.log10(config_range['bandwidth_upper_bound'][0]),
+                np.log10(config_range['bandwidth_upper_bound'][1]), 1)[0]
+        delay = np.random.uniform(config_range['delay'][0],
+                                  config_range['delay'][1], 1)[0]
+        queue = np.random.uniform(config_range['queue'][0],
+                                  config_range['queue'][1], 1)[0]
+        T_s = np.random.uniform(config_range['T_s'][0],
+                                config_range['T_s'][1], 1)[0]
+        loss_exponent = np.random.uniform(
+                np.log10(config_range['loss'][0] + 1e-5),
+                np.log10(config_range['loss'][1] + 1e-5), 1)[0]
+        loss = 0 if loss_exponent < -4 else 10 ** loss_exponent
+        configs.append([min_bw, max_bw, delay, queue, loss, T_s])
+
+    return configs
+
+
 def parse_args():
     """Parse arguments from the command line."""
     parser = argparse.ArgumentParser("Training code.")
