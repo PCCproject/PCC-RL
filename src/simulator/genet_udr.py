@@ -279,7 +279,6 @@ class Genet:
                 self.save_dir, "bo_"+str(i) + ".json")
             self.rand_ranges.dump(self.cur_config_file)
             to_csv(self.cur_config_file)
-            return
 
             cmd = "mpiexec -np {nproc} python train_genet_udr.py " \
                 "--save-dir {save_dir} --exp-name {exp_name} --seed {seed} " \
@@ -343,14 +342,12 @@ def black_box_function(bandwidth_lower_bound: float,
             heuristic_rewards.append(heuristic_pkt_level_reward)
         print("heuristic used {}s".format(time.time() - t_start))
         t_start = time.time()
-        rl_ret = [[0, 0]] * 10 # test_on_traces(model_path, traces, save_dirs, 8, 20,
-                                # record_pkt_log=False, plot_flag=False)
+        rl_ret = test_on_traces(model_path, traces, save_dirs, 8, 20,
+                                record_pkt_log=False, plot_flag=False)
         for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
             # rl_method_rewards.append(rl_mi_level_reward)
             rl_method_rewards.append(rl_pkt_level_reward)
         print("rl used {}s".format(time.time() - t_start))
-    import pdb
-    pdb.set_trace()
     gap = float(np.mean(np.array(heuristic_rewards)) - np.mean(np.array(rl_method_rewards)))
     return gap
 #
@@ -412,8 +409,6 @@ def main():
         heuristic = None
     else:
         raise ValueError
-    import pdb
-    pdb.set_trace()
     genet = Genet(args.config_file, args.save_dir, black_box_function,
                   heuristic, args.model_path, args.nproc, seed=args.seed,
                   validation=args.validation,
@@ -421,7 +416,7 @@ def main():
                   model_select=args.model_select,
                   train_trace_file=args.train_trace_file,
                   real_trace_prob=args.real_trace_prob)
-    # genet.train(args.bo_rounds)
+    genet.train(args.bo_rounds)
 
 
 if __name__ == "__main__":
