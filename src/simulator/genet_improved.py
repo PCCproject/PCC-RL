@@ -87,7 +87,6 @@ class JSONLogger(_Tracker):
                 data2dump['params']['loss'] = 0
             else:
                 data2dump['params']['loss'] = 10**data2dump['params']['loss']
-            data2dump['params']['loss'] = 10**data2dump['params']['loss']
 
             with open(self._path, "a") as f:
                 f.write(json.dumps(data2dump) + "\n")
