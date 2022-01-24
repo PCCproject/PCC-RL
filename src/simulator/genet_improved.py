@@ -45,9 +45,10 @@ def parse_args():
                         'workers used in training.')
     parser.add_argument('--validation', action='store_true',
                         help='specify to enable validation.')
-    parser.add_argument('--type', type=str, choices=('bo', 'random'),
-                        default='bo', help='use bo or random (without '
-                        'GaussianProcessRegressor) configuraiton selection')
+    parser.add_argument('--n-init-pts', type=int, default=10,
+                        help='number of randomly points in BO.')
+    parser.add_argument('--n-iter', type=int, default=5,
+                        help='number of exploitation points in BO.')
     parser.add_argument('--model-select', type=str, choices=('best', 'latest'),
                         default='latest', help='method to select a model from '
                         'the saved ones.')
@@ -56,6 +57,8 @@ def parse_args():
                         "network traces used in training.")
     parser.add_argument("--real-trace-prob", type=float, default=0,
                         help="Probability of picking a real trace in training")
+    parser.add_argument('--bo-only', action='store_true',
+                        help='specify to avoid training.')
 
     return parser.parse_args()
 
@@ -196,17 +199,18 @@ class Genet:
         nproc: number of processes used in training.
         seed: random seed.
         validation: a boolean flag to enable validation in training.
-        random_config_sample: a boolean flag to enable random configuration
-                              exploration instead of using BO.
+        n_init_pts: number of randomly sampled points in BO.
+        n_iter: number of exploitation points in BO.
         model_select: how to pick a model from trained models. latest or best. Default: latest
     """
 
     def __init__(self, config_file: str, save_dir: str,
                  black_box_function: Callable, heuristic, model_path: str,
                  nproc: int, seed: int = 42, validation: bool = False,
-                 random_config_sample: bool = False, model_select: str = 'latest',
+                 n_init_pts: int = 10, n_iter: int = 5,
+                 model_select: str = 'latest',
                  train_trace_file: Union[None, str] = None,
-                 real_trace_prob: float = 0):
+                 real_trace_prob: float = 0, bo_only: bool = False):
         self.real_trace_prob = real_trace_prob
         self.black_box_function = black_box_function
         self.seed = seed
@@ -233,12 +237,9 @@ class Genet:
         self.start_model_path = model_path
         self.nproc = nproc
         self.validation = validation
-        if random_config_sample:
-            self.n_init_pts = 15
-            self.n_iter = 0
-        else:
-            self.n_init_pts = 10
-            self.n_iter = 5
+        self.n_init_pts = n_init_pts
+        self.n_iter = n_iter
+        self.bo_only = bo_only
         if model_select != 'latest' and model_select != 'best':
             raise ValueError('Wrong way of model_select!')
         self.model_select = model_select
@@ -278,6 +279,8 @@ class Genet:
                 self.save_dir, "bo_"+str(i) + ".json")
             self.rand_ranges.dump(self.cur_config_file)
             to_csv(self.cur_config_file)
+            if self.bo_only:
+                return
 
             cmd = "mpiexec -np {nproc} python train_rl.py " \
                 "--save-dir {save_dir} --exp-name {exp_name} --seed {seed} " \
@@ -333,16 +336,16 @@ def black_box_function(bandwidth_lower_bound: float,
             heuristic_rewards.append(trace.optimal_reward)
     else:
         t_start = time.time()
-        # save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
-        save_dirs = [""] * len(traces)
-        hret = heuristic.test_on_traces(traces, save_dirs, False, 8)
+        save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
+        # save_dirs = [""] * len(traces)
+        hret = heuristic.test_on_traces(traces, save_dirs, True, 8)
         for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
             # heuristic_rewards.append(heuristic_mi_level_reward)
             heuristic_rewards.append(heuristic_pkt_level_reward)
         print("heuristic used {}s".format(time.time() - t_start))
         t_start = time.time()
         rl_ret = test_on_traces(model_path, traces, save_dirs, 8, 20,
-                                record_pkt_log=False, plot_flag=False)
+                                record_pkt_log=False, plot_flag=True)
         for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
             # rl_method_rewards.append(rl_mi_level_reward)
             rl_method_rewards.append(rl_pkt_level_reward)
@@ -412,10 +415,10 @@ def main():
     genet = Genet(args.config_file, args.save_dir, black_box_function,
                   heuristic, args.model_path, args.nproc, seed=args.seed,
                   validation=args.validation,
-                  random_config_sample=(args.type == 'random'),
+                  n_init_pts=args.n_init_pts, n_iter=args.n_iter,
                   model_select=args.model_select,
                   train_trace_file=args.train_trace_file,
-                  real_trace_prob=args.real_trace_prob)
+                  real_trace_prob=args.real_trace_prob, bo_only=args.bo_only)
     genet.train(args.bo_rounds)
 
 
