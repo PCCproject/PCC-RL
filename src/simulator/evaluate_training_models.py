@@ -42,9 +42,9 @@ def parse_args():
     parser.add_argument('--save-dir', type=str, default="",
                         help="direcotry to testing results.")
     parser.add_argument('--cc', type=str, required=True,
-                        choices=("bbr", 'bbr_old', "cubic", "udr1", "udr2", "udr3",
-                                 "genet_bbr", 'genet_bbr_old', 'genet_cubic',
-                                 'real', 'cl1', 'cl2', 'pretrained'),
+                        # choices=("bbr", 'bbr_old', "cubic", "udr1", "udr2", "udr3",
+                        #          "genet_bbr", 'genet_bbr_old', 'genet_cubic',
+                        #          'real', 'cl1', 'cl2', 'pretrained', 'cl2_new', 'real_cellular', ),
                         help='congestion control name')
     parser.add_argument("--conn-type", type=str, required=True,
                         choices=('ethernet', 'cellular', 'wifi'),
@@ -68,7 +68,9 @@ def main():
         raise ValueError
     dataset = PantheonDataset(TRACE_ROOT, args.conn_type, post_nsdi=False,
                               target_ccs=TARGET_CCS)
-    traces = dataset.get_traces(0, queue_size, front_offset=10, wrap=True)
+    # traces = dataset.get_traces(0, queue_size, front_offset=10, wrap=True)
+    traces = dataset.get_traces(0, queue_size)
+    # traces = dataset.get_traces(0, front_offset=10, wrap=True)
     save_dirs = [os.path.join(args.save_dir, args.conn_type, link_name,
                               trace_name) for link_name, trace_name in dataset.trace_names]
 
@@ -106,7 +108,8 @@ def main():
             test_on_traces(model_path, traces, udr_save_dirs,
                            args.nproc, 42, False, True)
             step += 28800
-    elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3' or args.cc == 'cl1' or args.cc == 'cl2':
+    elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3' or \
+            args.cc == 'cl1' or args.cc == 'cl1_new' or args.cc == 'cl2' or args.cc == 'cl2_new' or args.cc == 'real_cellular' or 'udr' in args.cc:
         # TODO: bug here when there is no validation log
         # original implementation
         # val_log = pd.read_csv(os.path.join(
@@ -129,7 +132,7 @@ def main():
             if 'seed' in s:
                 udr_seed = s
         step = 0
-        while True:
+        while step <= 720000:
             if not os.path.exists(os.path.join(args.models_path, 'model_step_{}.ckpt.meta'.format(step))):
                 break
             udr_save_dirs = [os.path.join(
@@ -139,12 +142,14 @@ def main():
             test_on_traces(model_path, traces, udr_save_dirs,
                            args.nproc, 42, False, True)
             step += 64800
-    elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old':
-        genet_seed = ''
+            print(step)
+    # elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old':
+    elif 'genet' in args.cc: #== 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old': genet_seed = ''
         for s in args.models_path.split('/'):
             if 'seed' in s:
                 genet_seed = s
-        for bo in range(0, 15, 3):
+        # for bo in range(0, 15, 3):
+        for bo in range(0, 10, 3):
             bo_dir = os.path.join(args.models_path, "bo_{}".format(bo))
             step = 64800
             model_path = os.path.join(
