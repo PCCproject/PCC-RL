@@ -2,19 +2,22 @@ import glob
 import os
 from typing import Union
 
-from simulator.trace import Trace, generate_traces
-from common.utils import set_seed
+from simulator.trace import Trace, generate_traces, generate_traces_from_config
+from common.utils import set_seed, read_json_file
 
 
 class SyntheticDataset:
-    def __init__(self, count: int, config_file: Union[str, None],
+    def __init__(self, count: int, config_file: Union[str, None], config=None,
                  seed: int = 42):
         set_seed(seed)
         self.count = count
         self.traces = []
         self.config_file = config_file
+        self.config = config
         if self.config_file:
             self.traces = generate_traces(self.config_file, self.count, 30)
+        elif self.config:
+            self.traces = generate_traces_from_config(self.config, self.count, 30)
         assert len(self.traces) == self.count
 
     def dump(self, save_dir: str):
@@ -51,5 +54,9 @@ class SyntheticDataset:
     def __getitem__(self, idx):
         return self.traces[idx]
 
-dataset = SyntheticDataset(1000, '../../config/train/udr_7_dims_0826/udr_large.json')
-dataset.dump('/datamirror/zxxia/PCC-RL/results_1006/synthetic_dataset')
+# dataset = SyntheticDataset(1000, '../../config/train/udr_7_dims_0826/udr_large.json')
+# dataset.dump('/datamirror/zxxia/PCC-RL/results_1006/synthetic_dataset')
+# config = read_json_file('../../config/train/udr_7_dims_0826/udr_large.json')
+#
+# dataset = SyntheticDataset(1000, '../../config/train/udr_7_dims_0826/udr_large.json')
+# dataset.dump('/datamirror/zxxia/PCC-RL/results_1006/synthetic_dataset')
