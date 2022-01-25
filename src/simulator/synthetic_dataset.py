@@ -18,7 +18,6 @@ class SyntheticDataset:
             self.traces = generate_traces(self.config_file, self.count, 30)
         elif self.config:
             self.traces = generate_traces_from_config(self.config, self.count, 30)
-        assert len(self.traces) == self.count
 
     def dump(self, save_dir: str):
         """Save all traces."""
