@@ -58,8 +58,16 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dataset = SyntheticDataset(25, '/tank/zxxia/PCC-RL/config/train/udr_7_dims_0826/udr_large.json', seed=42)
+    # dataset = SyntheticDataset(25, '/tank/zxxia/PCC-RL/config/train/udr_7_dims_0826/udr_large.json', seed=42)
+    dataset = SyntheticDataset.load_from_dir('/datamirror/zxxia/PCC-RL/results_1006/synthetic_dataset')
     traces = dataset.traces
+    # cnt = 0
+    # for idx, trace in enumerate(traces):
+    #     if trace.min_bw > 0.5:
+    #         cnt+=1
+    #         print(idx)
+    # print(cnt)
+    # return
     save_dirs = [os.path.join(args.save_dir, 'trace_{:05d}'.format(i)) for i in range(len(dataset))]
 
     if args.cc == 'bbr':
@@ -129,7 +137,8 @@ def main():
                 args.models_path, 'model_step_{}.ckpt'.format(step))
             test_on_traces(model_path, traces, udr_save_dirs,
                            args.nproc, 42, False, True)
-            step += (7200) * 2
+            # step += (7200) * 2
+            step += 72000
             print(step)
     # elif args.cc == 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old':
     elif 'genet' in args.cc: #== 'genet_bbr' or args.cc == 'genet_cubic' or 'genet_bbr_old': genet_seed = ''
@@ -139,17 +148,19 @@ def main():
         # for bo in range(0, 15, 3):
         for bo in range(0, 10):
             bo_dir = os.path.join(args.models_path, "bo_{}".format(bo))
-            step = 64800
-            model_path = os.path.join(
-                bo_dir, 'model_step_{}.ckpt'.format(step))
-            if not os.path.exists(model_path + '.meta'):
-                continue
-            genet_save_dirs = [os.path.join(
-                save_dir, args.cc, genet_seed, "bo_{}".format(bo),
-                "step_{}".format(step)) for save_dir in save_dirs]
-            # print(genet_save_dirs)
-            test_on_traces(model_path, traces, genet_save_dirs,
-                           args.nproc, 42, False, True)
+            for step in range(64800, 72000, 14400):
+            # step = 64800
+                model_path = os.path.join(
+                    bo_dir, 'model_step_{}.ckpt'.format(step))
+                if not os.path.exists(model_path + '.meta'):
+                    print("skip " + model_path + '.meta')
+                    continue
+                genet_save_dirs = [os.path.join(
+                    save_dir, args.cc, genet_seed, "bo_{}".format(bo),
+                    "step_{}".format(step)) for save_dir in save_dirs]
+                # print(genet_save_dirs)
+                test_on_traces(model_path, traces, genet_save_dirs,
+                               args.nproc, 42, False, True)
     else:
         raise ValueError
 
