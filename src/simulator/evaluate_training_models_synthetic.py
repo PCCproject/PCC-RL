@@ -58,7 +58,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dataset = SyntheticDataset(25, '/tank/zxxia/PCC-RL/config/train/udr_7_dims_0826/udr_large.json', seed=42)
+    dataset = SyntheticDataset(25, '../../config/train/udr_7_dims_0826/udr_large.json', seed=42)
     traces = dataset.traces
     save_dirs = [os.path.join(args.save_dir, 'trace_{:05d}'.format(i)) for i in range(len(dataset))]
 
