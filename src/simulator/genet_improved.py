@@ -331,26 +331,25 @@ def black_box_function(bandwidth_lower_bound: float,
         T_s_range=(T_s, T_s),
         delay_noise_range=(delay_noise, delay_noise)) for _ in range(10)]
     # print("trace generation used {}s".format(time.time() - t_start))
+    save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
     if not heuristic:
         for trace in traces:
             heuristic_rewards.append(trace.optimal_reward)
     else:
         t_start = time.time()
-        save_dirs = [os.path.join(save_dir, 'trace_{}'.format(i)) for i in range(10)]
         # save_dirs = [""] * len(traces)
         hret = heuristic.test_on_traces(traces, save_dirs, True, 8)
         for heuristic_mi_level_reward, heuristic_pkt_level_reward in hret:
             # heuristic_rewards.append(heuristic_mi_level_reward)
             heuristic_rewards.append(heuristic_pkt_level_reward)
         print("heuristic used {}s".format(time.time() - t_start))
-        t_start = time.time()
-        rl_ret = test_on_traces(model_path, traces, save_dirs, 8, 20,
-                                record_pkt_log=False, plot_flag=True)
-        for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
-            # rl_method_rewards.append(rl_mi_level_reward)
-            rl_method_rewards.append(rl_pkt_level_reward)
-        print("rl used {}s".format(time.time() - t_start))
-
+    t_start = time.time()
+    rl_ret = test_on_traces(model_path, traces, save_dirs, 8, 20,
+                            record_pkt_log=False, plot_flag=True)
+    for rl_mi_level_reward, rl_pkt_level_reward in rl_ret:
+        # rl_method_rewards.append(rl_mi_level_reward)
+        rl_method_rewards.append(rl_pkt_level_reward)
+    print("rl used {}s".format(time.time() - t_start))
     gap = float(np.mean(np.array(heuristic_rewards)) - np.mean(np.array(rl_method_rewards)))
     return gap
 
