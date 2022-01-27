@@ -118,18 +118,29 @@ class PantheonDataset:
                 idx = (idx + 1) % val_cnt
             sample_feature = np.array(trace.bandwidths[:val_cnt]).reshape(-1, 1)
             data_feature.append(sample_feature)
-            if conn_type == 'cellular':
-                data_attribute.append(np.array([1, 0]))
-            elif conn_type == 'ethernet':
-                data_attribute.append(np.array([0, 1]))
-            else:
-                raise ValueError
+            data_attribute.append(np.array([1, 0]))
+            # if conn_type == 'cellular':
+            #     data_attribute.append(np.array([1, 0]))
+            # elif conn_type == 'ethernet':
+            #     data_attribute.append(np.array([0, 1]))
+            # else:
+            #     raise ValueError
+
+        print(np.min(data_feature))
+        print(np.max(data_feature))
+
         data_feature = zero_one_normalize(np.stack(data_feature))
         data_attribute = np.stack(data_attribute)
 
         data_gen_flag = np.ones(data_feature[:,:, 0].shape)
         return data_feature, data_attribute, data_gen_flag
 
-data = PantheonDataset('../../data', 'all')
-data.prepare_data_for_DoppelGANger()
-
+# data = PantheonDataset('../../data', 'all')
+# data.dump_dataset('../../data/converted_pantheon')
+# data_feature, data_attribute, data_gen_flag = data.prepare_data_for_DoppelGANger(500)
+# np.savez('/tank/zxxia/DoppelGANger/data/pantheon/data_train.npz',
+#          data_feature=data_feature, data_attribute=data_attribute,
+#          data_gen_flag=data_gen_flag)
+# np.savez('/tank/zxxia/DoppelGANger/data/pantheon/data_train_no_attribute.npz',
+#          data_feature=data_feature, data_attribute=data_attribute,
+#          data_gen_flag=data_gen_flag)
