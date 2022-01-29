@@ -755,16 +755,16 @@ class BBR_old:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
-        with open(os.path.join(save_dir, "{}_log.csv".format(self.cc_name)), 'w', 1) as f:
-            writer = csv.writer(f, lineterminator='\n')
-            writer.writerow(
-                ['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
-                 'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
-                 "full_bw", 'state', "packets_in_flight",
-                 "in_fast_recovery_mode", 'rs_delivery_rate', 'round_start',
-                 'round_count', 'rto', 'exit_fast_recovery_ts',
-                 'pkt_in_queue'])
-            writer.writerows(senders[0].bbr_log)
+        # with open(os.path.join(save_dir, "{}_log.csv".format(self.cc_name)), 'w', 1) as f:
+        #     writer = csv.writer(f, lineterminator='\n')
+        #     writer.writerow(
+        #         ['timestamp', 'pacing_gain', "pacing_rate", 'cwnd_gain',
+        #          'cwnd', 'target_cwnd', 'prior_cwnd', "btlbw", "rtprop",
+        #          "full_bw", 'state', "packets_in_flight",
+        #          "in_fast_recovery_mode", 'rs_delivery_rate', 'round_start',
+        #          'round_count', 'rto', 'exit_fast_recovery_ts',
+        #          'pkt_in_queue'])
+        #     writer.writerows(senders[0].bbr_log)
         if plot_flag and save_dir:
             plot_mi_level_time_series(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
             plot(trace, *senders[0].bin_tput, *senders[0].bin_sending_rate,
