@@ -105,7 +105,9 @@ def main():
                            args.nproc, 42, False, True)
             step += 28800
     elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3' or \
-            args.cc == 'cl1' or args.cc == 'cl1_new' or args.cc == 'cl2' or args.cc == 'cl2_new' or args.cc == 'real_cellular' or 'udr' in args.cc or 'cl' in args.cc:
+            args.cc == 'cl1' or args.cc == 'cl1_new' or args.cc == 'cl2' or \
+            args.cc == 'cl2_new' or args.cc == 'real_cellular' or \
+            'udr' in args.cc or 'cl' in args.cc:
         # TODO: bug here when there is no validation log
         # original implementation
         # val_log = pd.read_csv(os.path.join(

@@ -286,13 +286,13 @@ class Genet:
                 "--save-dir {save_dir} --exp-name {exp_name} --seed {seed} " \
                 "--total-timesteps {tot_step} " \
                 "--randomization-range-file {config_file} " \
-                "--pretrained-model-path {model_path} " \
                 "--real-trace-prob {real_trace_prob}".format(
                     nproc=self.nproc, save_dir=training_save_dir, exp_name="",
                     seed=self.seed, tot_step=int(7.2e4),
                     config_file=self.cur_config_file,
-                    model_path=self.model_path,
                     real_trace_prob=self.real_trace_prob)
+            if self.model_path:
+                " --pretrained-model-path {}".format(self.model_path)
             if self.validation:
                 cmd += " --validation"
             if self.train_trace_file:

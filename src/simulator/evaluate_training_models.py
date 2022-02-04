@@ -68,8 +68,8 @@ def main():
         raise ValueError
     dataset = PantheonDataset(TRACE_ROOT, args.conn_type, post_nsdi=False,
                               target_ccs=TARGET_CCS)
-    # traces = dataset.get_traces(0, queue_size, front_offset=10, wrap=True)
-    traces = dataset.get_traces(0, queue_size)
+    traces = dataset.get_traces(0, queue_size, front_offset=10, wrap=True)
+    # traces = dataset.get_traces(0, queue_size)
     # traces = dataset.get_traces(0, front_offset=10, wrap=True)
     save_dirs = [os.path.join(args.save_dir, args.conn_type, link_name,
                               trace_name) for link_name, trace_name in dataset.trace_names]
@@ -109,7 +109,9 @@ def main():
                            args.nproc, 42, False, True)
             step += 28800
     elif args.cc == 'udr1' or args.cc == 'udr2' or args.cc == 'udr3' or \
-            args.cc == 'cl1' or args.cc == 'cl1_new' or args.cc == 'cl2' or args.cc == 'cl2_new' or args.cc == 'real_cellular' or 'udr' in args.cc or 'cl' in args.cc:
+            args.cc == 'cl1' or args.cc == 'cl1_new' or args.cc == 'cl2' or \
+            args.cc == 'cl2_new' or args.cc == 'real_cellular' or \
+            args.cc == 'real_ethernet' or 'udr' in args.cc or 'cl' in args.cc:
         # TODO: bug here when there is no validation log
         # original implementation
         # val_log = pd.read_csv(os.path.join(
