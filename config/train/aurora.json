@@ -1,0 +1,37 @@
+[
+    {
+        "bandwidth_lower_bound": [
+            0.1,
+            0.1
+        ],
+        "bandwidth_upper_bound": [
+            1.2,
+            6
+        ],
+        "delay": [
+            50,
+            500
+        ],
+        "loss": [
+            0,
+            0.05
+        ],
+        "queue": [
+            0.2,
+            3
+        ],
+        "T_s": [
+            30,
+            30
+        ],
+        "duration": [
+            30,
+            30
+        ],
+        "delay_noise": [
+            0,
+            0
+        ],
+        "weight": 1
+    }
+]
