@@ -7,7 +7,7 @@ from mpi4py.MPI import COMM_WORLD
 
 from simulator.aurora import Aurora
 from simulator.trace import Trace
-from common.utils import set_seed, write_json_file
+from common.utils import set_seed, save_args
 
 warnings.filterwarnings("ignore")
 
@@ -42,14 +42,12 @@ def parse_args():
                         help="tensorboard log direcotry.")
     parser.add_argument('--validation', action='store_true',
                         help='specify to enable validation.')
+    parser.add_argument('--dataset', type=str, default='pantheon',
+                        choices=('pantheon', 'synthetic'), help='dataset name')
+    parser.add_argument('--real-trace-prob', type=float, default=0.0,
+                        help='Probability of picking a real trace in training')
 
     return parser.parse_args()
-
-
-def save_args(args):
-    """Write arguments to a log file."""
-    if args.save_dir and os.path.exists(args.save_dir):
-        write_json_file(os.path.join(args.save_dir, 'cmd.json'), args.__dict__)
 
 
 def main():
@@ -57,7 +55,7 @@ def main():
     assert args.pretrained_model_path is None or args.pretrained_model_path.endswith(
         ".ckpt")
     os.makedirs(args.save_dir, exist_ok=True)
-    save_args(args)
+    save_args(args, args.save_dir)
     set_seed(args.seed + COMM_WORLD.Get_rank() * 100)
     nprocs = COMM_WORLD.Get_size()
 
@@ -72,36 +70,33 @@ def main():
         with open(args.train_trace_file, 'r') as f:
             for line in f:
                 line = line.strip()
-                queue = 100  # dummy value
-                # if "ethernet" in line:
-                #     queue = 500
-                # elif "cellular" in line:
-                #     queue = 50
-                # else:
-                #     queue = 100
-                training_traces.append(Trace.load_from_pantheon_file(
-                    line, queue=queue, loss=0))
-                print(len(training_traces))
+                training_traces.append(Trace.load_from_file(line))
+
     if args.val_trace_file:
         with open(args.val_trace_file, 'r') as f:
             for line in f:
                 line = line.strip()
-                queue = 100  # dummy value
-                # if "ethernet" in line:
-                #     queue = 500
-                # elif "cellular" in line:
-                #     queue = 50
-                # else:
-                #     queue = 100
-                val_traces.append(Trace.load_from_pantheon_file(
-                    line, queue=queue, loss=0))
-
+                if args.dataset == 'pantheon':
+                    queue = 100  # dummy value
+                    # if "ethernet" in line:
+                    #     queue = 500
+                    # elif "cellular" in line:
+                    #     queue = 50
+                    # else:
+                    #     queue = 100
+                    val_traces.append(Trace.load_from_pantheon_file(
+                        line, queue=queue, loss=0))
+                elif args.dataset == 'synthetic':
+                    val_traces.append(Trace.load_from_file(line))
+                else:
+                    raise ValueError
 
     aurora.train(args.randomization_range_file,
                  args.total_timesteps, tot_trace_cnt=args.total_trace_count,
                  tb_log_name=args.exp_name, validation_flag=args.validation,
                  training_traces=training_traces,
-                 validation_traces=val_traces)
+                 validation_traces=val_traces,
+                 real_trace_prob=args.real_trace_prob)
 
 
 if __name__ == '__main__':

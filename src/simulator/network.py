@@ -18,6 +18,7 @@ import sys
 import time
 import warnings
 warnings.simplefilter(action='ignore', category=UserWarning)
+from typing import Tuple, List
 
 import gym
 import numpy as np
@@ -325,7 +326,6 @@ class Sender():
         self.lat_diff = 0
         self.recv_rate = 0
         self.send_rate = 0
-        self.avg_latency = 0
         self.latest_rtt = 0
 
         # variables to track accross the connection session
@@ -338,7 +338,62 @@ class Sender():
         self.first_sent_ts = None
         self.last_sent_ts = None
 
+        # variables to track binwise measurements
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
+        self.bin_size = 500 # ms
+
     _next_id = 1
+
+    @property
+    def avg_sending_rate(self):
+        """Average sending rate in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_sent / (self.last_sent_ts - self.first_sent_ts)
+
+    @property
+    def avg_throughput(self):
+        """Average throughput in packets/second."""
+        assert self.last_ack_ts is not None and self.first_ack_ts is not None
+        assert self.last_sent_ts is not None and self.first_sent_ts is not None
+        return self.tot_acked / (self.last_ack_ts - self.first_ack_ts)
+
+    @property
+    def avg_latency(self):
+        """Average latency in second."""
+        return self.cur_avg_latency
+
+    @property
+    def pkt_loss_rate(self):
+        """Packet loss rate in one connection session."""
+        return 1 - self.tot_acked / self.tot_sent
+
+    @property
+    def bin_tput(self) -> Tuple[List[float], List[float]]:
+        tput_ts = []
+        tput = []
+        for bin_id in sorted(self.bin_bytes_acked):
+            tput_ts.append(bin_id * self.bin_size / 1000)
+            tput.append(
+                self.bin_bytes_acked[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
+        return tput_ts, tput
+
+    @property
+    def bin_sending_rate(self) -> Tuple[List[float], List[float]]:
+        sending_rate_ts = []
+        sending_rate = []
+        for bin_id in sorted(self.bin_bytes_sent):
+            sending_rate_ts.append(bin_id * self.bin_size / 1000)
+            sending_rate.append(
+                self.bin_bytes_sent[bin_id] * BITS_PER_BYTE / self.bin_size * 1000 / 1e6)
+        return sending_rate_ts, sending_rate
+
+    @property
+    def latencies(self) -> Tuple[List[float], List[float]]:
+        return self.lat_ts, self.lats
 
     def _get_next_id():
         result = Sender._next_id
@@ -380,6 +435,9 @@ class Sender():
             self.first_sent_ts = self.net.get_cur_time()
         self.last_sent_ts = self.net.get_cur_time()
 
+        bin_id = int((self.net.get_cur_time() - self.first_sent_ts) * 1000 / self.bin_size)
+        self.bin_bytes_sent[bin_id] = self.bin_bytes_sent.get(bin_id, 0) + BYTES_PER_PACKET
+
     def on_packet_acked(self, rtt):
         assert self.net
         self.cur_avg_latency = (self.cur_avg_latency * self.tot_acked + rtt) / (self.tot_acked + 1)
@@ -408,6 +466,11 @@ class Sender():
         if not self.got_data:
             self.got_data = len(self.rtt_samples) >= 1
         # self.got_data = True
+
+        bin_id = int((self.net.get_cur_time() - self.first_ack_ts) * 1000 / self.bin_size)
+        self.bin_bytes_acked[bin_id] = self.bin_bytes_acked.get(bin_id, 0) + BYTES_PER_PACKET
+        self.lat_ts.append(self.net.get_cur_time())
+        self.lats.append(rtt * 1000)
 
     def on_packet_lost(self, rtt):
         self.lost += 1
@@ -529,7 +592,6 @@ class Sender():
         self.lat_diff = 0
         self.recv_rate = 0
         self.send_rate = 0
-        self.avg_latency = 0
         self.latest_rtt = 0
 
         self.tot_sent = 0 # no. of packets
@@ -538,6 +600,11 @@ class Sender():
         self.cur_avg_latency = 0.0
         self.first_ack_ts = None
         self.last_ack_ts = None
+
+        self.bin_bytes_sent = {}
+        self.bin_bytes_acked = {}
+        self.lat_ts = []
+        self.lats = []
 
     def timeout(self):
         # placeholder
@@ -550,16 +617,29 @@ class SimulatedNetworkEnv(gym.Env):
                  # features="sent latency inflation,latency ratio,send ratio",
                  features="sent latency inflation,latency ratio,recv ratio",
                  train_flag=False, delta_scale=1.0, config_file=None,
-                 record_pkt_log: bool = False):
+                 record_pkt_log: bool = False, real_trace_prob: float = 0):
         """Network environment used in simulation.
         congestion_control_type: aurora is pcc-rl. cubic is TCPCubic.
         """
+        self.real_trace_prob = real_trace_prob
         self.record_pkt_log = record_pkt_log
         self.config_file = config_file
         self.delta_scale = delta_scale
         self.traces = traces
-        self.current_trace = np.random.choice(self.traces)
         self.train_flag = train_flag
+        if self.config_file:
+            self.current_trace = generate_traces(self.config_file, 1, 30)[0]
+        elif self.traces:
+            self.current_trace = np.random.choice(self.traces)
+        else:
+            raise ValueError
+        if self.train_flag and self.traces:
+            self.real_trace_configs = []
+            for trace in self.traces:
+                self.real_trace_configs.append(trace.real_trace_configs(True))
+            self.real_trace_configs = np.array(self.real_trace_configs).reshape(-1, 4)
+        else:
+            self.real_trace_configs = None
         self.use_cwnd = False
 
         self.history_len = history_len
@@ -593,11 +673,6 @@ class SimulatedNetworkEnv(gym.Env):
                                             np.tile(single_obs_max_vec,
                                                     self.history_len),
                                             dtype=np.float32)
-        # single_obs_min_vec = np.array([0, 0, -1e12, 0, 0, 0, 0])
-        # single_obs_max_vec =  np.array([1e12, 1e12, 1e12, 1, 1e12, 1e12, 1e12])
-        # self.observation_space = spaces.Box(single_obs_min_vec,
-        #                                     single_obs_max_vec,
-        #                                     dtype=np.float32)
 
         self.reward_sum = 0.0
         self.reward_ewma = 0.0
@@ -641,15 +716,6 @@ class SimulatedNetworkEnv(gym.Env):
         #         self.senders[0].latest_rtt])
         return sender_obs, reward, should_stop, {}
 
-    def print_debug(self):
-        assert self.links and self.senders
-        print("---Link Debug---")
-        for link in self.links:
-            link.print_debug()
-        print("---Sender Debug---")
-        for sender in self.senders:
-            sender.print_debug()
-
     def create_new_links_and_senders(self):
         self.links = [Link(self.current_trace), Link(self.current_trace)]
         self.senders = [Sender(
@@ -669,34 +735,51 @@ class SimulatedNetworkEnv(gym.Env):
     def reset(self):
         self.steps_taken = 0
         self.net.reset()
-        self.current_trace = np.random.choice(self.traces)
-        if self.train_flag and not self.config_file:
-            bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
-                    BITS_PER_BYTE * 1e6 * np.max(self.current_trace.delays) * 2 / 1000
-            self.current_trace.queue_size = max(2, int(bdp * np.random.uniform(0.2, 3.0))) # hard code this for now
-            loss_rate_exponent = float(np.random.uniform(np.log10(0+1e-5), np.log10(0.5+1e-5), 1))
-            if loss_rate_exponent < -4:
-                loss_rate = 0
-            else:
-                loss_rate = 10**loss_rate_exponent
-            self.current_trace.loss_rate = loss_rate
+        # old snippet start
+        # self.current_trace = np.random.choice(self.traces)
+        # old snippet end
+
+        # choose real trace with a probability. otherwise, use synthetic trace
+        if self.train_flag and self.config_file:
+            self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
+            if random.uniform(0, 1) < self.real_trace_prob and self.traces:
+                config_syn = np.array(self.current_trace.real_trace_configs(normalized=True)).reshape(1, -1)
+                assert self.real_trace_configs is not None
+                dists = np.linalg.norm(self.real_trace_configs - config_syn, axis=1)
+                target_idx = np.argmin(dists)
+                real_trace = self.traces[target_idx]
+                # real_trace = np.random.choice(self.traces)  # randomly select a real trace
+                real_trace.queue_size = self.current_trace.queue_size
+                real_trace.loss_rate = self.current_trace.loss_rate
+                self.current_trace = real_trace
+        else:
+            self.current_trace = np.random.choice(self.traces)
+
+        # if self.train_flag and not self.config_file:
+        #     bdp = np.max(self.current_trace.bandwidths) / BYTES_PER_PACKET / \
+        #             BITS_PER_BYTE * 1e6 * np.max(self.current_trace.delays) * 2 / 1000
+        #     self.current_trace.queue_size = max(2, int(bdp * np.random.uniform(0.2, 3.0))) # hard code this for now
+        #     loss_rate_exponent = float(np.random.uniform(np.log10(0+1e-5), np.log10(0.5+1e-5), 1))
+        #     if loss_rate_exponent < -4:
+        #         loss_rate = 0
+        #     else:
+        #         loss_rate = 10**loss_rate_exponent
+        #     self.current_trace.loss_rate = loss_rate
 
         self.current_trace.reset()
         self.create_new_links_and_senders()
         self.net = Network(self.senders, self.links, self)
         self.episodes_run += 1
-        if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
-            self.traces = generate_traces(self.config_file, 10, duration=30)
+
+        # old code snippet start
+        # if self.train_flag and self.config_file is not None and self.episodes_run % 100 == 0:
+        #     self.traces = generate_traces(self.config_file, 10, duration=30)
+        # old code snippet end
         self.net.run_for_dur(self.run_dur)
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
-        # print("Reward: %0.2f, Ewma Reward: %0.2f" % (self.reward_sum, self.reward_ewma))
         self.reward_sum = 0.0
         return self._get_all_sender_obs()
-        # return np.array([self.senders[0].send_rate, self.senders[0].avg_latency,
-        #         self.senders[0].lat_diff, int(self.senders[0].start_stage),
-        #         self.senders[0].max_tput, self.senders[0].min_rtt,
-        #         self.senders[0].latest_rtt])
 
 
 register(id='PccNs-v0', entry_point='simulator.network:SimulatedNetworkEnv')

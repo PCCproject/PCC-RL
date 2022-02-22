@@ -1,3 +1,4 @@
+import argparse
 from bisect import bisect_right
 import copy
 import csv
@@ -6,7 +7,7 @@ import os
 from typing import List, Tuple, Union
 
 import numpy as np
-from common.utils import read_json_file, set_seed, write_json_file
+from common.utils import read_json_file, set_seed, write_json_file, pcc_aurora_reward
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.pantheon_trace_parser.flow import Flow
 
@@ -26,18 +27,22 @@ class Trace():
         loss_rate: uplink random packet loss rate.
         queue: queue in packets.
         delay_noise: maximum noise added to a packet in ms.
+        bw_change_interval: bandwidth change interval in second.
     """
 
     def __init__(self, timestamps: Union[List[float], List[int]],
                  bandwidths: Union[List[int], List[float]],
                  delays: Union[List[int], List[float]], loss_rate: float,
-                 queue_size: int, delay_noise: float = 0):
-        assert len(timestamps) == len(bandwidths)
+                 queue_size: int, delay_noise: float = 0,
+                 bw_change_interval: float = 0):
+        assert len(timestamps) == len(bandwidths), \
+                "len(timestamps)={}, len(bandwidths)={}".format(
+                        len(timestamps), len(bandwidths))
         self.timestamps = timestamps
         if len(timestamps) >= 2:
             self.dt = timestamps[1] - timestamps[0]
         else:
-            self.dt = 0.01
+            self.dt = 0.1
 
         self.bandwidths = [val if val >= 0.1 else 0.1 for val in bandwidths]
         self.delays = delays
@@ -52,6 +57,22 @@ class Trace():
         self.noises = []
         self.noise_idx = 0
         self.return_noise = False
+        self.bw_change_interval = bw_change_interval
+
+    def real_trace_configs(self, normalized=False) -> List[float]:
+        if normalized:
+            return [(self.min_bw - 0.1) / (100 - 0.1),
+                    (self.max_bw - 0.1) / (100 - 0.1),
+                    (self.avg_delay - 0) / (200 - 2),
+                    max((1 / self.bw_change_freq) / (30 - 0), 1)
+                    if self.bw_change_freq > 0 else 1]
+        return [self.min_bw, self.max_bw, self.avg_delay,
+                1 / self.bw_change_freq]
+
+    @property
+    def bdp(self) -> float:
+        return np.max(self.bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * \
+                1e6 * np.max(self.delays) * 2 / 1000
 
     @property
     def min_bw(self) -> float:
@@ -113,6 +134,13 @@ class Trace():
     def avg_delay(self) -> float:
         """Mean one-way delay in ms."""
         return np.mean(np.array(self.delays))
+
+    @property
+    def optimal_reward(self):
+        return pcc_aurora_reward(
+                self.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET,
+                self.avg_delay * 2 / 1000, self.loss_rate,
+                self.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
 
     def get_next_ts(self) -> float:
         if self.idx + 1 < len(self.timestamps):
@@ -204,13 +232,14 @@ class Trace():
         self.idx = 0
 
     def dump(self, filename: str):
-        # save trace details into a json file.
+        """Save trace details into a json file."""
         data = {'timestamps': self.timestamps,
                 'bandwidths': self.bandwidths,
                 'delays': self.delays,
                 'loss': self.loss_rate,
                 'queue': self.queue_size,
-                'delay_noise': self.delay_noise}
+                'delay_noise': self.delay_noise,
+                'T_s': self.bw_change_interval}
         write_json_file(filename, data)
 
     @staticmethod
@@ -242,8 +271,10 @@ class Trace():
                 timestamps.append(ts - front_offset)
                 bandwidths.append(bw)
             elif wrap:
-                wrapped_ts.append(flow.throughput_timestamps[-1] - front_offset + ms_per_bin / 1000 + ts)
-                wrapped_bw.append(bw)
+                new_ts = flow.throughput_timestamps[-1] - front_offset + ms_per_bin / 1000 + ts
+                if new_ts < 25:  # mimic the behavior in pantheon+mahimahi emulator.
+                    wrapped_ts.append(new_ts)
+                    wrapped_bw.append(bw)
         timestamps += wrapped_ts
         bandwidths += wrapped_bw
 
@@ -302,7 +333,7 @@ def generate_trace(duration_range: Tuple[float, float],
                    queue_size_range: Tuple[float, float],
                    T_s_range: Union[Tuple[float, float], None] = None,
                    delay_noise_range: Union[Tuple[float, float], None] = None,
-                   seed: Union[int, None] = None):
+                   seed: Union[int, None] = None, dt: float = 0.1):
     """Generate trace for a network flow.
 
     Args:
@@ -345,17 +376,18 @@ def generate_trace(duration_range: Tuple[float, float],
     timestamps, bandwidths, delays = generate_bw_delay_series(
         T_s, duration, bandwidth_lower_bound_range[0], bandwidth_lower_bound_range[1],
         bandwidth_upper_bound_range[0], bandwidth_upper_bound_range[1],
-        delay_range[0], delay_range[1])
+        delay_range[0], delay_range[1], dt=dt)
 
     queue_size = np.random.uniform(queue_size_range[0], queue_size_range[1])
     bdp = np.max(bandwidths) / BYTES_PER_PACKET / BITS_PER_BYTE * 1e6 * np.max(delays) * 2 / 1000
     queue_size = max(2, int(bdp * queue_size))
 
-    ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size, delay_noise)
+    ret_trace = Trace(timestamps, bandwidths, delays, loss_rate, queue_size,
+                      delay_noise, T_s)
     return ret_trace
 
 
-def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
+def generate_traces(config_file: str, tot_trace_cnt: int, duration: int) -> List[Trace]:
     traces = []
     for _ in range(tot_trace_cnt):
         trace = generate_trace_from_config_file(config_file, duration)
@@ -363,7 +395,7 @@ def generate_traces(config_file: str, tot_trace_cnt: int, duration: int):
     return traces
 
 
-def generate_traces_from_config(config, tot_trace_cnt: int, duration: int):
+def generate_traces_from_config(config, tot_trace_cnt: int, duration: int) -> List[Trace]:
     traces = []
     for _ in range(tot_trace_cnt):
         trace = generate_trace_from_config(config, duration)
@@ -386,22 +418,25 @@ def load_bandwidth_from_file(filename: str):
 def generate_bw_delay_series(T_s: float, duration: float,
                              min_bw_lower_bnd: float, min_bw_upper_bnd: float,
                              max_bw_lower_bnd: float, max_bw_upper_bnd: float,
-                             min_delay: float, max_delay: float)-> Tuple[List[float], List[float], List[float]]:
+                             min_delay: float, max_delay: float, dt: float=0.1) -> Tuple[List[float], List[float], List[float]]:
     timestamps = []
     bandwidths = []
     delays = []
     round_digit = 5
     min_bw_lower_bnd = round(min_bw_lower_bnd, round_digit)
-    bw_upper_bnd =  round(np.exp(float(np.random.uniform(np.log(max_bw_lower_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
-    assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(min_bw_lower_bnd, bw_upper_bnd)
-    bw_lower_bnd =  round(np.exp(float(np.random.uniform(np.log(min_bw_lower_bnd), np.log(min(min_bw_upper_bnd, bw_upper_bnd)), 1))), round_digit)
+    bw_upper_bnd =  round(np.exp(float(np.random.uniform(
+        np.log(max_bw_lower_bnd), np.log(max_bw_upper_bnd), 1))), round_digit)
+    assert min_bw_lower_bnd <= bw_upper_bnd, "{}, {}".format(
+            min_bw_lower_bnd, bw_upper_bnd)
+    bw_lower_bnd =  round(np.exp(float(np.random.uniform(
+        np.log(min_bw_lower_bnd), np.log(min(min_bw_upper_bnd, bw_upper_bnd)), 1))), round_digit)
     # bw_val = round(np.exp(float(np.random.uniform(np.log(bw_lower_bnd), np.log(bw_upper_bnd), 1))), round_digit)
     bw_val = round(float(np.random.uniform(bw_lower_bnd, bw_upper_bnd, 1)), round_digit)
     delay_val = round(float(np.random.uniform(
         min_delay, max_delay, 1)), round_digit)
     ts = 0
     bw_change_ts = 0
-    delay_change_ts = 0
+    # delay_change_ts = 0
 
     while ts < duration:
         if T_s !=0 and ts - bw_change_ts >= T_s:
@@ -413,7 +448,7 @@ def generate_bw_delay_series(T_s: float, duration: float,
         timestamps.append(ts)
         bandwidths.append(bw_val)
         delays.append(delay_val)
-        ts += 0.1
+        ts += dt
     timestamps.append(round(duration, round_digit))
     bandwidths.append(bw_val)
     delays.append(delay_val)
@@ -464,3 +499,58 @@ def generate_trace_from_config(config, duration: int = 30) -> Trace:
                                   (T_s_min, T_s_max),
                                   (delay_noise_min, delay_noise_max))
     raise ValueError("This line should never be reached.")
+
+
+def generate_configs(config_file: str, n: int):
+    config_range = read_json_file(config_file)[0]
+    configs = []
+
+    for _ in range(n):
+        min_bw = 10**np.random.uniform(
+                np.log10(config_range['bandwidth_lower_bound'][0]),
+                np.log10(config_range['bandwidth_lower_bound'][1]), 1)[0]
+        max_bw = 10**np.random.uniform(
+                np.log10(config_range['bandwidth_upper_bound'][0]),
+                np.log10(config_range['bandwidth_upper_bound'][1]), 1)[0]
+        delay = np.random.uniform(config_range['delay'][0],
+                                  config_range['delay'][1], 1)[0]
+        queue = np.random.uniform(config_range['queue'][0],
+                                  config_range['queue'][1], 1)[0]
+        T_s = np.random.uniform(config_range['T_s'][0],
+                                config_range['T_s'][1], 1)[0]
+        loss_exponent = np.random.uniform(
+                np.log10(config_range['loss'][0] + 1e-5),
+                np.log10(config_range['loss'][1] + 1e-5), 1)[0]
+        loss = 0 if loss_exponent < -4 else 10 ** loss_exponent
+        configs.append([min_bw, max_bw, delay, queue, loss, T_s])
+
+    return configs
+
+
+def parse_args():
+    """Parse arguments from the command line."""
+    parser = argparse.ArgumentParser("Training code.")
+    parser.add_argument('--save-dir', type=str, required=True,
+                        help="direcotry to save the model.")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="A json file which contains a list of "
+                        "randomization ranges with their probabilites.")
+    parser.add_argument("--count", type=int, required=True)
+    parser.add_argument("--seed", type=int, default=42)
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    set_seed(args.seed)
+    assert args.count < 100000
+    for i in range(args.count):
+        trace = generate_trace_from_config_file(args.config_file)
+        trace_file = os.path.join(args.save_dir, 'trace_{:05d}.json'.format(i))
+        os.makedirs(args.save_dir, exist_ok=True)
+        trace.dump(trace_file)
+
+
+if __name__ == '__main__':
+    main()

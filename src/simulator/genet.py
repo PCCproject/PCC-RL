@@ -241,7 +241,8 @@ def to_csv(config_file):
     with open(csv_file, 'w') as f:
         writer = csv.DictWriter(
                 f, ['bandwidth_lower_bound', 'bandwidth_upper_bound', 'delay',
-                    'queue', 'loss', 'T_s', "delay_noise", 'duration', 'weight'])
+                    'queue', 'loss', 'T_s', "delay_noise", 'duration',
+                    'weight'], lineterminator='\n')
         writer.writeheader()
         for config in bo_log:
             writer.writerow(config)

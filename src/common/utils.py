@@ -60,7 +60,8 @@ def learnability_objective_function(throughput, delay):
 
 
 def pcc_aurora_reward(throughput: float, delay: float, loss: float,
-                      avg_bw: Union[float, None] = None, min_rtt: Union[float, None] = None) -> float:
+                      avg_bw: Union[float, None] = None,
+                      min_rtt: Union[float, None] = None) -> float:
     """PCC Aurora reward. Anchor point 0.6Mbps
     throughput: packets per second
     delay: second
@@ -72,6 +73,7 @@ def pcc_aurora_reward(throughput: float, delay: float, loss: float,
     if avg_bw is not None:
         return 10 * 50 * throughput/avg_bw - 1000 * delay - 2000 * loss
     return 10 * throughput - 1000 * delay - 2000 * loss
+
 
 def compute_std_of_mean(data):
     return np.std(data) / np.sqrt(len(data))
@@ -85,3 +87,23 @@ def load_summary(summary_file: str) -> Dict[str, float]:
             for k, v in row.items():
                 summary[k] = float(v)
     return summary
+
+
+def save_args(args, save_dir: str):
+    """Write arguments to a log file."""
+    os.makedirs(save_dir, exist_ok=True)
+    if save_dir and os.path.exists(save_dir):
+        write_json_file(os.path.join(save_dir, 'cmd.json'), args.__dict__)
+
+
+def zero_one_normalize(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+
+def load_bo_json_log(file: str):
+    logs = []
+    with open(file, 'r') as f:
+        for line in f:
+            line.strip()
+            logs.append(json.loads(line))
+    return logs
