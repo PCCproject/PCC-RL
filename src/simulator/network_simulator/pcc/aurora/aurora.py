@@ -118,7 +118,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
                 delimiter='\t', lineterminator='\n')
             self.val_log_writer.writerow(
-                ['n_calls', 'num_timesteps', 'mean_validation_reward', 'loss',
+                ['n_calls', 'num_timesteps', 'mean_validation_reward', 'mean_validation_pkt_level_reward', 'loss',
                  'throughput', 'latency', 'sending_rate', 'tot_t_used(min)',
                  'val_t_used(min)', 'train_t_used(min)'])
 
@@ -153,6 +153,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 avg_tr_min_rtt = []
                 avg_tr_loss = []
                 avg_rewards = []
+                avg_pkt_level_rewards = []
                 avg_losses = []
                 avg_tputs = []
                 avg_delays = []
@@ -163,7 +164,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     avg_tr_bw.append(val_trace.avg_bw)
                     avg_tr_min_rtt.append(val_trace.avg_bw)
                     ts_list, val_rewards, loss_list, tput_list, delay_list, \
-                        send_rate_list, action_list, obs_list, mi_list, pkt_log = self.aurora._test(
+                        send_rate_list, action_list, obs_list, mi_list, pkt_level_reward = self.aurora._test(
                             val_trace, self.log_dir)
                     avg_rewards.append(np.mean(np.array(val_rewards)))
                     avg_losses.append(np.mean(np.array(loss_list)))
@@ -171,11 +172,13 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     avg_delays.append(np.mean(np.array(delay_list)))
                     avg_send_rates.append(
                         float(np.mean(np.array(send_rate_list))))
+                    avg_pkt_level_rewards.append(pkt_level_reward)
                 cur_t = time.time()
                 self.val_log_writer.writerow(
                     map(lambda t: "%.3f" % t,
                         [float(self.n_calls), float(self.num_timesteps),
                          np.mean(np.array(avg_rewards)),
+                         np.mean(np.array(avg_pkt_level_rewards)),
                          np.mean(np.array(avg_losses)),
                          np.mean(np.array(avg_tputs)),
                          np.mean(np.array(avg_delays)),
@@ -324,12 +327,12 @@ class Aurora():
                 trace.avg_delay * 2 / 1e3)
             if save_dir and writer:
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].pacing_rate * BITS_PER_BYTE, 0),
-                    round(send_rate, 0), round(throughput, 0), latency, loss,
-                    reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
-                    sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
-                    sender_mi.send_start, sender_mi.send_end,
-                    sender_mi.recv_start, sender_mi.recv_end,
+                    round(env.net.get_cur_time(), 6), round(env.senders[0].pacing_rate * BITS_PER_BYTE, 0),
+                    round(send_rate, 0), round(throughput, 0), round(latency, 6), loss,
+                    round(reward, 4), action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
+                    sender_mi.bytes_lost, round(sender_mi.send_end, 6) - round(sender_mi.send_start, 6),
+                    round(sender_mi.send_start, 6), round(sender_mi.send_end, 6),
+                    round(sender_mi.recv_start, 6), round(sender_mi.recv_end, 6),
                     sender_mi.get('latency increase'), sender_mi.packet_size,
                     sender_mi.get('conn min latency'), sent_latency_inflation,
                     latency_ratio, send_ratio,

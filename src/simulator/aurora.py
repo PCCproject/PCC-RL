@@ -433,12 +433,12 @@ class Aurora():
                 trace.avg_delay * 2/ 1e3)
             if save_dir and writer:
                 writer.writerow([
-                    env.net.get_cur_time(), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
-                    round(send_rate, 0), round(throughput, 0), latency, loss,
-                    reward, action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
-                    sender_mi.bytes_lost, sender_mi.send_end - sender_mi.send_start,
-                    sender_mi.send_start, sender_mi.send_end,
-                    sender_mi.recv_start, sender_mi.recv_end,
+                    round(env.net.get_cur_time(), 6), round(env.senders[0].rate * BYTES_PER_PACKET * BITS_PER_BYTE, 0),
+                    round(send_rate, 0), round(throughput, 0), round(latency, 6), loss,
+                    round(reward, 4), action.item(), sender_mi.bytes_sent, sender_mi.bytes_acked,
+                    sender_mi.bytes_lost, round(sender_mi.send_end, 6) - round(sender_mi.send_start, 6),
+                    round(sender_mi.send_start, 6), round(sender_mi.send_end, 6),
+                    round(sender_mi.recv_start, 6), round(sender_mi.recv_end, 6),
                     sender_mi.get('latency increase'), sender_mi.packet_size,
                     sender_mi.get('conn min latency'), sent_latency_inflation,
                     latency_ratio, send_ratio,
