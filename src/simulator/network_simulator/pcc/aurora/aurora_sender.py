@@ -17,7 +17,6 @@ class AuroraSender(Sender):
         super().__init__(sender_id, dest)
         self.starting_rate = pacing_rate
         self.pacing_rate = pacing_rate
-        self.pacing_rate = pacing_rate
         self.history_len = history_len
         self.features = features
         self.history = sender_obs.SenderHistory(self.history_len,
@@ -40,6 +39,7 @@ class AuroraSender(Sender):
         return super().on_packet_lost(pkt)
 
     def apply_rate_delta(self, delta):
+        delta = float(delta)
         if delta >= 0.0:
             self.set_rate(self.pacing_rate * (1.0 + delta))
         else:

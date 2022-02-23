@@ -21,6 +21,7 @@ from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.common.policies import FeedForwardPolicy
 
 from simulator.network_simulator.pcc.aurora import aurora_environment
+from simulator.network_simulator.pcc.aurora.schedulers import Scheduler, TestScheduler
 from simulator.network_simulator.constants import BITS_PER_BYTE, BYTES_PER_PACKET
 from simulator.trace import generate_trace, Trace, generate_traces
 from common.utils import set_tf_loglevel, pcc_aurora_reward
@@ -103,7 +104,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
 
     def __init__(self, aurora, check_freq: int, log_dir: str, val_traces: List[Trace] = [],
-                 verbose=0, steps_trained=0, config_file: Union[str, None] =None, validation_flag: bool = False):
+                 verbose=0, steps_trained=0, config_file: Union[str, None] =None):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.aurora = aurora
         self.check_freq = check_freq
@@ -112,7 +113,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         self.best_mean_reward = -np.inf
         self.val_traces = val_traces
         self.config_file = config_file
-        self.validation_flag = validation_flag
         if self.aurora.comm.Get_rank() == 0:
             self.val_log_writer = csv.writer(
                 open(os.path.join(log_dir, 'validation_log.csv'), 'w', 1),
@@ -147,7 +147,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 with self.model.graph.as_default():
                     saver = tf.train.Saver()
                     saver.save(self.model.sess, model_path_to_save)
-                if not self.validation_flag:
+                if not self.val_traces:
                     return True
                 avg_tr_bw = []
                 avg_tr_min_rtt = []
@@ -192,7 +192,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 class Aurora():
     cc_name = 'aurora'
     def __init__(self, seed: int, log_dir: str, timesteps_per_actorbatch: int,
-                 pretrained_model_path=None, gamma: float = 0.99,
+                 pretrained_model_path: str = "", gamma: float = 0.99,
                  tensorboard_log=None, record_pkt_log: bool = False):
         self.record_pkt_log = record_pkt_log
         self.comm = COMM_WORLD
@@ -202,8 +202,10 @@ class Aurora():
         self.steps_trained = 0
         dummy_trace = generate_trace(
             (10, 10), (2, 2), (2, 2), (50, 50), (0, 0), (1, 1), (0, 0), (0, 0))
-        env = gym.make('AuroraEnv-v0', traces=[dummy_trace], train_flag=True)
-        if pretrained_model_path is not None:
+        # env = gym.make('AuroraEnv-v0', traces=[dummy_trace], train_flag=True)
+        test_scheduler = TestScheduler(dummy_trace)
+        env = gym.make('AuroraEnv-v0', trace_scheduler=test_scheduler)
+        if pretrained_model_path:
             self.model = MyPPO1(MyMlpPolicy, env, verbose=1, seed=seed,
                               optim_stepsize=0.001, schedule='constant',
                               timesteps_per_actorbatch=timesteps_per_actorbatch,
@@ -229,27 +231,35 @@ class Aurora():
                               tensorboard_log=tensorboard_log, n_cpu_tf_sess=1)
         self.timesteps_per_actorbatch = timesteps_per_actorbatch
 
-    def train(self, config_file: str, total_timesteps: int, tot_trace_cnt: int,
-              tb_log_name: str = "", validation_flag: bool = False):
+    def train(self, config_file: str, total_timesteps: int,
+              train_scheduler: Scheduler,
+              tb_log_name: str = "", # training_traces: List[Trace] = [],
+              validation_traces: List[Trace] = [],
+              # real_trace_prob: float = 0
+              ):
         assert isinstance(self.model, PPO1)
 
-        training_traces = generate_traces(config_file, tot_trace_cnt,
-                                          duration=30)
+        # training_traces = generate_traces(config_file, tot_trace_cnt,
+        #                                   duration=30)
         # generate validation traces
         validation_traces = generate_traces(
             config_file, 20, duration=30)
-        env = gym.make('AuroraEnv-v0', traces=training_traces, train_flag=True,
-                       config_file=config_file)
-        env.seed(self.seed)
-        self.model.set_env(env)
+        # train_scheduler = UDRTrainScheduler(
+        #     config_file=config_file, traces=training_traces,
+        #     percent=real_trace_prob)
 
         # Create the callback: check every n steps and save best model
-        callback = SaveOnBestTrainingRewardCallback(
+        self.callback = SaveOnBestTrainingRewardCallback(
             self, check_freq=self.timesteps_per_actorbatch, log_dir=self.log_dir,
             steps_trained=self.steps_trained, val_traces=validation_traces,
-            config_file=config_file, validation_flag=validation_flag)
+            config_file=config_file)
+        env = gym.make('AuroraEnv-v0', trace_scheduler=train_scheduler)
+        # env = gym.make('AuroraEnv-v0', traces=training_traces, train_flag=True,
+        #                config_file=config_file)
+        env.seed(self.seed)
+        self.model.set_env(env)
         self.model.learn(total_timesteps=total_timesteps,
-                         tb_log_name=tb_log_name, callback=callback)
+                         tb_log_name=tb_log_name, callback=self.callback)
 
     def test_on_traces(self, traces: List[Trace], save_dirs: List[str]):
         results = []
@@ -292,8 +302,11 @@ class Aurora():
         else:
             f_sim_log = None
             writer = None
-        env = gym.make(
-            'AuroraEnv-v0', traces=[trace], record_pkt_log=self.record_pkt_log)
+        test_scheduler = TestScheduler(trace)
+        env = gym.make('AuroraEnv-v0', trace_scheduler=test_scheduler,
+                       record_pkt_log=self.record_pkt_log)
+        # env = gym.make(
+        #     'AuroraEnv-v0', traces=[trace], record_pkt_log=self.record_pkt_log)
         env.seed(self.seed)
         obs = env.reset()
         grads = []  # gradients for saliency map
