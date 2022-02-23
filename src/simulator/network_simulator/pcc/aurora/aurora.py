@@ -239,14 +239,9 @@ class Aurora():
               ):
         assert isinstance(self.model, PPO1)
 
-        # training_traces = generate_traces(config_file, tot_trace_cnt,
-        #                                   duration=30)
         # generate validation traces
         validation_traces = generate_traces(
             config_file, 20, duration=30)
-        # train_scheduler = UDRTrainScheduler(
-        #     config_file=config_file, traces=training_traces,
-        #     percent=real_trace_prob)
 
         # Create the callback: check every n steps and save best model
         self.callback = SaveOnBestTrainingRewardCallback(
@@ -254,8 +249,6 @@ class Aurora():
             steps_trained=self.steps_trained, val_traces=validation_traces,
             config_file=config_file)
         env = gym.make('AuroraEnv-v0', trace_scheduler=train_scheduler)
-        # env = gym.make('AuroraEnv-v0', traces=training_traces, train_flag=True,
-        #                config_file=config_file)
         env.seed(self.seed)
         self.model.set_env(env)
         self.model.learn(total_timesteps=total_timesteps,
@@ -305,8 +298,6 @@ class Aurora():
         test_scheduler = TestScheduler(trace)
         env = gym.make('AuroraEnv-v0', trace_scheduler=test_scheduler,
                        record_pkt_log=self.record_pkt_log)
-        # env = gym.make(
-        #     'AuroraEnv-v0', traces=[trace], record_pkt_log=self.record_pkt_log)
         env.seed(self.seed)
         obs = env.reset()
         grads = []  # gradients for saliency map

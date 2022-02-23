@@ -10,7 +10,7 @@ from simulator.trace import Trace, generate_traces
 
 class Scheduler:
     def get_trace(self):
-        raise NotImplemented
+        raise NotImplementedError
 
 
 class TestScheduler(Scheduler):

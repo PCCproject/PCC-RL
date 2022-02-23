@@ -12,28 +12,19 @@ from simulator.network_simulator.link import Link
 from simulator.network_simulator.network import Network
 from simulator.network_simulator.pcc.aurora.aurora_sender import AuroraSender
 from simulator.network_simulator.pcc.aurora.schedulers import Scheduler
-# from simulator.trace import Trace, generate_traces
 
 
 class AuroraEnvironment(gym.Env):
 
-    def __init__(self,
-                 trace_scheduler: Scheduler,
-            # traces: List[Trace],
-            history_len: int = 10,
+    def __init__(self, trace_scheduler: Scheduler, history_len: int = 10,
                  # features="sent latency inflation,latency ratio,send ratio",
                  features: List[str] = ["sent latency inflation",
                                         "latency ratio", "recv ratio"],
-                 # train_flag: bool = False, config_file=None,
                  record_pkt_log: bool = False):
         """Network environment used in simulation."""
         self.record_pkt_log = record_pkt_log
         self.trace_scheduler = trace_scheduler
         self.current_trace = self.trace_scheduler.get_trace()
-        # self.config_file = config_file
-        # self.traces = traces
-        # self.current_trace = np.random.choice(self.traces)
-        # self.train_flag = train_flag
 
         self.history_len = history_len
         self.features = features
@@ -89,7 +80,6 @@ class AuroraEnvironment(gym.Env):
     def reset(self):
         self.steps_taken = 0
         self.net.reset()
-        # self.current_trace = generate_traces(self.config_file, 1, duration=30)[0]
         self.current_trace = self.trace_scheduler.get_trace()
         self.current_trace.reset()
         self.run_dur = 0.01

@@ -53,13 +53,6 @@ def parse_args():
         action="store_true",
         help="specify to enable validation.",
     )
-    # parser.add_argument(
-    #     "--dataset",
-    #     type=str,
-    #     default="pantheon",
-    #     choices=("pantheon", "synthetic"),
-    #     help="dataset name",
-    # )
     subparsers = parser.add_subparsers(dest="curriculum", help="CL parsers.")
     udr_parser = subparsers.add_parser("udr", help="udr")
     udr_parser.add_argument(
@@ -86,6 +79,13 @@ def parse_args():
         default="",
         help="A json file which contains a list of randomization ranges with "
         "their probabilites.",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="pantheon",
+        choices=("pantheon", "synthetic"),
+        help="dataset name",
     )
     cl1_parser = subparsers.add_parser("cl1", help="cl1")
     cl1_parser.add_argument(
