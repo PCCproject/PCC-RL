@@ -69,7 +69,7 @@ class Network():
             sender.register_network(self)
             sender.reset_obs()
             heapq.heappush(self.q, (0, sender, EVENT_TYPE_SEND,
-                                    0, 0.0, False, self.event_count, sender.rto, 0))
+                                    0, 0.0, False, self.event_count, sender.rto, 0.0))
             self.event_count += 1
 
     def reset(self):
@@ -194,7 +194,7 @@ class Network():
                     heapq.heappush(self.q, (self.cur_time + (1.0 / sender.rate),
                                             sender, EVENT_TYPE_SEND, 0, 0.0,
                                             False, self.event_count, sender.rto,
-                                            0))
+                                            0.0))
                     self.event_count += 1
 
                 else:
@@ -235,7 +235,7 @@ class Network():
             if push_new_event:
                 heapq.heappush(self.q, (new_event_time, sender, new_event_type,
                                         new_next_hop, new_latency, new_dropped,
-                                        event_id, rto, new_event_queue_delay))
+                                        event_id, rto, float(new_event_queue_delay)))
         for sender in self.senders:
             sender.record_run()
 

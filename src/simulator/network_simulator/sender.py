@@ -106,7 +106,6 @@ class Sender:
         self.rtt_samples.append(pkt.rtt)
         self.queue_delay_samples.append(pkt.queue_delay)
 
-        self.rtt_samples.append(pkt.rtt)
         bin_id = int((pkt.ts - self.first_ack_ts) * 1000 / self.bin_size)
         self.bin_bytes_acked[bin_id] = self.bin_bytes_acked.get(bin_id, 0) + pkt.pkt_size
         self.lat_ts.append(pkt.ts)
