@@ -3,11 +3,27 @@ import os
 from simulator.pantheon_trace_parser.tunnel_graph import TunnelGraph
 
 
+def extract_cc_name(log_path):
+    """Exact congestion control name from log path.
+
+    Args
+        log_path: path to \\{cc\\}_datalink_run\\{run_id\\}.log or
+                  \\{cc\\}_acklink_run\\{run_id\\}.log
+    """
+    tokens = os.path.basename(log_path).split("_")
+    cc_tokens = []
+    for token in tokens:
+        if token == "datalink" or token == "acklink":
+            break
+        cc_tokens.append(token)
+    return "_".join(cc_tokens)
+
+
 class Flow():
     def __init__(self, log_path, ms_per_bin=500):
         self.tunnel_graph = TunnelGraph(log_path, ms_per_bin=ms_per_bin)
         self.tunnel_graph.parse_tunnel_log()
-        self.cc = str(os.path.basename(log_path).split("_")[0])
+        self.cc = extract_cc_name(log_path)
         self.ms_per_bin = ms_per_bin
 
     @property
@@ -64,4 +80,10 @@ class Flow():
 
     @property
     def loss_rate(self):
+        """Return loss rate."""
         return self.tunnel_graph.loss_rate[1]
+
+    @property
+    def percentile_delay(self):
+        """Return 95 percentile one-way delay in millisecond.(Tail latency)"""
+        return self.tunnel_graph.percentile_delay[1]
