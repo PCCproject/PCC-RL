@@ -1,7 +1,7 @@
 import glob
 import multiprocessing as mp
 import os
-from typing import List, Union
+from typing import List, Optional
 
 import numpy as np
 
@@ -77,7 +77,7 @@ class PantheonDataset:
 
         self.traces = []
 
-    def get_traces(self, loss: float, queue_size: Union[int, None] = None,
+    def get_traces(self, loss: float, queue_size: Optional[int] = None,
                    front_offset: float = 0.0, wrap: bool = False,
                    nproc: int = 8, ms_bin: int = 500):
         if self.traces:
@@ -104,7 +104,7 @@ class PantheonDataset:
             os.makedirs(link_dir, exist_ok=True)
             trace.dump(os.path.join(link_dir, trace_name + '.json'))
 
-    def prepare_data_for_DoppelGANger(self, ms_bin: int = 500):
+    def prepare_data_for_DoppelGANger(self, ms_bin: int = 500, save_dir: str = ""):
         traces = self.get_traces(0, ms_bin=ms_bin)
         data_feature = []
         data_attribute = []
@@ -133,7 +133,13 @@ class PantheonDataset:
         data_attribute = np.stack(data_attribute)
 
         data_gen_flag = np.ones(data_feature[:,:, 0].shape)
-        return data_feature, data_attribute, data_gen_flag
+        np.savez(os.path.join(save_dir, 'data_train.npz'),
+                 data_feature=data_feature, data_attribute=data_attribute,
+                 data_gen_flag=data_gen_flag)
+        np.savez(os.path.join(save_dir, 'data_train_no_attribute.npz'),
+                 data_feature=data_feature, data_attribute=data_attribute,
+                 data_gen_flag=data_gen_flag)
+        # return data_feature, data_attribute, data_gen_flag
 
 # data = PantheonDataset('../../data', 'all')
 # data.dump_dataset('../../data/converted_pantheon')

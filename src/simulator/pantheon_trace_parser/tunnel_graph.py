@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 
 class TunnelGraph(object):
     def __init__(self, tunnel_log, throughput_graph=None, delay_graph=None,
-                 ms_per_bin=500):
+                 ms_per_bin=500, end_time=None):
         self.tunnel_log = tunnel_log
         self.throughput_graph = throughput_graph
         self.delay_graph = delay_graph
         self.ms_per_bin = ms_per_bin
+        self.end_time = end_time
 
     def ms_to_bin(self, ts, first_ts):
         return int((ts - first_ts) / self.ms_per_bin)
@@ -58,6 +59,9 @@ class TunnelGraph(object):
 
             if first_ts is None:
                 first_ts = ts
+
+            if self.end_time and (ts - first_ts) / 1000 > self.end_time:
+                break
 
             bin_id = self.ms_to_bin(ts, first_ts)
 

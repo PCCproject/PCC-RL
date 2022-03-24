@@ -9,7 +9,7 @@ from simulator.pantheon_trace_parser.flow import Flow, extract_cc_name
 class Connection:
     """Connection contains an uplink flow and a downlink flow."""
 
-    def __init__(self, trace_file, calibrate_timestamps=False, use_cache=True):
+    def __init__(self, trace_file, calibrate_timestamps=False, use_cache=True, end_time=None):
         self.use_cache = use_cache
         trace_file_basename = os.path.basename(trace_file)
         trace_file_dirname = os.path.dirname(trace_file)
@@ -17,10 +17,11 @@ class Connection:
         summary_path = os.path.join(str(trace_file_dirname), '{}_conn_summary.json'.format(cc))
         self.cache = {}
         if not self.use_cache or (self.use_cache and not os.path.exists(summary_path)):
-            self.datalink = Flow(trace_file)
+            self.datalink = Flow(trace_file, end_time=end_time)
             self.acklink = Flow(os.path.join(
                 str(trace_file_dirname),
-                str(trace_file_basename.replace("datalink", "acklink"))))
+                str(trace_file_basename.replace("datalink", "acklink"))),
+                end_time=end_time)
             if calibrate_timestamps:
                 self.t_offset = min(self.datalink.throughput_timestamps[0],
                                     self.datalink.sending_rate_timestamps[0])
