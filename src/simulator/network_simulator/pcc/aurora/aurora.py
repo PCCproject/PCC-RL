@@ -279,7 +279,7 @@ class Aurora():
         obs_list = []
         if save_dir:
             os.makedirs(save_dir, exist_ok=True)
-            f_sim_log = open(os.path.join(save_dir, 'aurora_simulation_log.csv'), 'w', 1)
+            f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), 'w', 1)
             writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "target_send_rate", "send_rate",
                              'recv_rate', 'latency',
@@ -360,7 +360,7 @@ class Aurora():
         if f_sim_log:
             f_sim_log.close()
         if self.record_pkt_log and save_dir:
-            with open(os.path.join(save_dir, "aurora_packet_log.csv"), 'w', 1) as f:
+            with open(os.path.join(save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
                 pkt_logger = csv.writer(f, lineterminator='\n')
                 pkt_logger.writerow(['timestamp', 'packet_event_id', 'event_type',
                                      'bytes', 'cur_latency', 'queue_delay',
@@ -374,7 +374,7 @@ class Aurora():
             avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
         pkt_level_original_reward = pcc_aurora_reward(tput, avg_lat, loss)
         if plot_flag and save_dir:
-            plot_simulation_log(trace, os.path.join(save_dir, 'aurora_simulation_log.csv'), save_dir, self.cc_name)
+            plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
             bin_tput_ts, bin_tput = env.senders[0].bin_tput
             bin_sending_rate_ts, bin_sending_rate = env.senders[0].bin_sending_rate
             lat_ts, lat = env.senders[0].latencies

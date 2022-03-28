@@ -4,7 +4,7 @@ import copy
 import csv
 import random
 import os
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 import numpy as np
 from common.utils import read_json_file, set_seed, write_json_file, pcc_aurora_reward
@@ -331,9 +331,9 @@ def generate_trace(duration_range: Tuple[float, float],
                    delay_range: Tuple[float, float],
                    loss_rate_range: Tuple[float, float],
                    queue_size_range: Tuple[float, float],
-                   T_s_range: Union[Tuple[float, float], None] = None,
-                   delay_noise_range: Union[Tuple[float, float], None] = None,
-                   seed: Union[int, None] = None, dt: float = 0.1):
+                   T_s_range: Optional[Tuple[float, float]] = None,
+                   delay_noise_range: Optional[Tuple[float, float]] = None,
+                   seed: Optional[int] = None, dt: float = 0.1):
     """Generate trace for a network flow.
 
     Args:
