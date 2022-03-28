@@ -125,9 +125,11 @@ class AuroraSender(Sender):
             self.trace.avg_delay * 2 / 1e3)
 
         if latency > 0.0:
-            self.mi_duration = MI_RTT_PROPORTION * \
-                sender_mi.get("avg latency") # + np.mean(extra_delays)
-        return reward, self.mi_duration
+            mi_duration = MI_RTT_PROPORTION * \
+                sender_mi.get("avg latency") + np.mean(self.net.extra_delays)
+        else:
+            mi_duration = 0
+        return reward, mi_duration
 
     def reset_obs(self):
         self.sent = 0

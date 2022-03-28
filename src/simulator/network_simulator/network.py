@@ -26,6 +26,7 @@ class Network:
         self.links = links
         self.record_pkt_log = record_pkt_log
         self.pkt_log = []
+        self.extra_delays = []  # time used to put packet onto the network
         self.queue_initial_packets()
 
     def queue_initial_packets(self):
@@ -50,6 +51,7 @@ class Network:
             sender.reset()
         self.queue_initial_packets()
         self.pkt_log = []
+        self.extra_delays = []  # time used to put packet onto the network
 
     def get_cur_time(self) -> float:
         """Return current network time."""
@@ -61,6 +63,7 @@ class Network:
         for sender in self.senders:
             sender.reset_obs()
         end_time = min(self.cur_time + dur, self.links[0].trace.timestamps[-1])
+        self.extra_delays = []  # time used to put packet onto the network
         while True:
             pkt = self.q[0]
             # pkt.debug_print()
@@ -182,8 +185,8 @@ class Network:
                 # pkt.add_transmission_delay(1 / self.links[0].get_bandwidth(self.cur_time))
                 if not self.links[pkt.next_hop].packet_enters_link(self.cur_time):
                     pkt.drop()
-                # extra_delays.append(
-                #     1 / self.links[pkt.next_hop].get_bandwidth(self.cur_time))
+                self.extra_delays.append(
+                    1 / self.links[pkt.next_hop].get_bandwidth(self.cur_time))
                 pkt.next_hop += 1
                 # if not pkt.dropped:
                 #     sender.queue_delay_samples.append(new_event_queue_delay)

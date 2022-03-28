@@ -67,8 +67,9 @@ class AuroraEnvironment(gym.Env):
         self.senders[0].apply_rate_delta(action)
         self.senders[0].on_mi_start()
         self.net.run(self.run_dur)
-        # TODO: one run stops and aurora sender should do something
-        reward, self.run_dur = self.senders[0].on_mi_finish()
+        reward, run_dur = self.senders[0].on_mi_finish()
+        if run_dur != 0:
+            self.run_dur = run_dur
         self.steps_taken += 1
         sender_obs = self._get_all_sender_obs()
 
@@ -91,7 +92,9 @@ class AuroraEnvironment(gym.Env):
         self.episodes_run += 1
         self.senders[0].on_mi_start()
         self.net.run(self.run_dur)
-        _, self.run_dur = self.senders[0].on_mi_finish()
+        _, run_dur = self.senders[0].on_mi_finish()
+        if run_dur != 0:
+            self.run_dur = run_dur
 
         self.reward_ewma *= 0.99
         self.reward_ewma += 0.01 * self.reward_sum
