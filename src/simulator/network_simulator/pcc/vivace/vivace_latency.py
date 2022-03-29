@@ -7,7 +7,8 @@ from typing import Tuple
 import numpy as np
 
 from common.utils import pcc_aurora_reward
-from plot_scripts.plot_packet_log import PacketLog
+from plot_scripts.plot_packet_log import plot
+from plot_scripts.plot_time_series import plot as plot_simulation_log
 from simulator.network_simulator.constants import (
     BITS_PER_BYTE,
     BYTES_PER_PACKET,
@@ -23,6 +24,7 @@ FLAGS_max_rtt_fluctuation_tolerance_ratio_in_starting = 100.0
 FLAGS_max_rtt_fluctuation_tolerance_ratio_in_decision_made = 1.0
 
 kInitialRtt = 0.1
+kInitialCwnd = 10
 kNumIntervalGroupsInProbingPrimary = 3
 kMinReliabilityRatio = 0.8
 # Step size for rate change in PROBING mode.
@@ -31,6 +33,11 @@ kProbingStepSize = 0.05
 kDecisionMadeStepSize = 0.02
 # Maximum percentile step size for rate change in DECISION_MADE mode.
 kMaxDecisionMadeStepSize = 0.10
+
+class UtilityInfo:
+    def __init__(self, sending_rate: float, utility: float):
+        self.sending_rate = sending_rate
+        self.utility = utility
 
 
 class PccSenderMode(Enum):
@@ -56,6 +63,7 @@ class VivaceLatencySender(Sender):
     def __init__(self, sender_id: int, dest: int):
         super().__init__(sender_id, dest)
 
+        self.pacing_rate = kInitialCwnd * BYTES_PER_PACKET * BITS_PER_BYTE / kInitialRtt
         self.mi_q = monitor_interval_queue.MonitorIntervalQueue(self)
         self.monitor_duration = 0.0
         self.latest_rtt = 0.0
@@ -63,8 +71,7 @@ class VivaceLatencySender(Sender):
         self.min_rtt = 0.0
         self.rtt_deviation = 0.0
         self.min_rtt_deviation = 0.0
-        # TODO:
-        self.mode = ""
+        self.mode = PccSenderMode.STARTING
         self.has_seen_valid_rtt = False
         self.rounds = 1
         self.conn_start_time = 0.0
@@ -72,6 +79,7 @@ class VivaceLatencySender(Sender):
         self.latest_ack_timestamp = 0.0
         self.latest_utility = 0.0
         self.utility_manager = utility_manager.UtilityManager()
+        self.cwnd = 0
 
     def on_packet_sent(self, pkt: "packet.Packet") -> None:
         if self.conn_start_time == 0.0:
@@ -98,7 +106,7 @@ class VivaceLatencySender(Sender):
         self.latest_sent_timestamp = pkt.sent_time
         super().on_packet_sent(pkt)
 
-    def on_packet_acked(self, rtt_updated, pkt: "packet.Packet") -> None:
+    def on_packet_acked(self, pkt: "packet.Packet") -> None:
         if self.latest_ack_timestamp == 0.0:
             self.latest_ack_timestamp = pkt.ts
 
@@ -107,7 +115,7 @@ class VivaceLatencySender(Sender):
           # }
 
         ack_interval = 0.0
-        if rtt_updated:
+        if pkt.rtt:
             ack_interval = pkt.ts - self.latest_ack_timestamp
             self.update_rtt(pkt.ts, pkt.rtt)
 
@@ -352,24 +360,13 @@ class VivaceLatencySender(Sender):
 
         self.latest_ack_timestamp = event_time
 
-    def on_utility_available(self, useful_intervals, event_time):
+    def on_utility_available(self, useful_intervals, event_time: float):
         # Calculate the utilities for all available intervals.
         utility_info = []
         for mi in useful_intervals:
             utility_info.append(UtilityInfo(mi.sending_rate,
-                    self.utility_manager.calculate_utility(mi, event_time - self.conn_start_time)))
-        # /*std::cerr << "End MI (rate: "
-        #           << useful_intervals[i]->sending_rate.ToKBitsPerSecond()
-        #           << ", rtt "
-        #           << useful_intervals[i]->rtt_on_monitor_start.ToMicroseconds()
-        #           << "->"
-        #           << useful_intervals[i]->rtt_on_monitor_end.ToMicroseconds()
-        #           << ", " << useful_intervals[i]->rtt_fluctuation_tolerance_ratio
-        #           << ", " << useful_intervals[i]->bytes_acked << "/"
-        #           << useful_intervals[i]->bytes_sent << ") with utility "
-        #           << utility_manager_.CalculateUtility(useful_intervals[i])
-        #           << " (latest " << latest_utility_ << ")" << std::endl;*/
-
+                    self.utility_manager.calculate_utility(
+                        mi, event_time - self.conn_start_time)))
 
         if self.mode == PccSenderMode.STARTING:
             assert len(utility_info) == 1
@@ -397,8 +394,8 @@ class VivaceLatencySender(Sender):
                     else:
                         self.direciton = RateChangeDirection.INCREASE
                 self.latest_utility = max(
-                    utility_info[2 * self.get_num_interval_groups_in_probing() - 2].utility,
-                    utility_info[2 * self.get_num_interval_groups_in_probing() - 1].utility)
+                    utility_info[2*self.get_num_interval_groups_in_probing()-2].utility,
+                    utility_info[2*self.get_num_interval_groups_in_probing()-1].utility)
                 self.enter_decision_made()
             else:
                 # Stays in PROBING mode.
@@ -410,9 +407,11 @@ class VivaceLatencySender(Sender):
                 # the sending rate.
                 self.rounds += 1
                 if self.direction == RateChangeDirection.INCREASE:
-                    self.pacing_rate = self.pacing_rate * (1 + min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
+                    self.pacing_rate = self.pacing_rate * (1 + min(
+                        self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
                 else:
-                    self.pacing_rate = self.pacing_rate * (1 - min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
+                    self.pacing_rate = self.pacing_rate * (1 - min(
+                        self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize))
 
                 self.latest_utility = utility_info[0].utility
             else:
@@ -427,16 +426,15 @@ class VivaceLatencySender(Sender):
         if (utility_info.size() < 2 * self.get_num_interval_groups_in_probing()):
             return False
 
-
         increase = False
         # All the probing groups should have consistent decision. If not, directly
         # return false.
         i = 0
         while i < self.get_num_interval_groups_in_probing():
-            if utility_info[2 * i].utility > utility_info[2 * i + 1].utility:
-                increase_i =  utility_info[2 * i].sending_rate > utility_info[2 * i + 1].sending_rate
+            if utility_info[2*i].utility > utility_info[2*i+1].utility:
+                increase_i =  utility_info[2*i].sending_rate > utility_info[2*i+1].sending_rate
             else:
-                increase_i = utility_info[2 * i].sending_rate < utility_info[2 * i + 1].sending_rate
+                increase_i = utility_info[2*i].sending_rate < utility_info[2*i+1].sending_rate
             if i == 0:
                 increase = increase_i
 
@@ -447,24 +445,32 @@ class VivaceLatencySender(Sender):
 
         return True
 
-
     def enter_decision_made(self):
         assert self.mode == PccSenderMode.PROBING
 
         # Change sending rate from central rate based on the probing rate with
         # higher utility.
         if self.direction == RateChangeDirection.INCREASE:
-            self.pacing_rate = self.pacing_rate * (1 + kProbingStepSize) * (1 + kDecisionMadeStepSize)
+            self.pacing_rate = self.pacing_rate * (1 + kProbingStepSize) * \
+                    (1 + kDecisionMadeStepSize)
         else:
-            self.pacing_rate = self.pacing_rate * (1 - kProbingStepSize) * (1 - kDecisionMadeStepSize)
+            self.pacing_rate = self.pacing_rate * (1 - kProbingStepSize) * \
+                    (1 - kDecisionMadeStepSize)
 
         self.mode = PccSenderMode.DECISION_MADE
         self.rounds = 1
 
-
-
     def can_send(self):
         raise NotImplementedError
+
+    def schedule_send(self, first_pkt: bool = False, on_ack: bool = False):
+        assert self.net, "network is not registered in sender."
+        if first_pkt:
+            next_send_time = 0
+        else:
+            next_send_time = self.get_cur_time() + BYTES_PER_PACKET / self.pacing_rate
+        next_pkt = packet.Packet(next_send_time, self, 0)
+        self.net.add_packet(next_pkt)
 
 
 class VivaceLatency:
@@ -473,7 +479,7 @@ class VivaceLatency:
     def __init__(self, record_pkt_log: bool = False):
         self.record_pkt_log = record_pkt_log
 
-    def test(self, trace: Trace, save_dir: str) -> Tuple[float, float]:
+    def test(self, trace: Trace, save_dir: str, plot_flag: bool = False) -> Tuple[float, float]:
         """Test a network trace and return rewards.
 
         The 1st return value is the reward in Monitor Interval(MI) level and
@@ -497,8 +503,10 @@ class VivaceLatency:
         start_rtt = trace.get_delay(0) * 2 / 1000
         run_dur = start_rtt
         if save_dir:
-            writer = csv.writer(open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
-                self.cc_name)), 'w', 1), lineterminator='\n')
+            os.makedirs(save_dir, exist_ok=True)
+            f_sim_log = open(os.path.join(save_dir, '{}_simulation_log.csv'.format(
+                self.cc_name)), 'w', 1)
+            writer = csv.writer(f_sim_log, lineterminator='\n')
             writer.writerow(['timestamp', "send_rate", 'recv_rate', 'latency',
                              'loss', 'reward', "action", "bytes_sent",
                              "bytes_acked", "bytes_lost", "send_start_time",
@@ -508,6 +516,7 @@ class VivaceLatency:
                              'packet_in_queue', 'queue_size', 'cwnd',
                              'ssthresh', "rto", "packets_in_flight"])
         else:
+            f_sim_log = None
             writer = None
 
         while True:
@@ -546,7 +555,8 @@ class VivaceLatency:
             should_stop = trace.is_finished(net.get_cur_time())
             if should_stop:
                 break
-        pkt_level_reward = 0
+        if f_sim_log:
+            f_sim_log.close()
         if self.record_pkt_log and save_dir:
             with open(os.path.join(
                     save_dir, "{}_packet_log.csv".format(self.cc_name)), 'w', 1) as f:
@@ -556,6 +566,35 @@ class VivaceLatency:
                                      'queue_delay', 'packet_in_queue',
                                      'sending_rate', 'bandwidth'])
                 pkt_logger.writerows(net.pkt_log)
-            pkt_log = PacketLog.from_log(net.pkt_log)
-            pkt_level_reward = pkt_log.get_reward("", trace)
+
+        avg_sending_rate = senders[0].avg_sending_rate
+        tput = senders[0].avg_throughput
+        avg_lat = senders[0].avg_latency
+        loss = senders[0].pkt_loss_rate
+        pkt_level_reward = pcc_aurora_reward(tput, avg_lat,loss,
+            avg_bw=trace.avg_bw * 1e6 / BITS_PER_BYTE / BYTES_PER_PACKET)
+        pkt_level_original_reward = pcc_aurora_reward(tput, avg_lat, loss)
+        if plot_flag and save_dir:
+            plot_simulation_log(trace, os.path.join(save_dir, '{}_simulation_log.csv'.format(self.cc_name)), save_dir, self.cc_name)
+            bin_tput_ts, bin_tput = senders[0].bin_tput
+            bin_sending_rate_ts, bin_sending_rate = senders[0].bin_sending_rate
+            lat_ts, lat = senders[0].latencies
+            plot(trace, bin_tput_ts, bin_tput, bin_sending_rate_ts,
+                 bin_sending_rate, tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                 lat_ts, lat, avg_lat * 1000, loss, pkt_level_original_reward,
+                 pkt_level_reward, save_dir, self.cc_name)
+        if save_dir:
+            with open(os.path.join(save_dir, "{}_summary.csv".format(self.cc_name)), 'w', 1) as f:
+                summary_writer = csv.writer(f, lineterminator='\n')
+                summary_writer.writerow([
+                    'trace_average_bandwidth', 'trace_average_latency',
+                    'average_sending_rate', 'average_throughput',
+                    'average_latency', 'loss_rate', 'mi_level_reward',
+                    'pkt_level_reward'])
+                summary_writer.writerow(
+                    [trace.avg_bw, trace.avg_delay,
+                     avg_sending_rate * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6,
+                     tput * BYTES_PER_PACKET * BITS_PER_BYTE / 1e6, avg_lat,
+                     loss, np.mean(rewards), pkt_level_reward])
         return np.mean(rewards), pkt_level_reward
