@@ -74,8 +74,9 @@ class VivaceLatencySender(Sender):
         self.mode = PccSenderMode.STARTING
         self.has_seen_valid_rtt = False
         self.rounds = 1
-        self.conn_start_time = 0.0
+        self.conn_start_time = -1  # 0.0
         self.rtt_on_inflation_start = 0.0
+        self.latest_sent_timestamp = 0.0
         self.latest_ack_timestamp = 0.0
         self.latest_utility = 0.0
         self.utility_manager = utility_manager.UtilityManager()
@@ -142,6 +143,7 @@ class VivaceLatencySender(Sender):
         return super().on_packet_acked(pkt)
 
     def on_packet_lost(self, pkt: "packet.Packet") -> None:
+        self.mi_q.on_packet_lost(pkt, self.avg_rtt, self.min_rtt)
         return super().on_packet_lost(pkt)
 
     def create_new_interval(self, event_time: float) -> bool:
@@ -342,7 +344,7 @@ class VivaceLatencySender(Sender):
             return self.pacing_rate * (1.0 / (1 + min(self.rounds * kDecisionMadeStepSize, kMaxDecisionMadeStepSize)))
         assert False
 
-    def update_rtt(self, event_time, rtt: float):
+    def update_rtt(self, event_time: float, rtt: float):
         self.latest_rtt = rtt
         if self.rtt_deviation == 0:
             self.rtt_deviation = rtt / 2
@@ -459,9 +461,6 @@ class VivaceLatencySender(Sender):
 
         self.mode = PccSenderMode.DECISION_MADE
         self.rounds = 1
-
-    def can_send(self):
-        raise NotImplementedError
 
     def schedule_send(self, first_pkt: bool = False, on_ack: bool = False):
         assert self.net, "network is not registered in sender."

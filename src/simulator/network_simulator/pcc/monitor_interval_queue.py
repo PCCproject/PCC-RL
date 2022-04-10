@@ -154,8 +154,7 @@ class MonitorIntervalQueue:
 
         self.num_available_intervals = 0
 
-    def on_packet_lost(self, pkt, ack_interval: float, latest_rtt: float,
-            avg_rtt: float, min_rtt: float) -> None:
+    def on_packet_lost(self, pkt, avg_rtt: float, min_rtt: float) -> None:
         if self.empty():
             raise RuntimeError("MI queue is empty!")
         self.num_available_intervals = 0
