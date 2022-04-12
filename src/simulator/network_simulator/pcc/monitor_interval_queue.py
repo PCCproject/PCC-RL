@@ -53,9 +53,9 @@ class MonitorIntervalQueue:
         cur_mi = self.q[-1]
         if cur_mi.bytes_sent == 0:
             cur_mi.first_packet_sent_time = pkt.sent_time
-            cur_mi.first_packet_id = pkt.pkt_id
+            cur_mi.first_packet_number = pkt.pkt_id
         cur_mi.last_packet_sent_time = pkt.sent_time
-        cur_mi.last_packet_id = pkt.pkt_id
+        cur_mi.last_packet_number = pkt.pkt_id
         cur_mi.bytes_sent += pkt.pkt_size
         cur_mi.packet_sent_intervals.append(sent_interval)
 

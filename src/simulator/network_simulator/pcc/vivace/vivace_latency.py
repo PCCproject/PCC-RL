@@ -102,10 +102,10 @@ class VivaceLatencySender(Sender):
                     self.get_sending_rate_for_non_useful_interval(),
                     is_useful, self.get_max_rtt_fluctuation_tolerance(), self.avg_rtt)
 
+        super().on_packet_sent(pkt)
         self.mi_q.on_packet_sent(
             pkt, pkt.sent_time - self.latest_sent_timestamp)
         self.latest_sent_timestamp = pkt.sent_time
-        super().on_packet_sent(pkt)
 
     def on_packet_acked(self, pkt: "packet.Packet") -> None:
         if self.latest_ack_timestamp == 0.0:
@@ -167,10 +167,10 @@ class VivaceLatencySender(Sender):
 
         # Do not start new interval until current useful interval has enough
         # reliable RTT samples, and its duration exceeds the monitor_duration.
-        if not cur_mi.has_enough_reliable_rtt or event_time - cur_mi.send_start < self.monitor_duration:
+        if not cur_mi.has_enough_reliable_rtt or event_time - cur_mi.first_packet_sent_time < self.monitor_duration:
             return False
 
-        if cur_mi.num_reliable_rtt / len(cur_mi.rtt_samples) > kMinReliabilityRatio:
+        if cur_mi.num_reliable_rtt / len(cur_mi.packet_rtt_samples) > kMinReliabilityRatio:
             # Start a new interval if current useful interval has an RTT
             # reliability ratio larger than kMinReliabilityRatio.
             return True
@@ -425,7 +425,7 @@ class VivaceLatencySender(Sender):
         # Cannot make decision if number of utilities are less than
         # 2 * GetNumIntervalGroupsInProbing(). This happens when sender does not have
         # enough data to send.
-        if (utility_info.size() < 2 * self.get_num_interval_groups_in_probing()):
+        if len(utility_info) < 2 * self.get_num_interval_groups_in_probing():
             return False
 
         increase = False

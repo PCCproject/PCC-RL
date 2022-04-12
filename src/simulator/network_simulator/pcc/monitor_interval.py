@@ -15,11 +15,11 @@ class PacketRttSample:
         # RTT corresponding to the sampled packet.
         self.sample_rtt = rtt
         # Timestamp when the ACK of the sampled packet is received.
-        ack_timestamp = ack_timestamp
+        self.ack_timestamp = ack_timestamp
 
         # Flag representing if the RTT sample is reliable for utility calculation.
         self.is_reliable = reliability
-        self.s_reliable_for_gradient_calculation = gradient_reliability
+        self.is_reliable_for_gradient_calculation = gradient_reliability
 
 
 class LostPacketSample:
